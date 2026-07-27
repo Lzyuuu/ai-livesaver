@@ -68,6 +68,31 @@ private data class SocialReplyDraft(
     val replyToName: String,
 )
 
+private const val MAX_RENDERED_IMAGE_DIMENSION = 2048
+
+internal fun renderedImageSampleSize(
+    width: Int,
+    height: Int,
+    maxDimension: Int = MAX_RENDERED_IMAGE_DIMENSION,
+): Int {
+    if (width <= 0 || height <= 0 || maxDimension <= 0) return 1
+    var sample = 1
+    while (maxOf(width, height) / sample > maxDimension) sample *= 2
+    return sample
+}
+
+private fun decodeSocialBitmap(path: String): android.graphics.Bitmap? {
+    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    BitmapFactory.decodeFile(path, bounds)
+    if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+    return BitmapFactory.decodeFile(
+        path,
+        BitmapFactory.Options().apply {
+            inSampleSize = renderedImageSampleSize(bounds.outWidth, bounds.outHeight)
+        },
+    )
+}
+
 internal fun composeVisualPrompt(
     character: ResidentCharacter?,
     scene: String,
@@ -1150,7 +1175,7 @@ private fun PostDetailScreen(
 @Composable
 private fun PostMedia(post: SocialPost, onOpenImage: (Boolean) -> Unit) {
     post.mediaPath?.let { path ->
-        val bitmap = remember(path) { BitmapFactory.decodeFile(path) }
+        val bitmap = remember(path) { decodeSocialBitmap(path) }
         bitmap?.let {
             Image(
                 bitmap = it.asImageBitmap(),
@@ -1198,7 +1223,7 @@ private fun FullScreenMediaPreview(
     val originalPrompt = mediaPromptForEditing(post.mediaPrompt, post.mediaDescription)
     var prompt by rememberSaveable(post.id) { mutableStateOf(originalPrompt) }
     val bitmap = remember(post.mediaPath) {
-        post.mediaPath?.let { BitmapFactory.decodeFile(it) }
+        post.mediaPath?.let(::decodeSocialBitmap)
     }
     val closePreviewLabel = stringResource(R.string.close_image_preview)
     val imageActionsLabel = stringResource(R.string.open_image_actions)
