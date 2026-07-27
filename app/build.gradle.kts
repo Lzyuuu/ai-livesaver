@@ -11,8 +11,8 @@ android {
         applicationId = "io.github.lzyuuu.ailivesaver"
         minSdk = 28
         targetSdk = 36
-        versionCode = 61
-        versionName = "0.1.0-m60"
+        versionCode = 62
+        versionName = "0.1.0-m61"
 
         ndk {
             abiFilters += "arm64-v8a"

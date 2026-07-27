@@ -486,6 +486,9 @@ private fun AiLivesaverApp(
                         ?.postId,
                     onOpenPostConsumed = { pendingSocialPostRoute = null },
                     onChanged = { worldRevision++ },
+                    onResumeQueuedResponses = {
+                        WorldEngine.resumeSocialResponses(context) { worldRevision++ }
+                    },
                     onStartWorld = { destinationName = Destination.Chats.name },
                 )
                 Destination.Commons -> SocialScreen(
@@ -498,6 +501,9 @@ private fun AiLivesaverApp(
                         ?.postId,
                     onOpenPostConsumed = { pendingSocialPostRoute = null },
                     onChanged = { worldRevision++ },
+                    onResumeQueuedResponses = {
+                        WorldEngine.resumeSocialResponses(context) { worldRevision++ }
+                    },
                     onStartWorld = { destinationName = Destination.Chats.name },
                 )
                 Destination.Me -> MeScreen(

@@ -6,6 +6,14 @@ import org.junit.Test
 
 class SocialResponseQueueTest {
     @Test
+    fun retryBatchIsBounded() {
+        assertTrue(socialResponseRetryBatchSize(1) == 1)
+        assertTrue(socialResponseRetryBatchSize(3) == 3)
+        assertTrue(socialResponseRetryBatchSize(10) == 3)
+        assertTrue(socialResponseRetryBatchSize(0) == 0)
+    }
+
+    @Test
     fun queuesWhenResponseCannotRunAndNoJobWasRetried() {
         assertTrue(shouldQueueSocialResponse(true, false, null))
         assertFalse(shouldQueueSocialResponse(false, false, null))

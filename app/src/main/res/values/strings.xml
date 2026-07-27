@@ -127,6 +127,7 @@
     <string name="allow_ai_responses">允许 AI 世界成员回应</string>
     <string name="ai_responses_disabled">这条内容不会触发 AI 自动回应</string>
     <string name="social_responses_waiting">有 %1$d 条 AI 回应等待联网后继续；你的内容已保存在本机。</string>
+    <string name="continue_social_responses">继续生成回应</string>
     <string name="like">赞</string>
     <string name="unlike">取消赞</string>
     <string name="likes_count">%1$d 个赞</string>

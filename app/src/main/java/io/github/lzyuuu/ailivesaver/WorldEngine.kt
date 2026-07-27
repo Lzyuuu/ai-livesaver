@@ -81,6 +81,11 @@ internal fun canRespondToPost(
     taskPaused: Boolean,
 ): Boolean = providerReady && budgetAvailable && !taskPaused
 
+private const val MAX_SOCIAL_RESPONSE_RETRY_BATCH = 3
+
+internal fun socialResponseRetryBatchSize(pendingCount: Int): Int =
+    pendingCount.coerceIn(0, MAX_SOCIAL_RESPONSE_RETRY_BATCH)
+
 internal fun isWorldBootAction(action: String?): Boolean = action == Intent.ACTION_BOOT_COMPLETED
 
 private val BASE_WORLD_SETTING_KEYS = setOf(
@@ -645,7 +650,21 @@ internal object WorldEngine {
         return true
     }
 
-    private fun resumeSocialResponses(context: Context, onChanged: () -> Unit) {
+    internal fun resumeSocialResponses(context: Context, onChanged: () -> Unit) {
+        val pendingCount = WorldStore(context).use { it.socialResponseQueueCount() }
+        resumeSocialResponses(
+            context,
+            onChanged,
+            remaining = socialResponseRetryBatchSize(pendingCount),
+        )
+    }
+
+    private fun resumeSocialResponses(
+        context: Context,
+        onChanged: () -> Unit,
+        remaining: Int,
+    ) {
+        if (remaining <= 0) return
         if (!isOnline(context)) return
         if (!socialResponseRunning.compareAndSet(false, true)) return
         val job = WorldStore(context).use { it.socialResponseJobs(1).firstOrNull() } ?: run {
@@ -664,6 +683,7 @@ internal object WorldEngine {
             ) { success ->
                 socialResponseRunning.set(false)
                 if (success) onChanged()
+                if (success) resumeSocialResponses(context, onChanged, remaining - 1)
             }
         }.getOrElse {
             socialResponseRunning.set(false)

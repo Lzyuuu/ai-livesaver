@@ -108,6 +108,7 @@ internal fun SocialScreen(
     openPostId: Long?,
     onOpenPostConsumed: () -> Unit,
     onChanged: () -> Unit,
+    onResumeQueuedResponses: () -> Unit,
     onStartWorld: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -291,7 +292,24 @@ internal fun SocialScreen(
         }
         if (queuedResponseCount > 0) {
             item {
-                StatusCard(stringResource(R.string.social_responses_waiting, queuedResponseCount))
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                    ),
+                ) {
+                    Column(
+                        modifier = Modifier.padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        Text(stringResource(R.string.social_responses_waiting, queuedResponseCount))
+                        TextButton(
+                            onClick = onResumeQueuedResponses,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text(stringResource(R.string.continue_social_responses))
+                        }
+                    }
+                }
             }
         }
         if (character == null) {
