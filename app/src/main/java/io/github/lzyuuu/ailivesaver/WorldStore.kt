@@ -2593,7 +2593,7 @@ internal class WorldStore(context: Context) :
     }
 
     fun restoreMediaVersion(postId: Long, versionId: Long) {
-        readableDatabase.rawQuery(
+        val version = readableDatabase.rawQuery(
             """
             SELECT path, prompt, seed
             FROM media_versions
@@ -2602,19 +2602,29 @@ internal class WorldStore(context: Context) :
             arrayOf(versionId.toString(), postId.toString()),
         ).use { cursor ->
             if (!cursor.moveToFirst()) return
-            writableDatabase.update(
-                "social_posts",
-                ContentValues().apply {
-                    put("media_path", cursor.getString(0))
-                    put("media_prompt", cursor.getString(1))
-                    put("media_seed", cursor.getLong(2))
-                    put("media_status", "ready")
-                    put("media_error", "")
-                },
-                "id = ?",
-                arrayOf(postId.toString()),
+            MediaVersion(
+                id = versionId,
+                postId = postId,
+                path = cursor.getString(0),
+                prompt = cursor.getString(1),
+                seed = cursor.getLong(2),
+                createdAt = 0,
             )
         }
+        if (!File(version.path).isFile) return
+        writableDatabase.update(
+            "social_posts",
+            ContentValues().apply {
+                put("media_path", version.path)
+                put("media_prompt", version.prompt)
+                put("media_seed", version.seed)
+                put("media_description", version.prompt)
+                put("media_status", "ready")
+                put("media_error", "")
+            },
+            "id = ?",
+            arrayOf(postId.toString()),
+        )
     }
 
     fun deleteMediaVersion(postId: Long, versionId: Long) {
