@@ -396,6 +396,8 @@
     <string name="image_version_history">图片版本</string>
     <string name="current_image_version">当前显示版本</string>
     <string name="delete_version">删除版本</string>
+    <string name="close_image_preview">关闭图片预览</string>
+    <string name="open_image_actions">打开图片操作</string>
 
     <string name="updates_title">关于与更新</string>
     <string name="back">返回</string>

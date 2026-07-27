@@ -50,6 +50,8 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.text.font.FontWeight
@@ -1113,6 +1115,8 @@ private fun FullScreenMediaPreview(
     val bitmap = remember(post.mediaPath) {
         post.mediaPath?.let { BitmapFactory.decodeFile(it) }
     }
+    val closePreviewLabel = stringResource(R.string.close_image_preview)
+    val imageActionsLabel = stringResource(R.string.open_image_actions)
 
     LaunchedEffect(post.id, menuInitiallyOpen) {
         menuOpen = menuInitiallyOpen
@@ -1159,10 +1163,20 @@ private fun FullScreenMediaPreview(
                     .padding(top = 48.dp, start = 12.dp, end = 12.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
-                TextButton(onClick = onDismiss) {
+                TextButton(
+                    onClick = onDismiss,
+                    modifier = Modifier.semantics {
+                        contentDescription = closePreviewLabel
+                    },
+                ) {
                     Text("‹", color = Color.White, style = MaterialTheme.typography.headlineMedium)
                 }
-                TextButton(onClick = { menuOpen = true }) {
+                TextButton(
+                    onClick = { menuOpen = true },
+                    modifier = Modifier.semantics {
+                        contentDescription = imageActionsLabel
+                    },
+                ) {
                     Text("⋮", color = Color.White, style = MaterialTheme.typography.headlineMedium)
                 }
             }
