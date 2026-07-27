@@ -29,7 +29,7 @@ internal object WorldBackup {
     ) = background(callback) {
         val staging = File(context.cacheDir, "backup-${UUID.randomUUID()}").apply { mkdirs() }
         try {
-            store.close()
+            store.checkpointForBackup()
             val database = context.getDatabasePath("world.db")
             if (!database.isFile) throw IOException("世界数据库不存在")
             val stagedDatabase = File(staging, "world.db")

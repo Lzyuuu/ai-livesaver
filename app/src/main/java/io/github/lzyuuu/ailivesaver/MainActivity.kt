@@ -1061,7 +1061,10 @@ private fun BackupSettingsScreen(
                     (context as? MainActivity)?.recreate()
                     restoreSuccess
                 },
-                onFailure = { "$failed：${it.message.orEmpty()}" },
+                onFailure = {
+                    (context as? MainActivity)?.recreate()
+                    "$failed：${it.message.orEmpty()}"
+                },
             )
         }
     }

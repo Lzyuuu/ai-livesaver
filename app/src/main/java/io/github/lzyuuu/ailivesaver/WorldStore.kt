@@ -282,6 +282,10 @@ internal class WorldStore(context: Context) :
     java.io.Closeable {
     private val mediaDirectory = File(context.filesDir, "media").canonicalFile
 
+    fun checkpointForBackup() {
+        writableDatabase.rawQuery("PRAGMA wal_checkpoint(FULL)", null).use { }
+    }
+
     override fun onCreate(database: SQLiteDatabase) {
         database.execSQL(
             """
