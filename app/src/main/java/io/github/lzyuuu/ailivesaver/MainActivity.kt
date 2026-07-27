@@ -59,6 +59,7 @@ import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -128,8 +129,13 @@ internal fun systemAnimationsEnabled(context: android.content.Context): Boolean 
 }
 
 class MainActivity : ComponentActivity() {
+    private var notificationCharacterId by mutableStateOf<Long?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        notificationCharacterId = savedInstanceState?.getLong(OPEN_CHARACTER_ID_EXTRA, -1L)
+            ?.takeIf { it > 0L }
+            ?: intent.getLongExtra(OPEN_CHARACTER_ID_EXTRA, -1L).takeIf { it > 0L }
         enableEdgeToEdge()
         setContent {
             var themeModeName by rememberSaveable { mutableStateOf(readThemeMode(this).name) }
@@ -138,6 +144,8 @@ class MainActivity : ComponentActivity() {
             AiLivesaverTheme(themeMode) {
                 AiLivesaverApp(
                     themeMode = themeMode,
+                    notificationCharacterId = notificationCharacterId,
+                    onNotificationOpened = { notificationCharacterId = null },
                     onThemeModeChanged = { next ->
                         writeThemeMode(this, next)
                         themeModeName = next.name
@@ -145,6 +153,18 @@ class MainActivity : ComponentActivity() {
                 )
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        notificationCharacterId = intent.getLongExtra(OPEN_CHARACTER_ID_EXTRA, -1L)
+            .takeIf { it > 0L }
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        notificationCharacterId?.let { outState.putLong(OPEN_CHARACTER_ID_EXTRA, it) }
+        super.onSaveInstanceState(outState)
     }
 
     override fun onResume() {
@@ -208,6 +228,8 @@ private fun AiLivesaverTheme(themeMode: ThemeMode, content: @Composable () -> Un
 @Composable
 private fun AiLivesaverApp(
     themeMode: ThemeMode,
+    notificationCharacterId: Long?,
+    onNotificationOpened: () -> Unit,
     onThemeModeChanged: (ThemeMode) -> Unit,
 ) {
     val context = LocalContext.current
@@ -249,6 +271,10 @@ private fun AiLivesaverApp(
     val responseEvents = remember(worldRevision) { worldStore.worldEvents(needsResponseOnly = true) }
     val queueCount = remember(worldRevision) { worldStore.queueCount() }
     val budgetExhausted = remember(worldRevision) { WorldEngine.budgetExhausted(context) }
+
+    LaunchedEffect(notificationCharacterId) {
+        if (notificationCharacterId != null) destinationName = Destination.Chats.name
+    }
 
     fun openWorldEvent(event: WorldEvent) {
         worldStore.markWorldEventSeen(event.id)
@@ -445,6 +471,8 @@ private fun AiLivesaverApp(
                     contentPadding = padding,
                     store = worldStore,
                     revision = worldRevision,
+                    initialCharacterId = notificationCharacterId,
+                    onInitialCharacterConsumed = onNotificationOpened,
                     onChanged = { worldRevision++ },
                     onConfigureProvider = { showProviders = true },
                 )

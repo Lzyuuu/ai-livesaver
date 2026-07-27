@@ -86,11 +86,18 @@ internal fun ChatsScreen(
     contentPadding: PaddingValues,
     store: WorldStore,
     revision: Int,
+    initialCharacterId: Long?,
+    onInitialCharacterConsumed: () -> Unit,
     onChanged: () -> Unit,
     onConfigureProvider: () -> Unit,
 ) {
     val characters = remember(revision) { store.characters(includeDeparted = false) }
     var selectedId by rememberSaveable { mutableStateOf<Long?>(null) }
+    LaunchedEffect(initialCharacterId, characters) {
+        val requestedId = initialCharacterId ?: return@LaunchedEffect
+        if (characters.any { it.id == requestedId }) selectedId = requestedId
+        onInitialCharacterConsumed()
+    }
     val character = characters.firstOrNull { it.id == selectedId } ?: characters.firstOrNull()
     if (character == null) {
         FirstRelationshipScreen(contentPadding, store, revision, onChanged, onConfigureProvider)

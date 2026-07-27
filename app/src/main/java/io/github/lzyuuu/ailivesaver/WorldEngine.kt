@@ -55,6 +55,8 @@ internal fun relationshipNotificationVisibility(preview: Boolean): Int =
 internal fun relationshipNotificationId(characterId: Long): Int =
     (0xA1300000L or (characterId and 0x0000FFFFL)).toInt()
 
+internal const val OPEN_CHARACTER_ID_EXTRA = "io.github.lzyuuu.ailivesaver.OPEN_CHARACTER_ID"
+
 internal fun shouldReconstructWorld(
     previousOpen: Long,
     now: Long,
@@ -727,7 +729,7 @@ internal object WorldEngine {
                 .setSmallIcon(android.R.drawable.ic_dialog_email)
                 .setContentTitle(character.name)
                 .setContentText(text)
-                .setContentIntent(appIntent(context))
+                .setContentIntent(appIntent(context, character.id, relationshipNotificationId(character.id)))
                 .setAutoCancel(true)
                 .setVisibility(relationshipNotificationVisibility(notificationPreview(context)))
                 .build(),
@@ -757,10 +759,17 @@ internal object WorldEngine {
         )
     }
 
-    private fun appIntent(context: Context): PendingIntent = PendingIntent.getActivity(
+    private fun appIntent(
+        context: Context,
+        characterId: Long? = null,
+        requestCode: Int = 0,
+    ): PendingIntent = PendingIntent.getActivity(
         context,
-        0,
-        Intent(context, MainActivity::class.java),
+        requestCode,
+        Intent(context, MainActivity::class.java).apply {
+            addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            characterId?.let { putExtra(OPEN_CHARACTER_ID_EXTRA, it) }
+        },
         PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
     )
 
