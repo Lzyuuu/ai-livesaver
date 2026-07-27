@@ -7,7 +7,6 @@ import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.os.StatFs
-import android.util.Base64
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -16,6 +15,7 @@ import java.net.HttpURLConnection
 import java.net.ConnectException
 import java.net.SocketTimeoutException
 import java.net.URL
+import java.util.Base64
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -34,6 +34,62 @@ internal data class LocalDreamImportParameters(
     val width: Int? = null,
     val height: Int? = null,
 )
+
+internal sealed class LocalDreamSseEvent {
+    data class Progress(val step: Int, val total: Int) : LocalDreamSseEvent()
+    data class Complete(val payload: JSONObject) : LocalDreamSseEvent()
+    data class Error(val message: String) : LocalDreamSseEvent()
+    object Done : LocalDreamSseEvent()
+}
+
+internal fun parseLocalDreamSseLine(line: String): LocalDreamSseEvent? {
+    if (!line.startsWith("data:")) return null
+    val data = line.removePrefix("data:").trim()
+    if (data == "[DONE]") return LocalDreamSseEvent.Done
+    val event = JSONObject(data)
+    return when (event.optString("type")) {
+        "progress" -> LocalDreamSseEvent.Progress(
+            step = event.optInt("step"),
+            total = event.optInt("total_steps"),
+        )
+        "complete" -> LocalDreamSseEvent.Complete(event)
+        "error" -> LocalDreamSseEvent.Error(
+            event.optString("message", "Local Dream generation failed"),
+        )
+        else -> null
+    }
+}
+
+internal data class LocalDreamRgbImage(
+    val width: Int,
+    val height: Int,
+    val pixels: IntArray,
+    val seed: Long,
+)
+
+internal fun decodeLocalDreamRgb(event: JSONObject): LocalDreamRgbImage {
+    val width = event.optInt("width", -1)
+    val height = event.optInt("height", -1)
+    val channels = event.optInt("channels", 3)
+    if (width !in 8..2048 || height !in 8..2048 || channels != 3) {
+        throw IOException("Unsupported Local Dream image shape")
+    }
+    val rgb = try {
+        Base64.getDecoder().decode(event.optString("image", ""))
+    } catch (error: IllegalArgumentException) {
+        throw IOException("Invalid image data", error)
+    }
+    if (rgb.size != width * height * channels) throw IOException("Incomplete image data")
+    val pixels = IntArray(width * height)
+    var source = 0
+    for (index in pixels.indices) {
+        pixels[index] = (0xFF shl 24) or
+            ((rgb[source++].toInt() and 0xFF) shl 16) or
+            ((rgb[source++].toInt() and 0xFF) shl 8) or
+            (rgb[source++].toInt() and 0xFF)
+    }
+    return LocalDreamRgbImage(width, height, pixels, event.optLong("seed"))
+}
 
 internal fun parseLocalDreamParameters(raw: String): LocalDreamImportParameters {
     val text = raw.trim().removePrefix("```json").removePrefix("```").removeSuffix("```").trim()
@@ -174,20 +230,15 @@ internal object LocalDreamClient {
                     var completed: JSONObject? = null
                     connection.inputStream.bufferedReader().useLines { lines ->
                         lines.forEach { line ->
-                            if (!line.startsWith("data:")) return@forEach
-                            val event = JSONObject(line.removePrefix("data:").trim())
-                            when (event.optString("type")) {
-                                "progress" -> {
-                                    val step = event.optInt("step")
-                                    val total = event.optInt("total_steps")
+                            when (val event = parseLocalDreamSseLine(line)) {
+                                is LocalDreamSseEvent.Progress -> {
                                     Handler(Looper.getMainLooper()).post {
-                                        onProgress(step, total)
+                                        onProgress(event.step, event.total)
                                     }
                                 }
-                                "complete" -> completed = event
-                                "error" -> throw IOException(
-                                    event.optString("message", "Local Dream generation failed"),
-                                )
+                                is LocalDreamSseEvent.Complete -> completed = event.payload
+                                is LocalDreamSseEvent.Error -> throw IOException(event.message)
+                                LocalDreamSseEvent.Done, null -> Unit
                             }
                         }
                     }
@@ -223,24 +274,9 @@ internal object LocalDreamClient {
         }
 
     private fun saveImage(context: Context, event: JSONObject): LocalDreamImage {
-        val width = event.getInt("width")
-        val height = event.getInt("height")
-        val channels = event.optInt("channels", 3)
-        if (width !in 8..2048 || height !in 8..2048 || channels != 3) {
-            throw IOException("Unsupported Local Dream image shape")
-        }
-        val rgb = Base64.decode(event.getString("image"), Base64.DEFAULT)
-        if (rgb.size != width * height * channels) throw IOException("Incomplete image data")
-        val pixels = IntArray(width * height)
-        var source = 0
-        for (index in pixels.indices) {
-            pixels[index] = (0xFF shl 24) or
-                ((rgb[source++].toInt() and 0xFF) shl 16) or
-                ((rgb[source++].toInt() and 0xFF) shl 8) or
-                (rgb[source++].toInt() and 0xFF)
-        }
-        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-        bitmap.setPixels(pixels, 0, width, 0, 0, width, height)
+        val image = decodeLocalDreamRgb(event)
+        val bitmap = Bitmap.createBitmap(image.width, image.height, Bitmap.Config.ARGB_8888)
+        bitmap.setPixels(image.pixels, 0, image.width, 0, 0, image.width, image.height)
         val directory = File(context.filesDir, "media").apply { mkdirs() }
         val file = File(directory, "${UUID.randomUUID()}.png")
         file.outputStream().use {
@@ -249,7 +285,7 @@ internal object LocalDreamClient {
             }
         }
         bitmap.recycle()
-        return LocalDreamImage(file.absolutePath, event.optLong("seed"))
+        return LocalDreamImage(file.absolutePath, image.seed)
     }
 }
 
