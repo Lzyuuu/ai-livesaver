@@ -1164,6 +1164,7 @@ private fun PostMedia(post: SocialPost, onOpenImage: (Boolean) -> Unit) {
                         detectTapGestures(
                             onTap = { onOpenImage(false) },
                             onDoubleTap = { onOpenImage(true) },
+                            onLongPress = { onOpenImage(true) },
                         )
                     },
             )
