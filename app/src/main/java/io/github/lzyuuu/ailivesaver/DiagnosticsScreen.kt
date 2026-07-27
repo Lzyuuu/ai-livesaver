@@ -44,6 +44,7 @@ import java.util.Locale
 
 internal data class RuntimeSnapshot(
     val appVersion: String,
+    val deviceSummary: String,
     val sdk: Int,
     val providerConfigured: Boolean,
     val providerHost: String,
@@ -73,6 +74,12 @@ internal object RuntimeDiagnostics {
                 PackageManager.PERMISSION_GRANTED)
         return RuntimeSnapshot(
             appVersion = BuildConfig.VERSION_NAME,
+            deviceSummary = listOf(
+                Build.MANUFACTURER,
+                Build.MODEL,
+                Build.HARDWARE,
+                Build.SUPPORTED_ABIS.firstOrNull().orEmpty(),
+            ).map { it.trim() }.filter { it.isNotBlank() }.joinToString(" / "),
             sdk = Build.VERSION.SDK_INT,
             providerConfigured = provider.isValid(),
             providerHost = runCatching { URI(provider.baseUrl).host.orEmpty() }
@@ -106,6 +113,7 @@ internal object RuntimeDiagnostics {
     internal fun text(snapshot: RuntimeSnapshot): String = buildString {
         appendLine("AI Livesaver diagnostics")
         appendLine("version=${snapshot.appVersion}")
+        appendLine("device=${snapshot.deviceSummary}")
         appendLine("sdk=${snapshot.sdk}")
         appendLine("provider_configured=${snapshot.providerConfigured}")
         appendLine("provider_host=${snapshot.providerHost}")
@@ -210,6 +218,10 @@ internal fun DiagnosticsScreen(
                     DiagnosticRow(
                         stringResource(R.string.runtime_app_version),
                         snapshot.appVersion,
+                    )
+                    DiagnosticRow(
+                        stringResource(R.string.runtime_device),
+                        snapshot.deviceSummary,
                     )
                     DiagnosticRow(
                         stringResource(R.string.runtime_provider),

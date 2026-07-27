@@ -345,6 +345,7 @@
     <string name="diagnostics_title">运行状态与诊断</string>
     <string name="diagnostics_summary">只读取本机状态；分享内容已脱敏，不包含聊天正文、提示词、API Key 或完整文件路径。</string>
     <string name="runtime_app_version">应用版本</string>
+    <string name="runtime_device">设备环境</string>
     <string name="runtime_provider">通用 Provider</string>
     <string name="runtime_not_configured">未配置</string>
     <string name="runtime_world">自动世界事件</string>
@@ -370,7 +371,7 @@
     <string name="share_diagnostics">分享脱敏诊断</string>
     <string name="preview_diagnostics">预览并分享诊断</string>
     <string name="diagnostics_preview_title">诊断内容预览</string>
-    <string name="diagnostics_privacy">诊断只包含版本、能力状态、任务开关、队列数量、存储余量、Local Dream 耗时和错误摘要。</string>
+    <string name="diagnostics_privacy">诊断只包含版本、设备环境、能力状态、任务开关、队列数量、存储余量、Local Dream 耗时和错误摘要。</string>
     <string name="world_engine_summary">优先通过 Android 定时任务推进世界；任务未运行时，会根据离开时长补演至多一条合理事件。</string>
     <string name="auto_world_events">自动世界事件</string>
     <string name="auto_world_events_summary">约每 6 小时检查一次；不申请后台常驻或电池白名单。</string>

@@ -21,6 +21,7 @@ class DiagnosticsTest {
         val text = RuntimeDiagnostics.text(
             RuntimeSnapshot(
                 appVersion = "0.1.0-test",
+                deviceSummary = "iQOO / test / qcom / arm64-v8a",
                 sdk = 36,
                 providerConfigured = true,
                 providerHost = "api.example.test",
@@ -50,6 +51,7 @@ class DiagnosticsTest {
         )
 
         assertTrue(text.contains("provider_host=api.example.test"))
+        assertTrue(text.contains("device=iQOO / test / qcom / arm64-v8a"))
         assertTrue(text.contains("provider_capabilities=Chat"))
         assertTrue(text.contains("local_dream_generation_ms=3210"))
         assertTrue(text.contains("local_dream_queue_running=true"))
