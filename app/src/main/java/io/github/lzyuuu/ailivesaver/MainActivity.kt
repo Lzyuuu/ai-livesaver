@@ -57,7 +57,7 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -76,6 +76,8 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -164,8 +166,19 @@ private fun AiLivesaverApp() {
     val queueCount = remember(worldRevision) { worldStore.queueCount() }
     val budgetExhausted = remember(worldRevision) { WorldEngine.budgetExhausted(context) }
 
-    LaunchedEffect(Unit) {
-        WorldEngine.onAppOpened(context) { worldRevision++ }
+    val activity = context as? ComponentActivity
+    DisposableEffect(activity) {
+        if (activity == null) {
+            onDispose { }
+        } else {
+            val observer = LifecycleEventObserver { _, event ->
+                if (event == Lifecycle.Event.ON_RESUME) {
+                    WorldEngine.onAppOpened(activity) { worldRevision++ }
+                }
+            }
+            activity.lifecycle.addObserver(observer)
+            onDispose { activity.lifecycle.removeObserver(observer) }
+        }
     }
 
     BackHandler(
