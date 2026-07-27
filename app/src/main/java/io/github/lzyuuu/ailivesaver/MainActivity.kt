@@ -215,6 +215,10 @@ private fun AiLivesaverApp() {
             UpdateScreen(
                 contentPadding = padding,
                 onBack = { showUpdates = false },
+                onOpenBackups = {
+                    showUpdates = false
+                    showBackups = true
+                },
             )
         } else if (showProviders) {
             ProviderScreen(
@@ -2348,11 +2352,71 @@ private fun ProviderScreen(
 private fun UpdateScreen(
     contentPadding: PaddingValues,
     onBack: () -> Unit,
+    onOpenBackups: () -> Unit,
 ) {
     var state by remember { mutableStateOf<UpdateState>(UpdateState.Idle) }
+    var showBackupReminder by rememberSaveable { mutableStateOf(false) }
     val context = LocalContext.current
     val checker = remember { GitHubUpdateChecker() }
     val networkError = stringResource(R.string.network_error)
+
+    fun openDownload(release: GitHubRelease) {
+        try {
+            context.startActivity(
+                Intent(Intent.ACTION_VIEW, release.downloadUrl.toUri()),
+            )
+        } catch (_: ActivityNotFoundException) {
+            Toast.makeText(
+                context,
+                R.string.open_link_failed,
+                Toast.LENGTH_SHORT,
+            ).show()
+        }
+    }
+
+    if (showBackupReminder) {
+        val release = (state as? UpdateState.Available)?.release
+        if (release != null) {
+            AlertDialog(
+                onDismissRequest = { showBackupReminder = false },
+                title = { Text(stringResource(R.string.update_backup_title)) },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text(stringResource(R.string.update_backup_body))
+                        Text(
+                            stringResource(R.string.backup_privacy_warning),
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            showBackupReminder = false
+                            openDownload(release)
+                        },
+                    ) {
+                        Text(stringResource(R.string.update_backup_continue))
+                    }
+                },
+                dismissButton = {
+                    Row {
+                        TextButton(
+                            onClick = {
+                                showBackupReminder = false
+                                onOpenBackups()
+                            },
+                        ) {
+                            Text(stringResource(R.string.update_backup_now))
+                        }
+                        TextButton(onClick = { showBackupReminder = false }) {
+                            Text(stringResource(R.string.cancel))
+                        }
+                    }
+                },
+            )
+        }
+    }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -2474,22 +2538,7 @@ private fun UpdateScreen(
                 }
                 item {
                     Button(
-                        onClick = {
-                            try {
-                                context.startActivity(
-                                    Intent(
-                                        Intent.ACTION_VIEW,
-                                        snapshot.release.downloadUrl.toUri(),
-                                    ),
-                                )
-                            } catch (_: ActivityNotFoundException) {
-                                Toast.makeText(
-                                    context,
-                                    R.string.open_link_failed,
-                                    Toast.LENGTH_SHORT,
-                                ).show()
-                            }
-                        },
+                        onClick = { showBackupReminder = true },
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         Text(stringResource(R.string.download_update))
