@@ -35,6 +35,16 @@ class MainActivitySmokeTest {
     }
 
     @Test
+    fun opensFullWorldChronicle() {
+        composeRule.onNodeWithText("查看全部", useUnmergedTree = true).performClick()
+        composeRule.waitForIdle()
+        composeRule.onAllNodesWithText(
+            "这里保留世界最近发生的变化，不会因为已读而消失。",
+            useUnmergedTree = true,
+        ).get(0)
+    }
+
+    @Test
     fun opensUpdateScreenFromMe() {
         composeRule.onNodeWithText("Me", useUnmergedTree = true).performClick()
         composeRule.waitForIdle()

@@ -213,6 +213,7 @@ private fun AiLivesaverApp(
     var showProviders by rememberSaveable { mutableStateOf(false) }
     var showWorldSettings by rememberSaveable { mutableStateOf(false) }
     var showWorldKnowledge by rememberSaveable { mutableStateOf(false) }
+    var showWorldChronicle by rememberSaveable { mutableStateOf(false) }
     var showLocalDream by rememberSaveable { mutableStateOf(false) }
     var showDiagnostics by rememberSaveable { mutableStateOf(false) }
     var showPrivacy by rememberSaveable { mutableStateOf(false) }
@@ -256,7 +257,7 @@ private fun AiLivesaverApp(
 
     BackHandler(
         enabled = showUpdates || showProviders || showWorldSettings || showWorldKnowledge ||
-            showLocalDream ||
+            showWorldChronicle || showLocalDream ||
             showDiagnostics || showPrivacy || showBackups || showIdentity || showCharacters,
     ) {
         if (showProviders) worldRevision++
@@ -264,6 +265,7 @@ private fun AiLivesaverApp(
         showProviders = false
         showWorldSettings = false
         showWorldKnowledge = false
+        showWorldChronicle = false
         showLocalDream = false
         showDiagnostics = false
         showPrivacy = false
@@ -276,7 +278,7 @@ private fun AiLivesaverApp(
         bottomBar = {
             if (
                 !showUpdates && !showProviders && !showWorldSettings && !showWorldKnowledge &&
-                !showLocalDream && !showDiagnostics && !showPrivacy && !showBackups &&
+                !showWorldChronicle && !showLocalDream && !showDiagnostics && !showPrivacy && !showBackups &&
                     !showIdentity && !showCharacters
             ) {
                 NavigationBar {
@@ -328,6 +330,27 @@ private fun AiLivesaverApp(
                 revision = worldRevision,
                 onBack = { showWorldKnowledge = false },
                 onChanged = { worldRevision++ },
+            )
+        } else if (showWorldChronicle) {
+            WorldChronicleScreen(
+                contentPadding = padding,
+                events = worldEvents,
+                onBack = { showWorldChronicle = false },
+                onMarkSeen = { event ->
+                    worldStore.markWorldEventSeen(event.id)
+                    worldRevision++
+                },
+                onMarkAllSeen = {
+                    worldEvents.filter { !it.seen }
+                        .forEach { worldStore.markWorldEventSeen(it.id) }
+                    worldRevision++
+                },
+                onOpenEvent = { event ->
+                    showWorldChronicle = false
+                    worldStore.markWorldEventSeen(event.id)
+                    worldRevision++
+                    destinationName = routeWorldEvent(event.kind, destinationName)
+                },
             )
         } else if (showLocalDream) {
             LocalDreamSettingsScreen(
@@ -395,6 +418,7 @@ private fun AiLivesaverApp(
                     onOpenCommons = { destinationName = Destination.Commons.name },
                     onOpenQueue = { showLocalDream = true },
                     onManageCircle = { showCharacters = true },
+                    onOpenChronicle = { showWorldChronicle = true },
                     onMarkAllEventsSeen = {
                         worldEvents.filter { !it.seen }.forEach { worldStore.markWorldEventSeen(it.id) }
                         worldRevision++
@@ -472,6 +496,7 @@ private fun WorldScreen(
     onOpenCommons: () -> Unit,
     onOpenQueue: () -> Unit,
     onManageCircle: () -> Unit,
+    onOpenChronicle: () -> Unit,
     onMarkAllEventsSeen: () -> Unit,
     onOpenEvent: (WorldEvent) -> Unit,
 ) {
@@ -584,6 +609,12 @@ private fun WorldScreen(
                         }
                     }
                 }
+                TextButton(
+                    onClick = onOpenChronicle,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(stringResource(R.string.view_all))
+                }
             }
         }
         item {
@@ -694,6 +725,117 @@ private fun WorldScreen(
                     },
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+            }
+        }
+    }
+}
+
+@Composable
+private fun WorldChronicleScreen(
+    contentPadding: PaddingValues,
+    events: List<WorldEvent>,
+    onBack: () -> Unit,
+    onMarkSeen: (WorldEvent) -> Unit,
+    onMarkAllSeen: () -> Unit,
+    onOpenEvent: (WorldEvent) -> Unit,
+) {
+    val formatter = remember { SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()) }
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(
+            start = 20.dp,
+            top = contentPadding.calculateTopPadding() + 12.dp,
+            end = 20.dp,
+            bottom = contentPadding.calculateBottomPadding() + 24.dp,
+        ),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                TextButton(onClick = onBack) {
+                    Text("‹  ${stringResource(R.string.back)}")
+                }
+                TextButton(
+                    onClick = onMarkAllSeen,
+                    enabled = events.any { !it.seen },
+                ) {
+                    Text(stringResource(R.string.mark_all_read))
+                }
+            }
+            Text(
+                stringResource(R.string.world_chronicle),
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(
+                stringResource(R.string.world_chronicle_summary),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        if (events.isEmpty()) {
+            item { StatusCard(stringResource(R.string.no_world_history)) }
+        }
+        items(events, key = WorldEvent::id) { event ->
+            val source = event.providerName
+                .takeIf { it.isNotBlank() }
+                ?.let { "$it · ${event.modelName}" }
+                ?: stringResource(R.string.world_provider)
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onOpenEvent(event) },
+                colors = CardDefaults.cardColors(
+                    containerColor = if (!event.seen) {
+                        MaterialTheme.colorScheme.primaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.66f)
+                    },
+                ),
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(event.actorName, fontWeight = FontWeight.Bold)
+                        if (!event.seen) {
+                            Text(
+                                stringResource(
+                                    if (event.needsResponse) {
+                                        R.string.unread_event
+                                    } else {
+                                        R.string.mark_read
+                                    },
+                                ),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                        }
+                    }
+                    Text(event.summary)
+                    Text(
+                        stringResource(
+                            R.string.world_event_time,
+                            formatter.format(Date(event.createdAt)),
+                            source,
+                        ),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    if (!event.seen) {
+                        TextButton(onClick = { onMarkSeen(event) }) {
+                            Text(stringResource(R.string.mark_read))
+                        }
+                    }
+                }
             }
         }
     }

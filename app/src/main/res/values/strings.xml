@@ -18,7 +18,11 @@
     <string name="your_circle">你的圈子</string>
     <string name="manage">管理</string>
     <string name="world_chronicle">世界纪事</string>
+    <string name="world_chronicle_summary">这里保留世界最近发生的变化，不会因为已读而消失。</string>
+    <string name="view_all">查看全部</string>
     <string name="mark_all_read">全部已读</string>
+    <string name="mark_read">标记已读</string>
+    <string name="unread_event">待回应</string>
     <string name="no_world_history">这个世界还没有留下可回看的事件。</string>
     <string name="world_event_time">%1$s · %2$s</string>
     <string name="respond_first">先回应这些</string>
