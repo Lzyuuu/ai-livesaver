@@ -1041,6 +1041,7 @@ internal class WorldStore(context: Context) :
                         put("appearance", character.appearance.trim())
                         put("clothing", character.clothing.trim())
                         put("negative_prompt", character.negativePrompt.trim())
+                        put("card_json", character.cardJson)
                         put("updated_at", System.currentTimeMillis())
                     },
                     "id = ?",
