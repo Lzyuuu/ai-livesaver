@@ -24,6 +24,7 @@ import androidx.core.content.edit
 import java.time.LocalDate
 import java.time.LocalTime
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 
 internal fun chooseWorldTurn(
     eventCount: Int,
@@ -83,6 +84,7 @@ internal object WorldEngine {
     private const val RELATIONSHIP_NOTIFICATION_ID = 0xA13
     private const val CONTINUOUS_CHANNEL = "continuous_world"
     private const val RELATIONSHIP_CHANNEL = "relationship_messages"
+    private val generationRunning = AtomicBoolean(false)
 
     fun eventIntervalMs(context: Context): Long = when (activity(context)) {
         "quiet" -> TimeUnit.HOURS.toMillis(12)
@@ -352,6 +354,10 @@ internal object WorldEngine {
             store.close()
             return false
         }
+        if (!generationRunning.compareAndSet(false, true)) {
+            store.close()
+            return false
+        }
         val system = when {
             npc != null ->
                 "You are ${npc.name}, a peripheral member of a fictional social world. " +
@@ -404,30 +410,31 @@ internal object WorldEngine {
                     "Keep the relationship central without sounding needy. Stay under 80 Chinese characters."
         }
         ProviderTextClient.completeStructured(config, system, prompt) { result ->
-            val created = result.fold(
-                onSuccess = { response ->
-                    val body = response.text
-                    val usedConfig = response.config
-                    when {
-                        npcForumTarget != null -> {
-                            val npcName = requireNotNull(npc).name
-                            store.addComment(
-                                npcForumTarget.id,
-                                body,
-                                authorName = npcName,
-                                authorKind = "npc",
-                            )
-                            store.addWorldEvent(
-                                "npc_forum_reply",
-                                body.take(120),
-                                npcName,
-                                needsResponse = false,
-                                sourcePostId = npcForumTarget.id,
-                                providerName = usedConfig.preset.displayName,
-                                modelName = usedConfig.model,
-                            )
-                        }
-                        npc != null -> store.createPost(
+            val created = runCatching {
+                result.fold(
+                    onSuccess = { response ->
+                        val body = response.text
+                        val usedConfig = response.config
+                        when {
+                            npcForumTarget != null -> {
+                                val npcName = requireNotNull(npc).name
+                                store.addComment(
+                                    npcForumTarget.id,
+                                    body,
+                                    authorName = npcName,
+                                    authorKind = "npc",
+                                )
+                                store.addWorldEvent(
+                                    "npc_forum_reply",
+                                    body.take(120),
+                                    npcName,
+                                    needsResponse = false,
+                                    sourcePostId = npcForumTarget.id,
+                                    providerName = usedConfig.preset.displayName,
+                                    modelName = usedConfig.model,
+                                )
+                            }
+                            npc != null -> store.createPost(
                                 "moment",
                                 npc.name,
                                 "",
@@ -441,60 +448,65 @@ internal object WorldEngine {
                                     "moment"
                                 },
                             )
-                        interactionCharacter != null -> store.createPost(
-                            "moment",
-                            actor.name,
-                            "",
-                            body,
-                            authorKind = "resident",
-                            authorCharacterId = actor.id,
-                            providerName = usedConfig.preset.displayName,
-                            modelName = usedConfig.model,
-                            worldEventKind = if (reconstructed) {
-                                "reconstructed_character_interaction"
-                            } else {
-                                "character_interaction"
-                            },
-                            eventNeedsResponse = false,
-                        )
-                        messageTurn -> {
-                            store.addMessage(actor.id, "assistant", body)
-                            store.addWorldEvent(
-                                kind = if (reconstructed) "reconstructed_message" else "message",
-                                summary = body.take(120),
-                                actorName = actor.name,
-                                needsResponse = true,
+                            interactionCharacter != null -> store.createPost(
+                                "moment",
+                                actor.name,
+                                "",
+                                body,
+                                authorKind = "resident",
+                                authorCharacterId = actor.id,
                                 providerName = usedConfig.preset.displayName,
                                 modelName = usedConfig.model,
+                                worldEventKind = if (reconstructed) {
+                                    "reconstructed_character_interaction"
+                                } else {
+                                    "character_interaction"
+                                },
+                                eventNeedsResponse = false,
                             )
-                            notifyRelationship(context, actor, body)
+                            messageTurn -> {
+                                store.addMessage(actor.id, "assistant", body)
+                                store.addWorldEvent(
+                                    kind = if (reconstructed) "reconstructed_message" else "message",
+                                    summary = body.take(120),
+                                    actorName = actor.name,
+                                    needsResponse = true,
+                                    providerName = usedConfig.preset.displayName,
+                                    modelName = usedConfig.model,
+                                )
+                                notifyRelationship(context, actor, body)
+                            }
+                            else -> store.createPost(
+                                "moment",
+                                actor.name,
+                                "",
+                                body,
+                                authorKind = "resident",
+                                authorCharacterId = actor.id,
+                                providerName = usedConfig.preset.displayName,
+                                modelName = usedConfig.model,
+                                worldEventKind = if (reconstructed) "reconstructed_moment" else "moment",
+                            )
                         }
-                        else -> store.createPost(
-                            "moment",
-                            actor.name,
-                            "",
-                            body,
-                            authorKind = "resident",
-                            authorCharacterId = actor.id,
-                            providerName = usedConfig.preset.displayName,
-                            modelName = usedConfig.model,
-                            worldEventKind = if (reconstructed) "reconstructed_moment" else "moment",
-                        )
-                    }
-                    consumeBudget(context)
-                    recordSuccess(context)
-                    preferences(context).edit {
-                        putInt("event_count", eventCount + 1)
-                        putLong("last_event", System.currentTimeMillis())
-                    }
-                    true
-                },
-                onFailure = {
-                    recordFailure(context, it.message.orEmpty())
-                    false
-                },
-            )
+                        consumeBudget(context)
+                        recordSuccess(context)
+                        preferences(context).edit {
+                            putInt("event_count", eventCount + 1)
+                            putLong("last_event", System.currentTimeMillis())
+                        }
+                        true
+                    },
+                    onFailure = {
+                        recordFailure(context, it.message.orEmpty())
+                        false
+                    },
+                )
+            }.getOrElse {
+                recordFailure(context, it.message.orEmpty())
+                false
+            }
             store.close()
+            generationRunning.set(false)
             callback(created)
         }
         return true
