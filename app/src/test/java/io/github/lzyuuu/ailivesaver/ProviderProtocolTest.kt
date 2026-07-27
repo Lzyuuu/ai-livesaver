@@ -63,6 +63,34 @@ class ProviderProtocolTest {
     }
 
     @Test
+    fun requiresStructuredBodyAndTracksCapabilityResults() {
+        val request = ProviderProtocol.structuredRequest(
+            "model",
+            "Return JSON.",
+            "Say OK.",
+        )
+        assertEquals(
+            "json_object",
+            request.getJSONObject("response_format").getString("type"),
+        )
+        assertEquals(
+            "OK",
+            ProviderProtocol.parseStructuredBody(
+                """{"choices":[{"message":{"content":"{\"body\":\"OK\"}"}}]}""",
+            ),
+        )
+        val capabilities = ProviderCapabilities().withResults(
+            listOf(
+                CapabilityResult(ProviderCapability.Chat, true),
+                CapabilityResult(ProviderCapability.Structured, false, "unsupported"),
+            ),
+        )
+        assertTrue(capabilities.supported.contains(ProviderCapability.Chat))
+        assertFalse(capabilities.supports(ProviderCapability.Structured))
+        assertEquals("unsupported", capabilities.failures[ProviderCapability.Structured])
+    }
+
+    @Test
     fun includesRecapAndMemoriesInCharacterContext() {
         val prompt = buildChatSystemPrompt(
             ResidentCharacter(1, "Mira", "A patient old friend."),

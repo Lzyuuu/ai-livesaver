@@ -1819,15 +1819,29 @@ private fun ProviderScreen(
     val context = LocalContext.current
     val store = remember { ProviderStore(context) }
     var textConfig by remember { mutableStateOf(store.load()) }
+    var worldConfig by remember { mutableStateOf(store.loadTask(ProviderTask.World)) }
+    var memoryConfig by remember { mutableStateOf(store.loadTask(ProviderTask.Memory)) }
     var visionConfig by remember { mutableStateOf(store.loadVision()) }
-    var profile by rememberSaveable { mutableStateOf("text") }
-    val initial = if (profile == "text") textConfig else visionConfig ?: ProviderConfig()
+    var profile by rememberSaveable { mutableStateOf(ProviderTask.Chat.key) }
+    val task = when (profile) {
+        "text" -> ProviderTask.Chat
+        "vision" -> ProviderTask.Vision
+        else -> ProviderTask.entries.firstOrNull { it.key == profile } ?: ProviderTask.Chat
+    }
+    val initial = when (task) {
+        ProviderTask.Chat -> textConfig
+        ProviderTask.World -> worldConfig ?: textConfig
+        ProviderTask.Memory -> memoryConfig ?: textConfig
+        ProviderTask.Vision -> visionConfig ?: textConfig
+    }
     var presetName by rememberSaveable { mutableStateOf(initial.preset.name) }
     var baseUrl by rememberSaveable { mutableStateOf(initial.baseUrl) }
     var model by rememberSaveable { mutableStateOf(initial.model) }
     var apiKey by rememberSaveable { mutableStateOf(initial.apiKey) }
     var extraHeaders by rememberSaveable { mutableStateOf(initial.extraHeaders) }
+    var capabilities by remember { mutableStateOf(initial.capabilities) }
     var testing by remember { mutableStateOf(false) }
+    var testingCapabilities by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf<String?>(null) }
     val preset = ProviderPreset.valueOf(presetName)
     val requiredFields = stringResource(R.string.provider_required_fields)
@@ -1835,14 +1849,16 @@ private fun ProviderScreen(
     val connectionOk = stringResource(R.string.provider_connection_ok)
     val connectionFailed = stringResource(R.string.provider_connection_failed)
     val visionRemoved = stringResource(R.string.vision_provider_removed)
+    val capabilitiesSaved = stringResource(R.string.capabilities_saved)
 
-    fun showProfile(name: String, config: ProviderConfig) {
-        profile = name
+    fun showProfile(nextTask: ProviderTask, config: ProviderConfig) {
+        profile = nextTask.key
         presetName = config.preset.name
         baseUrl = config.baseUrl
         model = config.model
         apiKey = config.apiKey
         extraHeaders = config.extraHeaders
+        capabilities = config.capabilities
         status = null
     }
 
@@ -1852,7 +1868,17 @@ private fun ProviderScreen(
         model = model.trim(),
         apiKey = apiKey.trim(),
         extraHeaders = extraHeaders.trim(),
+        capabilities = capabilities,
     )
+
+    fun rememberSavedConfig(savedTask: ProviderTask, config: ProviderConfig) {
+        when (savedTask) {
+            ProviderTask.Chat -> textConfig = config
+            ProviderTask.World -> worldConfig = config
+            ProviderTask.Memory -> memoryConfig = config
+            ProviderTask.Vision -> visionConfig = config
+        }
+    }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -1874,24 +1900,43 @@ private fun ProviderScreen(
                 fontWeight = FontWeight.Bold,
             )
             Text(
-                if (profile == "text") {
-                    stringResource(R.string.provider_privacy)
-                } else {
+                if (task == ProviderTask.Vision) {
                     stringResource(R.string.vision_provider_summary)
+                } else {
+                    stringResource(R.string.provider_privacy)
                 },
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
         item {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
                 FilterChip(
-                    selected = profile == "text",
-                    onClick = { showProfile("text", textConfig) },
+                    selected = task == ProviderTask.Chat,
+                    onClick = { showProfile(ProviderTask.Chat, textConfig) },
                     label = { Text(stringResource(R.string.general_provider)) },
                 )
                 FilterChip(
-                    selected = profile == "vision",
-                    onClick = { showProfile("vision", visionConfig ?: ProviderConfig()) },
+                    selected = task == ProviderTask.World,
+                    onClick = {
+                        showProfile(ProviderTask.World, worldConfig ?: textConfig)
+                    },
+                    label = { Text(stringResource(R.string.world_provider)) },
+                )
+                FilterChip(
+                    selected = task == ProviderTask.Memory,
+                    onClick = {
+                        showProfile(ProviderTask.Memory, memoryConfig ?: textConfig)
+                    },
+                    label = { Text(stringResource(R.string.memory_provider)) },
+                )
+                FilterChip(
+                    selected = task == ProviderTask.Vision,
+                    onClick = {
+                        showProfile(ProviderTask.Vision, visionConfig ?: textConfig)
+                    },
                     label = { Text(stringResource(R.string.vision_provider)) },
                 )
             }
@@ -1962,13 +2007,8 @@ private fun ProviderScreen(
                     onClick = {
                         val config = currentConfig()
                         status = if (config.isValid()) {
-                            if (profile == "text") {
-                                store.save(config)
-                                textConfig = config
-                            } else {
-                                store.saveVision(config)
-                                visionConfig = config
-                            }
+                            store.saveTask(task, config)
+                            rememberSavedConfig(task, config)
                             savedMessage
                         } else {
                             requiredFields
@@ -2010,19 +2050,136 @@ private fun ProviderScreen(
                 }
             }
         }
+        item {
+            Card(Modifier.fillMaxWidth()) {
+                Column(
+                    Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    Text(
+                        stringResource(R.string.capability_title),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    ProviderCapability.entries.forEach { capability ->
+                        val failure = capabilities.failures[capability]
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(stringResource(capability.labelRes))
+                            Text(
+                                when {
+                                    capability in capabilities.supported ->
+                                        stringResource(R.string.capability_passed)
+                                    failure != null ->
+                                        stringResource(R.string.capability_failed, failure)
+                                    else -> stringResource(R.string.capability_unverified)
+                                },
+                                color = if (capability in capabilities.supported) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                },
+                                style = MaterialTheme.typography.labelMedium,
+                            )
+                        }
+                    }
+                    Button(
+                        onClick = {
+                            val config = currentConfig()
+                            if (!config.isValid()) {
+                                status = requiredFields
+                            } else {
+                                val testedTask = task
+                                testingCapabilities = true
+                                status = null
+                                ProviderCapabilityTester.test(config) { result ->
+                                    testingCapabilities = false
+                                    result.fold(
+                                        onSuccess = { results ->
+                                            val updated = config.copy(
+                                                capabilities = config.capabilities.withResults(results),
+                                            )
+                                            if (task == testedTask) {
+                                                capabilities = updated.capabilities
+                                            }
+                                            store.saveTask(testedTask, updated)
+                                            rememberSavedConfig(testedTask, updated)
+                                            status = capabilitiesSaved
+                                        },
+                                        onFailure = {
+                                            status = it.message.orEmpty()
+                                        },
+                                    )
+                                }
+                            }
+                        },
+                        enabled = !testingCapabilities,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(
+                            if (testingCapabilities) {
+                                stringResource(R.string.testing_capabilities)
+                            } else {
+                                stringResource(R.string.test_capabilities)
+                            },
+                        )
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(stringResource(R.string.capability_override))
+                            Text(
+                                stringResource(R.string.capability_override_summary),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        Switch(
+                            checked = capabilities.manualOverride,
+                            onCheckedChange = {
+                                capabilities = capabilities.copy(manualOverride = it)
+                            },
+                        )
+                    }
+                }
+            }
+        }
         status?.let { message ->
             item { StatusCard(message) }
         }
-        if (profile == "vision" && visionConfig != null) {
+        val configured = when (task) {
+            ProviderTask.Chat -> null
+            ProviderTask.World -> worldConfig
+            ProviderTask.Memory -> memoryConfig
+            ProviderTask.Vision -> visionConfig
+        }
+        if (configured != null) {
             item {
                 TextButton(
                     onClick = {
-                        store.clearVision()
-                        visionConfig = null
-                        status = visionRemoved
+                        store.clearTask(task)
+                        when (task) {
+                            ProviderTask.World -> worldConfig = null
+                            ProviderTask.Memory -> memoryConfig = null
+                            ProviderTask.Vision -> visionConfig = null
+                            ProviderTask.Chat -> Unit
+                        }
+                        status = if (task == ProviderTask.Vision) visionRemoved else savedMessage
                     },
                 ) {
-                    Text(stringResource(R.string.remove_vision_provider))
+                    Text(
+                        if (task == ProviderTask.Vision) {
+                            stringResource(R.string.remove_vision_provider)
+                        } else {
+                            stringResource(R.string.remove_task_provider)
+                        },
+                    )
                 }
             }
         }

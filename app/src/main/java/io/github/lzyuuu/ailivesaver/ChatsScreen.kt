@@ -761,7 +761,7 @@ private fun ConversationContextScreen(
                                 generating = true
                                 recapError = null
                                 ProviderTextClient.complete(
-                                    provider.load(),
+                                    provider.loadFor(ProviderTask.Memory),
                                     "Summarize a private conversation for future context. " +
                                         "Preserve concrete events, promises, feelings and unresolved topics. " +
                                         "Do not invent facts. Write concise natural-language Chinese.",

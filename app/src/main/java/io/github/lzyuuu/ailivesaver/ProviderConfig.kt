@@ -33,12 +33,59 @@ internal enum class ProviderPreset(
     Custom("自定义", "", ""),
 }
 
+internal enum class ProviderTask(
+    val key: String,
+    val labelRes: Int,
+    val prefix: String,
+) {
+    Chat("chat", R.string.general_provider, ""),
+    World("world", R.string.world_provider, "world_"),
+    Memory("memory", R.string.memory_provider, "memory_"),
+    Vision("vision", R.string.vision_provider, "vision_"),
+}
+
+internal enum class ProviderCapability(
+    val labelRes: Int,
+) {
+    Chat(R.string.capability_chat),
+    Streaming(R.string.capability_streaming),
+    Structured(R.string.capability_structured),
+    Vision(R.string.capability_vision),
+}
+
+internal data class ProviderCapabilities(
+    val supported: Set<ProviderCapability> = emptySet(),
+    val checkedAt: Long = 0,
+    val failures: Map<ProviderCapability, String> = emptyMap(),
+    val manualOverride: Boolean = false,
+) {
+    fun supports(capability: ProviderCapability) = manualOverride || capability in supported
+
+    fun withResults(results: List<CapabilityResult>) = ProviderCapabilities(
+        supported = results.filter(CapabilityResult::passed).mapTo(mutableSetOf()) {
+            it.capability
+        },
+        checkedAt = System.currentTimeMillis(),
+        failures = results.filterNot(CapabilityResult::passed).associate {
+            it.capability to it.detail
+        },
+        manualOverride = manualOverride,
+    )
+}
+
+internal data class CapabilityResult(
+    val capability: ProviderCapability,
+    val passed: Boolean,
+    val detail: String = "",
+)
+
 internal data class ProviderConfig(
     val preset: ProviderPreset = ProviderPreset.DeepSeek,
     val baseUrl: String = ProviderPreset.DeepSeek.defaultBaseUrl,
     val model: String = ProviderPreset.DeepSeek.defaultModel,
     val apiKey: String = "",
     val extraHeaders: String = "",
+    val capabilities: ProviderCapabilities = ProviderCapabilities(),
 ) {
     fun isValid() = baseUrl.startsWith("https://") && model.isNotBlank() && apiKey.isNotBlank()
 }
@@ -65,6 +112,28 @@ internal object ProviderProtocol {
         .getJSONObject("message")
         .getString("content")
         .trim()
+
+    fun structuredRequest(model: String, system: String, prompt: String): JSONObject = JSONObject()
+        .put("model", model)
+        .put("max_tokens", 240)
+        .put("response_format", JSONObject().put("type", "json_object"))
+        .put(
+            "messages",
+            JSONArray()
+                .put(JSONObject().put("role", "system").put("content", system))
+                .put(JSONObject().put("role", "user").put("content", prompt)),
+        )
+
+    fun parseStructuredBody(json: String): String {
+        val content = parseReply(json)
+            .removePrefix("```")
+            .removePrefix("json")
+            .removeSuffix("```")
+            .trim()
+        val body = JSONObject(content).optString("body").trim()
+        require(body.isNotEmpty()) { "Structured reply is missing body" }
+        return body
+    }
 
     fun parseStreamDelta(json: String): String {
         val choice = JSONObject(json).getJSONArray("choices").optJSONObject(0) ?: return ""
@@ -117,11 +186,18 @@ internal class ProviderStore(context: Context) {
 
     fun load() = load("")
 
-    fun loadVision() = if (preferences.getBoolean("vision_enabled", false)) {
-        load("vision_")
-    } else {
-        null
+    fun loadTask(task: ProviderTask): ProviderConfig? = when (task) {
+        ProviderTask.Chat -> load()
+        else -> if (preferences.getBoolean("${task.prefix}enabled", false)) {
+            load(task.prefix)
+        } else {
+            null
+        }
     }
+
+    fun loadFor(task: ProviderTask): ProviderConfig = loadTask(task) ?: load()
+
+    fun loadVision() = loadTask(ProviderTask.Vision)
 
     private fun load(prefix: String) = ProviderConfig(
         preset = runCatching {
@@ -139,17 +215,32 @@ internal class ProviderStore(context: Context) {
         extraHeaders = preferences.getString("${prefix}extra_headers", null)
             ?.let(::decrypt)
             .orEmpty(),
+        capabilities = decodeCapabilities(preferences.getString("${prefix}capabilities", null)),
     )
 
     fun save(config: ProviderConfig) = save(config, "")
 
     fun saveVision(config: ProviderConfig) {
-        preferences.edit { putBoolean("vision_enabled", true) }
-        save(config, "vision_")
+        saveTask(ProviderTask.Vision, config)
+    }
+
+    fun saveTask(task: ProviderTask, config: ProviderConfig) {
+        if (task == ProviderTask.Chat) {
+            save(config)
+        } else {
+            preferences.edit { putBoolean("${task.prefix}enabled", true) }
+            save(config, task.prefix)
+        }
     }
 
     fun clearVision() {
-        preferences.edit { putBoolean("vision_enabled", false) }
+        clearTask(ProviderTask.Vision)
+    }
+
+    fun clearTask(task: ProviderTask) {
+        if (task != ProviderTask.Chat) {
+            preferences.edit { putBoolean("${task.prefix}enabled", false) }
+        }
     }
 
     fun clearAll() {
@@ -165,8 +256,47 @@ internal class ProviderStore(context: Context) {
             putString("${prefix}model", config.model)
             putString("${prefix}api_key", encrypt(config.apiKey))
             putString("${prefix}extra_headers", encrypt(config.extraHeaders))
+            putString("${prefix}capabilities", encodeCapabilities(config.capabilities))
         }
     }
+
+    private fun encodeCapabilities(capabilities: ProviderCapabilities): String = JSONObject()
+        .put("supported", JSONArray(capabilities.supported.map(ProviderCapability::name)))
+        .put("checked_at", capabilities.checkedAt)
+        .put("manual_override", capabilities.manualOverride)
+        .put(
+            "failures",
+            JSONObject().apply {
+                capabilities.failures.forEach { (capability, detail) -> put(capability.name, detail) }
+            },
+        )
+        .toString()
+
+    private fun decodeCapabilities(raw: String?): ProviderCapabilities = runCatching {
+        val json = JSONObject(raw.orEmpty())
+        val supported = buildSet {
+            val values = json.optJSONArray("supported") ?: JSONArray()
+            for (index in 0 until values.length()) {
+                runCatching {
+                    add(ProviderCapability.valueOf(values.getString(index)))
+                }
+            }
+        }
+        val failuresJson = json.optJSONObject("failures") ?: JSONObject()
+        val failures = buildMap {
+            ProviderCapability.entries.forEach { capability ->
+                failuresJson.optString(capability.name).takeIf(String::isNotBlank)?.let {
+                    put(capability, it)
+                }
+            }
+        }
+        ProviderCapabilities(
+            supported = supported,
+            checkedAt = json.optLong("checked_at"),
+            failures = failures,
+            manualOverride = json.optBoolean("manual_override"),
+        )
+    }.getOrDefault(ProviderCapabilities())
 
     private fun encrypt(value: String): String {
         val cipher = Cipher.getInstance(TRANSFORMATION)
@@ -229,6 +359,76 @@ internal object ProviderConnectionTester {
             Handler(Looper.getMainLooper()).post { callback(result) }
         }.start()
     }
+}
+
+internal object ProviderCapabilityTester {
+    fun test(config: ProviderConfig, callback: (Result<List<CapabilityResult>>) -> Unit) {
+        Thread {
+            val result = runCatching {
+                ProviderCapability.entries.map { capability ->
+                    runCatching {
+                        when (capability) {
+                            ProviderCapability.Chat -> {
+                                ProviderProtocol.parseReply(
+                                    ProviderHttp.post(config, capabilityRequest(config, false)),
+                                ).ifBlank { throw IOException("empty reply") }
+                            }
+                            ProviderCapability.Streaming -> {
+                                var deltas = 0
+                                ProviderHttp.stream(config, capabilityRequest(config, true)) {
+                                    deltas++
+                                }
+                                require(deltas > 0) { "endpoint did not return SSE deltas" }
+                            }
+                            ProviderCapability.Structured -> {
+                                ProviderProtocol.parseStructuredBody(
+                                    ProviderHttp.post(
+                                        config,
+                                        ProviderProtocol.structuredRequest(
+                                            config.model,
+                                            "Return JSON only with a single string field named body.",
+                                            "Return body equal to OK.",
+                                        ),
+                                    ),
+                                )
+                            }
+                            ProviderCapability.Vision -> {
+                                ProviderProtocol.parseReply(
+                                    ProviderHttp.post(
+                                        config,
+                                        ProviderProtocol.visionRequest(
+                                            config.model,
+                                            ONE_PIXEL_DATA_URL,
+                                        ),
+                                    ),
+                                ).ifBlank { throw IOException("empty vision description") }
+                            }
+                        }
+                        CapabilityResult(capability, passed = true)
+                    }.getOrElse { failure ->
+                        CapabilityResult(
+                            capability,
+                            passed = false,
+                            detail = failure.message.orEmpty().take(160),
+                        )
+                    }
+                }
+            }
+            Handler(Looper.getMainLooper()).post { callback(result) }
+        }.start()
+    }
+
+    private fun capabilityRequest(config: ProviderConfig, stream: Boolean) = JSONObject()
+        .put("model", config.model)
+        .put("messages", JSONArray().put(JSONObject().apply {
+            put("role", "user")
+            put("content", "Reply with OK.")
+        }))
+        .put("max_tokens", 4)
+        .put("stream", stream)
+
+    private const val ONE_PIXEL_DATA_URL =
+        "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
 }
 
 internal object ProviderChatClient {
@@ -352,6 +552,32 @@ internal object ProviderTextClient {
             Handler(Looper.getMainLooper()).post { callback(result) }
         }.start()
     }
+
+    fun completeStructured(
+        config: ProviderConfig,
+        system: String,
+        prompt: String,
+        callback: (Result<String>) -> Unit,
+    ) {
+        Thread {
+            val result = runCatching {
+                if (!config.capabilities.supports(ProviderCapability.Structured)) {
+                    throw IOException("Provider structured JSON capability is not qualified")
+                }
+                ProviderProtocol.parseStructuredBody(
+                    ProviderHttp.post(
+                        config,
+                        ProviderProtocol.structuredRequest(
+                            config.model,
+                            "$system\nReturn a JSON object with only one string field named body.",
+                            "$prompt\nReturn only the JSON object; put the response text in body.",
+                        ),
+                    ),
+                )
+            }
+            Handler(Looper.getMainLooper()).post { callback(result) }
+        }.start()
+    }
 }
 
 internal object ProviderVisionClient {
@@ -362,6 +588,9 @@ internal object ProviderVisionClient {
     ) {
         Thread {
             val result = runCatching {
+                if (!config.capabilities.supports(ProviderCapability.Vision)) {
+                    throw IOException("Provider vision capability is not qualified")
+                }
                 val dataUrl = minimizedImageDataUrl(imagePath)
                 ProviderProtocol.parseReply(
                     ProviderHttp.post(config, ProviderProtocol.visionRequest(config.model, dataUrl)),

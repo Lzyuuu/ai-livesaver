@@ -272,8 +272,12 @@ internal object WorldEngine {
         if (!isEnabled(context) || !hasBudget(context) || taskPaused(context)) return false
         val store = WorldStore(context)
         val character = store.primaryCharacter()
-        val config = ProviderStore(context).load()
-        if (character == null || !config.isValid()) {
+        val config = ProviderStore(context).loadFor(ProviderTask.World)
+        if (
+            character == null ||
+            !config.isValid() ||
+            !config.capabilities.supports(ProviderCapability.Structured)
+        ) {
             store.close()
             return false
         }
@@ -342,7 +346,7 @@ internal object WorldEngine {
                 "Write one natural short social post for ${store.userName()} to discover later. " +
                     "Keep the relationship central without sounding needy. Stay under 80 Chinese characters."
         }
-        ProviderTextClient.complete(config, system, prompt) { result ->
+        ProviderTextClient.completeStructured(config, system, prompt) { result ->
             val created = result.fold(
                 onSuccess = { body ->
                     when {
@@ -435,8 +439,12 @@ internal object WorldEngine {
         val character = store.characters(includeDeparted = false).firstOrNull {
             audience != "selected" || it.id in allowedIds
         }
-        val config = ProviderStore(context).load()
-        if (character == null || !config.isValid()) {
+        val config = ProviderStore(context).loadFor(ProviderTask.World)
+        if (
+            character == null ||
+            !config.isValid() ||
+            !config.capabilities.supports(ProviderCapability.Structured)
+        ) {
             store.close()
             return false
         }
@@ -446,7 +454,7 @@ internal object WorldEngine {
             "Write one warm, natural flat comment on this social update. " +
                 "Stay under 80 Chinese characters."
         }
-        ProviderTextClient.complete(
+        ProviderTextClient.completeStructured(
             config,
             "You are ${character.name}. ${character.persona}",
             "$prompt\n\nUser post:\n$body",
@@ -488,8 +496,11 @@ internal object WorldEngine {
         callback: (Boolean) -> Unit,
     ): Boolean {
         if (post.authorKind == "user") return false
-        val config = ProviderStore(context).load()
-        if (!config.isValid()) return false
+        val config = ProviderStore(context).loadFor(ProviderTask.World)
+        if (
+            !config.isValid() ||
+            !config.capabilities.supports(ProviderCapability.Structured)
+        ) return false
         val store = WorldStore(context)
         val character = post.authorCharacterId?.let { id ->
             store.characters().firstOrNull { it.id == id }
@@ -499,7 +510,7 @@ internal object WorldEngine {
         } else {
             "You are ${character.name}. ${character.persona}"
         }
-        ProviderTextClient.complete(
+        ProviderTextClient.completeStructured(
             config,
             system,
             "Rewrite this post as a distinct alternative. Keep the same facts, do not mention rewriting, " +
