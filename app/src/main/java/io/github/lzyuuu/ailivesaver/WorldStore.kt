@@ -53,19 +53,67 @@ internal data class RelationshipEvent(
     val source: String,
 )
 
+internal data class RelationshipSignals(
+    val tension: Boolean,
+    val repair: Boolean,
+)
+
 internal fun nextRelationship(
     current: RelationshipState,
     sharedPersonalFact: Boolean,
+    signals: RelationshipSignals = RelationshipSignals(false, false),
 ): Pair<String, String>? = if (current.pinned) {
     null
 } else {
     when {
         current.createdAt == 0L ->
             "开始交谈" to "你主动开启了一段只属于你们的对话。"
+        signals.tension && current.label == "关系出现裂痕" ->
+            "有些疏远" to "刚才的分歧还没有真正过去，你们需要一点空间。"
+        signals.tension ->
+            "关系出现裂痕" to "这次对话留下了没有被轻轻带过的分歧。"
+        signals.repair && current.label in setOf("关系出现裂痕", "有些疏远") ->
+            "重新靠近" to "你们愿意把没有说完的部分重新放回对话里。"
         sharedPersonalFact && current.label != "更了解彼此" ->
             "更了解彼此" to "你分享了一件值得长期记住的事。"
         else -> null
     }
+}
+
+internal fun relationshipSignals(message: String): RelationshipSignals {
+    // ponytail: keyword heuristic keeps relation mutation bounded; replace with structured signals later.
+    val normalized = message.trim().lowercase()
+    return RelationshipSignals(
+        tension = listOf(
+            "生气",
+            "失望",
+            "别烦",
+            "讨厌",
+            "不想聊",
+            "你不懂",
+            "吵架",
+            "误会",
+            "不信任",
+            "离开我",
+            "angry",
+            "disappointed",
+            "leave me alone",
+            "don't understand",
+        ).any(normalized::contains),
+        repair = listOf(
+            "对不起",
+            "抱歉",
+            "和好",
+            "原谅",
+            "想聊聊",
+            "我们谈谈",
+            "我在乎你",
+            "别生气",
+            "sorry",
+            "forgive",
+            "talk this through",
+        ).any(normalized::contains),
+    )
 }
 
 internal data class ChatMessage(
@@ -957,10 +1005,15 @@ internal class WorldStore(context: Context) :
         characterId: Long,
         sourceMessageId: Long,
         sharedPersonalFact: Boolean,
+        messageBody: String = "",
     ) {
         val current = relationship(characterId)
         if (current.pinned) return
-        val next = nextRelationship(current, sharedPersonalFact) ?: return
+        val next = nextRelationship(
+            current,
+            sharedPersonalFact,
+            relationshipSignals(messageBody),
+        ) ?: return
         writableDatabase.insertOrThrow(
             "relationship_events",
             null,

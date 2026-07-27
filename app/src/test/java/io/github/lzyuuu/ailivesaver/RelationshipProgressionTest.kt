@@ -19,5 +19,39 @@ class RelationshipProgressionTest {
 
         val pinned = RelationshipState("刚认识", "", null, 0, pinned = true)
         assertNull(nextRelationship(pinned, sharedPersonalFact = true))
+
+        val tension = RelationshipState("更了解彼此", "", 2, 2)
+        assertEquals(
+            "关系出现裂痕",
+            nextRelationship(
+                tension,
+                sharedPersonalFact = false,
+                signals = RelationshipSignals(tension = true, repair = false),
+            )?.first,
+        )
+        val distant = RelationshipState("关系出现裂痕", "", 3, 3)
+        assertEquals(
+            "有些疏远",
+            nextRelationship(
+                distant,
+                sharedPersonalFact = false,
+                signals = RelationshipSignals(tension = true, repair = false),
+            )?.first,
+        )
+        assertEquals(
+            "重新靠近",
+            nextRelationship(
+                distant,
+                sharedPersonalFact = false,
+                signals = RelationshipSignals(tension = false, repair = true),
+            )?.first,
+        )
+    }
+
+    @Test
+    fun `message cues stay narrow and directional`() {
+        assertEquals(true, relationshipSignals("我很失望，不想聊").tension)
+        assertEquals(true, relationshipSignals("对不起，我们谈谈").repair)
+        assertEquals(false, relationshipSignals("今天见到一只猫").tension)
     }
 }

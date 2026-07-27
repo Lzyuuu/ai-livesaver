@@ -366,6 +366,7 @@ private fun ConversationScreen(
                                 character.id,
                                 newMessage.id,
                                 extractedMemory != null,
+                                messageBody = body,
                             )
                             captureLongTermMemory(context, store, character, newMessage, onChanged)
                             rewritingMessageId = null
@@ -681,6 +682,7 @@ private fun ConversationScreen(
                         character.id,
                         userMessage.id,
                         extractedMemory != null,
+                        messageBody = body,
                     )
                     captureLongTermMemory(context, store, character, userMessage, onChanged)
                     onChanged()
