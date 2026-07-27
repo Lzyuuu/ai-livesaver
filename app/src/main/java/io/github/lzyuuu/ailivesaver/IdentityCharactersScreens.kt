@@ -1,6 +1,7 @@
 package io.github.lzyuuu.ailivesaver
 
 import android.graphics.BitmapFactory
+import android.os.StatFs
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -37,6 +38,12 @@ import androidx.compose.ui.window.Dialog
 import java.text.DateFormat
 import java.util.Date
 import java.io.File
+import java.util.UUID
+
+private const val MAX_AVATAR_BYTES = 10L * 1024 * 1024
+
+internal fun avatarImportAllowed(totalBytes: Long): Boolean =
+    totalBytes in 1..MAX_AVATAR_BYTES
 
 @Composable
 internal fun IdentityScreen(
@@ -55,19 +62,39 @@ internal fun IdentityScreen(
     val saved = stringResource(R.string.identity_saved)
     val incomplete = stringResource(R.string.identity_name_required)
     val avatarInvalid = stringResource(R.string.identity_avatar_invalid)
+    val avatarTooLarge = stringResource(R.string.identity_avatar_too_large)
+    val avatarStorageLow = stringResource(R.string.identity_avatar_storage_low)
     val avatarPicker = rememberLauncherForActivityResult(
         ActivityResultContracts.PickVisualMedia(),
     ) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
+        val target = File(
+            File(context.filesDir, "media").apply { mkdirs() },
+            "user-avatar-${UUID.randomUUID()}.jpg",
+        )
         runCatching {
-            val directory = File(context.filesDir, "media").apply { mkdirs() }
-            val target = File(directory, "user-avatar-${System.currentTimeMillis()}.jpg")
+            check(storageAllowsGeneration(StatFs(context.filesDir.path).availableBytes)) {
+                avatarStorageLow
+            }
             context.contentResolver.openInputStream(uri)?.use { input ->
-                target.outputStream().use { output -> input.copyTo(output) }
+                target.outputStream().use { output ->
+                    var total = 0L
+                    val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+                    while (true) {
+                        val count = input.read(buffer)
+                        if (count < 0) break
+                        total += count
+                        check(avatarImportAllowed(total)) { avatarTooLarge }
+                        output.write(buffer, 0, count)
+                    }
+                }
             } ?: error(avatarInvalid)
             check(BitmapFactory.decodeFile(target.path) != null) { avatarInvalid }
             avatarPath = target.path
-        }.onFailure { status = it.message ?: avatarInvalid }
+        }.onFailure {
+            target.delete()
+            status = it.message ?: avatarInvalid
+        }
     }
 
     SettingsList(contentPadding) {

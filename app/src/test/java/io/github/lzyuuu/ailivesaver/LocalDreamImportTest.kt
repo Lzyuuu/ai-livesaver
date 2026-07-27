@@ -9,6 +9,14 @@ import java.nio.file.Files
 
 class LocalDreamImportTest {
     @Test
+    fun avatarImportHasARecoverableSizeLimit() {
+        assertTrue(avatarImportAllowed(1))
+        assertTrue(avatarImportAllowed(10L * 1024 * 1024))
+        assertFalse(avatarImportAllowed(0))
+        assertFalse(avatarImportAllowed(10L * 1024 * 1024 + 1))
+    }
+
+    @Test
     fun readsJsonAndKeyValueLocalDreamParameters() {
         val json = parseLocalDreamParameters(
             """{"prompt":"rainy station","negative_prompt":"blurry","seed":42,"steps":24,"cfg_scale":6.5,"width":768,"height":512}""",

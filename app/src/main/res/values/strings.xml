@@ -190,6 +190,8 @@
     <string name="choose_avatar">选择头像</string>
     <string name="remove_avatar">移除头像</string>
     <string name="identity_avatar_invalid">无法读取这张图片，请重新选择。</string>
+    <string name="identity_avatar_too_large">头像超过 10 MB，请选择更小的图片。</string>
+    <string name="identity_avatar_storage_low">存储空间不足，暂时无法导入头像。</string>
     <string name="save_identity">保存身份</string>
     <string name="identity_saved">身份已更新；既有关系与记忆不会被改写</string>
     <string name="identity_name_required">昵称不能为空</string>
