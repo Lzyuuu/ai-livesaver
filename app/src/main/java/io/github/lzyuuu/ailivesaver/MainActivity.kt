@@ -170,7 +170,6 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         cleanupTemporaryCache(this)
-        LocalDreamQueue.resume(this)
     }
 }
 
@@ -275,6 +274,17 @@ private fun AiLivesaverApp(
     val queueCount = remember(worldRevision) { worldStore.queueCount() }
     val budgetExhausted = remember(worldRevision) { WorldEngine.budgetExhausted(context) }
 
+    fun resumeLocalDreamQueue() {
+        LocalDreamQueue.resume(
+            context,
+            onFinished = { _, _ -> worldRevision++ },
+        )
+    }
+
+    LaunchedEffect(Unit) {
+        resumeLocalDreamQueue()
+    }
+
     LaunchedEffect(notificationCharacterId) {
         if (notificationCharacterId != null) destinationName = Destination.Chats.name
     }
@@ -294,6 +304,7 @@ private fun AiLivesaverApp(
         } else {
             val observer = LifecycleEventObserver { _, event ->
                 if (event == Lifecycle.Event.ON_RESUME) {
+                    resumeLocalDreamQueue()
                     WorldEngine.onAppOpened(activity) { worldRevision++ }
                 }
             }
