@@ -208,6 +208,10 @@
     <string name="character_turning_points">角色转折</string>
     <string name="character_turning_points_summary">人设的重要变化从发生时刻起影响未来，不追溯改写旧经历。</string>
     <string name="settings_title">设置</string>
+    <string name="my_posts">我的动态</string>
+    <string name="my_posts_summary">你在这个世界里留下的 Moments 与 Commons。</string>
+    <string name="no_my_posts">还没有发布动态。去和这个世界分享一点什么吧。</string>
+    <string name="open">打开</string>
     <string name="provider_settings">推理配置</string>
     <string name="provider_settings_summary">DeepSeek、OpenAI、OpenRouter 与自定义 Provider</string>
     <string name="local_dream_settings">Local Dream</string>

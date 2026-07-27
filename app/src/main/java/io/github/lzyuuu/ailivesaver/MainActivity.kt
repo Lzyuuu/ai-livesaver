@@ -331,6 +331,8 @@ private fun AiLivesaverApp() {
                 Destination.Me -> MeScreen(
                     contentPadding = padding,
                     identity = worldStore.identity(),
+                    store = worldStore,
+                    revision = worldRevision,
                     onOpenIdentity = { showIdentity = true },
                     onOpenCharacters = { showCharacters = true },
                     onOpenUpdates = { showUpdates = true },
@@ -341,6 +343,8 @@ private fun AiLivesaverApp() {
                     onOpenDiagnostics = { showDiagnostics = true },
                     onOpenPrivacy = { showPrivacy = true },
                     onOpenBackups = { showBackups = true },
+                    onOpenMoments = { destinationName = Destination.Moments.name },
+                    onOpenCommons = { destinationName = Destination.Commons.name },
                 )
             }
         }
@@ -727,6 +731,8 @@ private data class SettingRow(
 private fun MeScreen(
     contentPadding: PaddingValues,
     identity: UserIdentity,
+    store: WorldStore,
+    revision: Int,
     onOpenIdentity: () -> Unit,
     onOpenCharacters: () -> Unit,
     onOpenUpdates: () -> Unit,
@@ -737,7 +743,14 @@ private fun MeScreen(
     onOpenDiagnostics: () -> Unit,
     onOpenPrivacy: () -> Unit,
     onOpenBackups: () -> Unit,
+    onOpenMoments: () -> Unit,
+    onOpenCommons: () -> Unit,
 ) {
+    val myPosts = remember(revision) {
+        (store.posts("moment") + store.posts("forum"))
+            .filter { it.authorKind == "user" }
+            .sortedByDescending(SocialPost::createdAt)
+    }
     val settings = listOf(
         SettingRow(R.string.user_identity, R.string.user_identity_summary, "identity"),
         SettingRow(R.string.world_members, R.string.world_members_summary, "characters"),
@@ -778,6 +791,56 @@ private fun MeScreen(
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
             )
+        }
+        item {
+            Text(
+                stringResource(R.string.my_posts),
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(
+                stringResource(R.string.my_posts_summary),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        if (myPosts.isEmpty()) {
+            item { StatusCard(stringResource(R.string.no_my_posts)) }
+        } else {
+            items(myPosts.take(5), key = { "me-post-${it.id}" }) { post ->
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.66f),
+                    ),
+                ) {
+                    Column(
+                        Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        Text(
+                            if (post.kind == "moment") {
+                                stringResource(R.string.moments_title)
+                            } else {
+                                stringResource(R.string.commons_title)
+                            },
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                        Text(
+                            post.title.ifBlank { post.body },
+                            maxLines = 3,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        TextButton(
+                            onClick = {
+                                if (post.kind == "moment") onOpenMoments() else onOpenCommons()
+                            },
+                        ) {
+                            Text(stringResource(R.string.open))
+                        }
+                    }
+                }
+            }
         }
         items(settings) { setting ->
             Card(
