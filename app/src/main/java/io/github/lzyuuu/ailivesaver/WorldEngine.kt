@@ -68,6 +68,12 @@ internal fun shouldReconstructWorld(
     now - previousOpen >= interval &&
     (lastEvent <= 0 || (now >= lastEvent && now - lastEvent >= interval))
 
+internal fun shouldQueueSocialResponse(
+    hasTargetCharacter: Boolean,
+    providerReady: Boolean,
+    existingJobId: Long?,
+): Boolean = hasTargetCharacter && !providerReady && existingJobId == null
+
 private val BASE_WORLD_SETTING_KEYS = setOf(
     "enabled",
     "activity",
@@ -537,12 +543,20 @@ internal object WorldEngine {
             audience != "selected" || it.id in allowedIds
         }
         val config = ProviderStore(context).loadFor(ProviderTask.World)
-        if (
-            character == null ||
-            !config.supports(ProviderCapability.Structured)
-        ) {
+        val providerReady = config.supports(ProviderCapability.Structured)
+        if (character == null || !providerReady) {
+            if (shouldQueueSocialResponse(character != null, providerReady, queuedJobId)) {
+                store.enqueueSocialResponse(
+                    postId,
+                    kind,
+                    body,
+                    audience,
+                    audienceCharacterIds,
+                )
+            }
             store.close()
-            return false
+            callback(false)
+            return true
         }
         val prompt = if (kind == "forum") {
             "Reply thoughtfully to this public discussion topic. Stay under 180 Chinese characters."
