@@ -352,6 +352,9 @@
     <string name="runtime_disabled">未启用</string>
     <string name="runtime_budget">自动预算</string>
     <string name="runtime_queue">创作队列</string>
+    <string name="runtime_queue_summary">%1$d 待处理 · %2$d 失败 · %3$s</string>
+    <string name="runtime_queue_running">运行中</string>
+    <string name="runtime_queue_idle">空闲</string>
     <string name="runtime_storage">可用存储</string>
     <string name="runtime_notifications">关系通知</string>
     <string name="runtime_paused">任务已暂停：%1$s</string>

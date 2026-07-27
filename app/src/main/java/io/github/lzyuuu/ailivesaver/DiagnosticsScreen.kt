@@ -55,6 +55,9 @@ internal data class RuntimeSnapshot(
     val taskPaused: Boolean,
     val lastFailure: String,
     val queuedMedia: Int,
+    val pendingMedia: Int,
+    val failedMedia: Int,
+    val localDreamQueueRunning: Boolean,
     val availableStorage: Long,
     val notificationsEnabled: Boolean,
     val localDreamStats: LocalDreamRunStats?,
@@ -63,7 +66,7 @@ internal data class RuntimeSnapshot(
 internal object RuntimeDiagnostics {
     fun snapshot(context: Context): RuntimeSnapshot {
         val provider = ProviderStore(context).load()
-        val queue = WorldStore(context).use { it.queueCount() }
+        val mediaJobs = WorldStore(context).use { it.mediaJobs() }
         val notifications = WorldEngine.notificationsEnabled(context) &&
             (Build.VERSION.SDK_INT < 33 ||
                 context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) ==
@@ -82,7 +85,10 @@ internal object RuntimeDiagnostics {
             budgetLimit = WorldEngine.dailyBudget(context),
             taskPaused = WorldEngine.taskPaused(context),
             lastFailure = sanitizeFailure(WorldEngine.lastFailure(context)),
-            queuedMedia = queue,
+            queuedMedia = mediaJobs.size,
+            pendingMedia = mediaJobs.count { it.status == "pending" },
+            failedMedia = mediaJobs.count { it.status == "failed" },
+            localDreamQueueRunning = LocalDreamQueue.isRunning(),
             availableStorage = StatFs(context.filesDir.path).availableBytes,
             notificationsEnabled = notifications,
             localDreamStats = LocalDreamStatsStore.load(context),
@@ -109,6 +115,9 @@ internal object RuntimeDiagnostics {
         appendLine("budget=${snapshot.budgetUsed}/${snapshot.budgetLimit}")
         appendLine("task_paused=${snapshot.taskPaused}")
         appendLine("queued_media=${snapshot.queuedMedia}")
+        appendLine("queued_media_pending=${snapshot.pendingMedia}")
+        appendLine("queued_media_failed=${snapshot.failedMedia}")
+        appendLine("local_dream_queue_running=${snapshot.localDreamQueueRunning}")
         appendLine("available_storage_bytes=${snapshot.availableStorage}")
         appendLine("notifications_enabled=${snapshot.notificationsEnabled}")
         snapshot.localDreamStats?.let { stats ->
@@ -225,7 +234,18 @@ internal fun DiagnosticsScreen(
                     )
                     DiagnosticRow(
                         stringResource(R.string.runtime_queue),
-                        snapshot.queuedMedia.toString(),
+                        stringResource(
+                            R.string.runtime_queue_summary,
+                            snapshot.pendingMedia,
+                            snapshot.failedMedia,
+                            stringResource(
+                                if (snapshot.localDreamQueueRunning) {
+                                    R.string.runtime_queue_running
+                                } else {
+                                    R.string.runtime_queue_idle
+                                },
+                            ),
+                        ),
                     )
                     DiagnosticRow(
                         stringResource(R.string.runtime_storage),
