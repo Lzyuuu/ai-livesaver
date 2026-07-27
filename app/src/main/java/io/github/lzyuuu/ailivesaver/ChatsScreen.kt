@@ -91,7 +91,7 @@ internal fun ChatsScreen(
     var selectedId by rememberSaveable { mutableStateOf<Long?>(null) }
     val character = characters.firstOrNull { it.id == selectedId } ?: characters.firstOrNull()
     if (character == null) {
-        FirstRelationshipScreen(contentPadding, store, onChanged, onConfigureProvider)
+        FirstRelationshipScreen(contentPadding, store, revision, onChanged, onConfigureProvider)
     } else {
         key(character.id) {
             ConversationScreen(
@@ -111,11 +111,12 @@ internal fun ChatsScreen(
 private fun FirstRelationshipScreen(
     contentPadding: PaddingValues,
     store: WorldStore,
+    revision: Int,
     onChanged: () -> Unit,
     onConfigureProvider: () -> Unit,
 ) {
     val context = LocalContext.current
-    val providerReady = remember { ProviderStore(context).load().isValid() }
+    val providerReady = remember(revision) { ProviderStore(context).load().isValid() }
     var userName by rememberSaveable { mutableStateOf("") }
     var characterName by rememberSaveable { mutableStateOf("") }
     var persona by rememberSaveable { mutableStateOf("") }

@@ -248,6 +248,7 @@ private fun AiLivesaverApp(
             showLocalDream ||
             showDiagnostics || showPrivacy || showBackups || showIdentity || showCharacters,
     ) {
+        if (showProviders) worldRevision++
         showUpdates = false
         showProviders = false
         showWorldSettings = false
@@ -298,7 +299,10 @@ private fun AiLivesaverApp(
         } else if (showProviders) {
             ProviderScreen(
                 contentPadding = padding,
-                onBack = { showProviders = false },
+                onBack = {
+                    showProviders = false
+                    worldRevision++
+                },
             )
         } else if (showWorldSettings) {
             WorldSettingsScreen(
