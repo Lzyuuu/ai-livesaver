@@ -197,6 +197,9 @@ private data class PendingSocialPostRoute(
     val postId: Long,
 )
 
+internal fun unreadWorldEventIds(events: List<WorldEvent>): List<Long> =
+    events.filterNot(WorldEvent::seen).map(WorldEvent::id)
+
 @Composable
 private fun AiLivesaverTheme(themeMode: ThemeMode, content: @Composable () -> Unit) {
     val context = LocalContext.current
@@ -462,7 +465,8 @@ private fun AiLivesaverApp(
                     onManageCircle = { showCharacters = true },
                     onOpenChronicle = { showWorldChronicle = true },
                     onMarkAllEventsSeen = {
-                        worldEvents.filter { !it.seen }.forEach { worldStore.markWorldEventSeen(it.id) }
+                        unreadWorldEventIds(allWorldEvents)
+                            .forEach(worldStore::markWorldEventSeen)
                         worldRevision++
                     },
                 onOpenEvent = ::openWorldEvent,
