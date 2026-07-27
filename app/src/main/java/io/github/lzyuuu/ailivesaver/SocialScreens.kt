@@ -367,6 +367,7 @@ internal fun SocialScreen(
                                         generationStatus =
                                             "$visionAnalysisFailed：" +
                                             it.message.orEmpty()
+                                        respond(description)
                                     }
                                     onChanged()
                                 }
