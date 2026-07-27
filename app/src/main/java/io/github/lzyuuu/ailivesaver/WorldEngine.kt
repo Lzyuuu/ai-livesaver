@@ -52,6 +52,9 @@ internal fun isDefaultQuietHour(hour: Int): Boolean = hour >= 23 || hour < 8
 internal fun relationshipNotificationVisibility(preview: Boolean): Int =
     if (preview) Notification.VISIBILITY_PUBLIC else Notification.VISIBILITY_PRIVATE
 
+internal fun relationshipNotificationId(characterId: Long): Int =
+    (0xA1300000L or (characterId and 0x0000FFFFL)).toInt()
+
 internal fun shouldReconstructWorld(
     previousOpen: Long,
     now: Long,
@@ -81,7 +84,6 @@ internal fun isBackedUpWorldSetting(key: String): Boolean =
 
 internal object WorldEngine {
     private const val JOB_ID = 0xA11
-    private const val RELATIONSHIP_NOTIFICATION_ID = 0xA13
     private const val CONTINUOUS_CHANNEL = "continuous_world"
     private const val RELATIONSHIP_CHANNEL = "relationship_messages"
     private val generationRunning = AtomicBoolean(false)
@@ -720,7 +722,7 @@ internal object WorldEngine {
             context.getString(R.string.private_new_message, character.name)
         }
         context.getSystemService(NotificationManager::class.java).notify(
-            RELATIONSHIP_NOTIFICATION_ID,
+            relationshipNotificationId(character.id),
             Notification.Builder(context, RELATIONSHIP_CHANNEL)
                 .setSmallIcon(android.R.drawable.ic_dialog_email)
                 .setContentTitle(character.name)
