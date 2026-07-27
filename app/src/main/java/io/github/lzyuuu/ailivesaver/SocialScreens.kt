@@ -95,6 +95,7 @@ internal fun SocialScreen(
     val characters = remember(revision) { store.characters(includeDeparted = false) }
     var forumSort by rememberSaveable { mutableStateOf("latest") }
     val posts = remember(revision, kind, forumSort) { store.posts(kind, forumSort) }
+    val queuedResponseCount = remember(revision) { store.socialResponseQueueCount() }
     var selectedPostId by rememberSaveable { mutableStateOf<Long?>(null) }
     var npcProfile by remember { mutableStateOf<NpcProfile?>(null) }
     var previewPostId by rememberSaveable { mutableStateOf<Long?>(null) }
@@ -254,6 +255,11 @@ internal fun SocialScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
+        if (queuedResponseCount > 0) {
+            item {
+                StatusCard(stringResource(R.string.social_responses_waiting, queuedResponseCount))
+            }
+        }
         if (character == null) {
             item {
                 StatusCard(stringResource(R.string.social_requires_world))
@@ -301,7 +307,7 @@ internal fun SocialScreen(
                                         },
                                         audience,
                                         audienceCharacterIds,
-                                    ) { if (it) onChanged() }
+                                    ) { onChanged() }
                                 }
                             }
                             if (analyzeImage && suppliedDescription.isBlank()) {
@@ -343,7 +349,7 @@ internal fun SocialScreen(
                                 body,
                                 audience,
                                 audienceCharacterIds,
-                            ) { if (it) onChanged() }
+                            ) { onChanged() }
                         }
                     } else {
                         val postId = store.createMediaPost(

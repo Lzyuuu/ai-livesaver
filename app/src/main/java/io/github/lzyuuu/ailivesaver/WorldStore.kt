@@ -223,6 +223,17 @@ internal data class SocialComment(
     val replyToName: String = "",
 )
 
+internal data class SocialResponseJob(
+    val id: Long,
+    val postId: Long,
+    val kind: String,
+    val body: String,
+    val audience: String,
+    val audienceCharacterIds: String,
+    val createdAt: Long,
+    val attempts: Int,
+)
+
 internal data class NpcProfile(
     val id: Long,
     val name: String,
@@ -264,7 +275,8 @@ internal data class MemberWorldContext(
 )
 
 internal class WorldStore(context: Context) :
-    SQLiteOpenHelper(context, "world.db", null, 16) {
+    SQLiteOpenHelper(context, "world.db", null, 17),
+    java.io.Closeable {
     private val mediaDirectory = File(context.filesDir, "media").canonicalFile
 
     override fun onCreate(database: SQLiteDatabase) {
@@ -333,6 +345,7 @@ internal class WorldStore(context: Context) :
         createSocialTables(database)
         createMediaVersionsTable(database)
         createM3Tables(database)
+        createSocialResponseQueueTable(database)
     }
 
     override fun onConfigure(database: SQLiteDatabase) {
@@ -396,6 +409,7 @@ internal class WorldStore(context: Context) :
         if (oldVersion < 14) migrateMediaDescriptions(database)
         if (oldVersion < 15) migrateChatTimeline(database)
         if (oldVersion < 16) migrateRelationshipControls(database)
+        if (oldVersion < 17) createSocialResponseQueueTable(database)
     }
 
     private fun createSocialTables(database: SQLiteDatabase) {
@@ -674,6 +688,23 @@ internal class WorldStore(context: Context) :
                 member_key TEXT PRIMARY KEY,
                 location TEXT NOT NULL DEFAULT '',
                 time_zone TEXT NOT NULL DEFAULT ''
+            )
+            """.trimIndent(),
+        )
+    }
+
+    private fun createSocialResponseQueueTable(database: SQLiteDatabase) {
+        database.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS social_response_queue (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                post_id INTEGER NOT NULL UNIQUE REFERENCES social_posts(id) ON DELETE CASCADE,
+                kind TEXT NOT NULL,
+                body TEXT NOT NULL,
+                audience TEXT NOT NULL,
+                audience_character_ids TEXT NOT NULL DEFAULT '',
+                created_at INTEGER NOT NULL,
+                attempts INTEGER NOT NULL DEFAULT 0
             )
             """.trimIndent(),
         )
@@ -2537,6 +2568,75 @@ internal class WorldStore(context: Context) :
         while (cursor.moveToNext()) total += File(cursor.getString(0)).length()
         total
     }
+
+    fun enqueueSocialResponse(
+        postId: Long,
+        kind: String,
+        body: String,
+        audience: String,
+        audienceCharacterIds: String,
+    ): Long {
+        writableDatabase.insertWithOnConflict(
+            "social_response_queue",
+            null,
+            ContentValues().apply {
+                put("post_id", postId)
+                put("kind", kind)
+                put("body", body.trim())
+                put("audience", audience)
+                put("audience_character_ids", audienceCharacterIds)
+                put("created_at", System.currentTimeMillis())
+            },
+            SQLiteDatabase.CONFLICT_IGNORE,
+        )
+        return readableDatabase.rawQuery(
+            "SELECT id FROM social_response_queue WHERE post_id = ?",
+            arrayOf(postId.toString()),
+        ).use { cursor -> if (cursor.moveToFirst()) cursor.getLong(0) else 0L }
+    }
+
+    fun socialResponseJobs(limit: Int = 3): List<SocialResponseJob> = readableDatabase.rawQuery(
+        """
+        SELECT id, post_id, kind, body, audience, audience_character_ids, created_at, attempts
+        FROM social_response_queue
+        ORDER BY created_at, id
+        LIMIT ?
+        """.trimIndent(),
+        arrayOf(limit.coerceIn(1, 20).toString()),
+    ).use { cursor ->
+        buildList {
+            while (cursor.moveToNext()) {
+                add(
+                    SocialResponseJob(
+                        id = cursor.getLong(0),
+                        postId = cursor.getLong(1),
+                        kind = cursor.getString(2),
+                        body = cursor.getString(3),
+                        audience = cursor.getString(4),
+                        audienceCharacterIds = cursor.getString(5),
+                        createdAt = cursor.getLong(6),
+                        attempts = cursor.getInt(7),
+                    ),
+                )
+            }
+        }
+    }
+
+    fun incrementSocialResponseAttempts(id: Long) {
+        writableDatabase.execSQL(
+            "UPDATE social_response_queue SET attempts = attempts + 1 WHERE id = ?",
+            arrayOf(id),
+        )
+    }
+
+    fun removeSocialResponse(id: Long) {
+        writableDatabase.delete("social_response_queue", "id = ?", arrayOf(id.toString()))
+    }
+
+    fun socialResponseQueueCount(): Int = readableDatabase.rawQuery(
+        "SELECT COUNT(*) FROM social_response_queue",
+        null,
+    ).use { cursor -> cursor.moveToFirst(); cursor.getInt(0) }
 
     fun queueCount(): Int = readableDatabase.rawQuery(
         "SELECT COUNT(*) FROM social_posts WHERE media_status IN ('pending', 'failed')",

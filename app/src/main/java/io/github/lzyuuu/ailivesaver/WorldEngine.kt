@@ -14,6 +14,8 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.os.Build
 import android.os.Handler
 import android.os.IBinder
@@ -94,6 +96,7 @@ internal object WorldEngine {
         } else {
             schedule(context)
         }
+        resumeSocialResponses(context, onChanged)
         val preferences = preferences(context)
         val now = System.currentTimeMillis()
         val previousOpen = preferences.getLong("last_open", 0)
@@ -470,6 +473,7 @@ internal object WorldEngine {
         body: String,
         audience: String,
         audienceCharacterIds: String,
+        queuedJobId: Long? = null,
         callback: (Boolean) -> Unit,
     ): Boolean {
         if (!hasBudget(context) || taskPaused(context)) return false
@@ -519,10 +523,32 @@ internal object WorldEngine {
                     )
                     consumeBudget(context)
                     recordSuccess(context)
+                    queuedJobId?.let { queuedId ->
+                        WorldStore(context).use { queuedStore ->
+                            queuedStore.removeSocialResponse(queuedId)
+                        }
+                    }
                     true
                 },
-                onFailure = {
-                    recordFailure(context, it.message.orEmpty())
+                onFailure = { failure ->
+                    recordFailure(context, failure.message.orEmpty())
+                    if (failure is java.io.IOException &&
+                        isTransientProviderFailure(failure.message.orEmpty())
+                    ) {
+                        WorldStore(context).use { queuedStore ->
+                            if (queuedJobId == null) {
+                                queuedStore.enqueueSocialResponse(
+                                    postId,
+                                    kind,
+                                    body,
+                                    audience,
+                                    audienceCharacterIds,
+                                )
+                            } else {
+                                queuedStore.incrementSocialResponseAttempts(queuedJobId)
+                            }
+                        }
+                    }
                     false
                 },
             )
@@ -530,6 +556,29 @@ internal object WorldEngine {
             callback(created)
         }
         return true
+    }
+
+    private fun resumeSocialResponses(context: Context, onChanged: () -> Unit) {
+        if (!isOnline(context)) return
+        val job = WorldStore(context).use { it.socialResponseJobs(1).firstOrNull() } ?: return
+        respondToPost(
+            context = context,
+            postId = job.postId,
+            kind = job.kind,
+            body = job.body,
+            audience = job.audience,
+            audienceCharacterIds = job.audienceCharacterIds,
+            queuedJobId = job.id,
+        ) { success ->
+            if (success) onChanged()
+        }
+    }
+
+    private fun isOnline(context: Context): Boolean {
+        val connectivity = context.getSystemService(ConnectivityManager::class.java)
+        val network = connectivity.activeNetwork ?: return false
+        return connectivity.getNetworkCapabilities(network)
+            ?.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) == true
     }
 
     fun rewriteSocialPost(
