@@ -1,6 +1,8 @@
 package io.github.lzyuuu.ailivesaver
 
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -25,9 +27,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import java.text.DateFormat
+import java.util.Date
 
 @Composable
 internal fun IdentityScreen(
@@ -105,10 +110,46 @@ internal fun CharacterManagerScreen(
     onBack: () -> Unit,
     onChanged: () -> Unit,
 ) {
+    val context = LocalContext.current
     val characters = remember(revision) { store.characters() }
     var editingId by rememberSaveable { mutableStateOf<Long?>(null) }
     var adding by rememberSaveable { mutableStateOf(false) }
+    var status by remember { mutableStateOf<String?>(null) }
     val editing = characters.firstOrNull { it.id == editingId }
+    val turningPoints = remember(revision, editingId) {
+        editingId?.let(store::turningPoints).orEmpty()
+    }
+    val imported = stringResource(R.string.character_card_imported)
+    val importFailed = stringResource(R.string.character_card_import_failed)
+    val importLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        runCatching {
+            val bytes = context.contentResolver.openInputStream(uri)?.use {
+                CharacterCardV2.read(it)
+            } ?: error("无法读取文件")
+            val card = CharacterCardV2.parse(bytes)
+            val id = store.addCharacter(
+                card.name,
+                card.persona,
+                "resident",
+                "",
+                "",
+                "",
+                card.rawJson,
+            )
+            if (card.firstMessage.isNotBlank()) {
+                store.addMessage(id, "assistant", card.firstMessage)
+            }
+            card.name
+        }.onSuccess {
+            status = "$imported：$it"
+            onChanged()
+        }.onFailure {
+            status = "$importFailed：${it.message.orEmpty()}"
+        }
+    }
 
     BackHandler(adding || editing != null) {
         adding = false
@@ -118,6 +159,7 @@ internal fun CharacterManagerScreen(
         CharacterEditor(
             contentPadding = contentPadding,
             character = editing,
+            turningPoints = turningPoints,
             canLeave = characters.count(ResidentCharacter::active) > 1,
             onBack = {
                 adding = false
@@ -162,7 +204,14 @@ internal fun CharacterManagerScreen(
             ) {
                 Text(stringResource(R.string.add_resident_character))
             }
+            TextButton(
+                onClick = { importLauncher.launch(arrayOf("application/json", "image/png")) },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(stringResource(R.string.import_character_card))
+            }
         }
+        status?.let { item { StatusCard(it) } }
         if (characters.isEmpty()) {
             item { StatusCard(stringResource(R.string.no_characters_yet)) }
         }
@@ -208,11 +257,13 @@ internal fun CharacterManagerScreen(
 private fun CharacterEditor(
     contentPadding: PaddingValues,
     character: ResidentCharacter?,
+    turningPoints: List<CharacterTurningPoint>,
     canLeave: Boolean,
     onBack: () -> Unit,
     onSave: (String, String, String, String, String, String) -> Unit,
     onActiveChange: (() -> Unit)?,
 ) {
+    val context = LocalContext.current
     var name by rememberSaveable(character?.id) { mutableStateOf(character?.name.orEmpty()) }
     var persona by rememberSaveable(character?.id) { mutableStateOf(character?.persona.orEmpty()) }
     var tier by rememberSaveable(character?.id) {
@@ -226,6 +277,32 @@ private fun CharacterEditor(
     }
     var negative by rememberSaveable(character?.id) {
         mutableStateOf(character?.negativePrompt.orEmpty())
+    }
+    var transferStatus by remember { mutableStateOf<String?>(null) }
+    val exported = stringResource(R.string.character_card_exported)
+    val exportFailed = stringResource(R.string.character_card_export_failed)
+    val jsonExporter = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/json"),
+    ) { uri ->
+        if (uri == null || character == null) return@rememberLauncherForActivityResult
+        runCatching {
+            context.contentResolver.openOutputStream(uri)?.use {
+                it.write(CharacterCardV2.export(character).toByteArray())
+            } ?: error("无法写入文件")
+        }.onSuccess { transferStatus = exported }
+            .onFailure { transferStatus = "$exportFailed：${it.message.orEmpty()}" }
+    }
+    val pngExporter = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("image/png"),
+    ) { uri ->
+        if (uri == null || character == null) return@rememberLauncherForActivityResult
+        runCatching {
+            val json = CharacterCardV2.export(character)
+            val png = CharacterCardV2.embedJson(CharacterCardV2.coverPng(character.name), json)
+            context.contentResolver.openOutputStream(uri)?.use { it.write(png) }
+                ?: error("无法写入文件")
+        }.onSuccess { transferStatus = exported }
+            .onFailure { transferStatus = "$exportFailed：${it.message.orEmpty()}" }
     }
 
     SettingsList(contentPadding) {
@@ -317,6 +394,52 @@ private fun CharacterEditor(
         }
         if (character != null && onActiveChange != null) {
             item {
+                Text(stringResource(R.string.character_card), fontWeight = FontWeight.Bold)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TextButton(
+                        onClick = {
+                            jsonExporter.launch("${character.safeFileName()}.json")
+                        },
+                    ) {
+                        Text(stringResource(R.string.export_json))
+                    }
+                    TextButton(
+                        onClick = {
+                            pngExporter.launch("${character.safeFileName()}.png")
+                        },
+                    ) {
+                        Text(stringResource(R.string.export_png))
+                    }
+                }
+                transferStatus?.let { StatusCard(it) }
+            }
+            if (turningPoints.isNotEmpty()) {
+                item {
+                    Text(stringResource(R.string.character_turning_points), fontWeight = FontWeight.Bold)
+                    Text(
+                        stringResource(R.string.character_turning_points_summary),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                items(turningPoints, key = CharacterTurningPoint::id) { point ->
+                    Card(Modifier.fillMaxWidth()) {
+                        Column(
+                            Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            Text(
+                                DateFormat.getDateTimeInstance().format(Date(point.createdAt)),
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                            Text(
+                                "${point.previousPersona}  →  ${point.newPersona}",
+                                maxLines = 5,
+                            )
+                        }
+                    }
+                }
+            }
+            item {
                 TextButton(
                     onClick = onActiveChange,
                     enabled = !character.active || canLeave,
@@ -339,6 +462,9 @@ private fun CharacterEditor(
         }
     }
 }
+
+private fun ResidentCharacter.safeFileName() =
+    name.replace(Regex("""[^\p{L}\p{N}._-]"""), "_").ifBlank { "character" }
 
 @Composable
 private fun SettingsList(

@@ -15,12 +15,20 @@ internal data class ResidentCharacter(
     val appearance: String = "",
     val clothing: String = "",
     val negativePrompt: String = "",
+    val cardJson: String = "",
 )
 
 internal data class UserIdentity(
     val name: String,
     val addressPreference: String,
     val bio: String,
+)
+
+internal data class CharacterTurningPoint(
+    val id: Long,
+    val previousPersona: String,
+    val newPersona: String,
+    val createdAt: Long,
 )
 
 internal data class ChatMessage(
@@ -63,7 +71,7 @@ internal data class SocialComment(
 )
 
 internal class WorldStore(context: Context) :
-    SQLiteOpenHelper(context, "world.db", null, 5) {
+    SQLiteOpenHelper(context, "world.db", null, 7) {
 
     override fun onCreate(database: SQLiteDatabase) {
         database.execSQL(
@@ -77,6 +85,7 @@ internal class WorldStore(context: Context) :
             )
             """.trimIndent(),
         )
+        createTurningPointsTable(database)
         createSocialTables(database)
         createMediaVersionsTable(database)
         database.execSQL(
@@ -92,6 +101,7 @@ internal class WorldStore(context: Context) :
                 appearance TEXT NOT NULL DEFAULT '',
                 clothing TEXT NOT NULL DEFAULT '',
                 negative_prompt TEXT NOT NULL DEFAULT '',
+                card_json TEXT NOT NULL DEFAULT '',
                 updated_at INTEGER NOT NULL DEFAULT 0
             )
             """.trimIndent(),
@@ -167,6 +177,12 @@ internal class WorldStore(context: Context) :
                 "UPDATE characters SET attention_tier = 'special_focus' WHERE is_primary = 1",
             )
         }
+        if (oldVersion < 6) {
+            database.execSQL(
+                "ALTER TABLE characters ADD COLUMN card_json TEXT NOT NULL DEFAULT ''",
+            )
+        }
+        if (oldVersion < 7) createTurningPointsTable(database)
     }
 
     private fun createSocialTables(database: SQLiteDatabase) {
@@ -214,9 +230,24 @@ internal class WorldStore(context: Context) :
         )
     }
 
+    private fun createTurningPointsTable(database: SQLiteDatabase) {
+        database.execSQL(
+            """
+            CREATE TABLE character_turning_points (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                character_id INTEGER NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+                previous_persona TEXT NOT NULL,
+                new_persona TEXT NOT NULL,
+                created_at INTEGER NOT NULL
+            )
+            """.trimIndent(),
+        )
+    }
+
     fun primaryCharacter(): ResidentCharacter? = readableDatabase.rawQuery(
         """
-        SELECT id, name, persona, attention_tier, active, appearance, clothing, negative_prompt
+        SELECT id, name, persona, attention_tier, active, appearance, clothing, negative_prompt,
+               card_json
         FROM characters
         WHERE active = 1
         ORDER BY CASE attention_tier WHEN 'special_focus' THEN 0 ELSE 1 END, is_primary DESC, id
@@ -231,7 +262,8 @@ internal class WorldStore(context: Context) :
     fun characters(includeDeparted: Boolean = true): List<ResidentCharacter> =
         readableDatabase.rawQuery(
             """
-            SELECT id, name, persona, attention_tier, active, appearance, clothing, negative_prompt
+            SELECT id, name, persona, attention_tier, active, appearance, clothing, negative_prompt,
+                   card_json
             FROM characters
             ${if (includeDeparted) "" else "WHERE active = 1"}
             ORDER BY active DESC,
@@ -312,6 +344,7 @@ internal class WorldStore(context: Context) :
         appearance: String,
         clothing: String,
         negativePrompt: String,
+        cardJson: String = "",
     ): Long = writableDatabase.insertOrThrow(
         "characters",
         null,
@@ -322,27 +355,76 @@ internal class WorldStore(context: Context) :
             put("appearance", appearance.trim())
             put("clothing", clothing.trim())
             put("negative_prompt", negativePrompt.trim())
+            put("card_json", cardJson)
             put("created_at", System.currentTimeMillis())
             put("updated_at", System.currentTimeMillis())
         },
     )
 
     fun updateCharacter(character: ResidentCharacter) {
-        writableDatabase.update(
-            "characters",
-            ContentValues().apply {
-                put("name", character.name.trim())
-                put("persona", character.persona.trim())
-                put("attention_tier", character.attentionTier)
-                put("appearance", character.appearance.trim())
-                put("clothing", character.clothing.trim())
-                put("negative_prompt", character.negativePrompt.trim())
-                put("updated_at", System.currentTimeMillis())
-            },
-            "id = ?",
-            arrayOf(character.id.toString()),
-        )
+        writableDatabase.run {
+            beginTransaction()
+            try {
+                val previous = rawQuery(
+                    "SELECT persona FROM characters WHERE id = ?",
+                    arrayOf(character.id.toString()),
+                ).use { if (it.moveToFirst()) it.getString(0) else character.persona }
+                if (previous != character.persona.trim()) {
+                    insertOrThrow(
+                        "character_turning_points",
+                        null,
+                        ContentValues().apply {
+                            put("character_id", character.id)
+                            put("previous_persona", previous)
+                            put("new_persona", character.persona.trim())
+                            put("created_at", System.currentTimeMillis())
+                        },
+                    )
+                }
+                update(
+                    "characters",
+                    ContentValues().apply {
+                        put("name", character.name.trim())
+                        put("persona", character.persona.trim())
+                        put("attention_tier", character.attentionTier)
+                        put("appearance", character.appearance.trim())
+                        put("clothing", character.clothing.trim())
+                        put("negative_prompt", character.negativePrompt.trim())
+                        put("updated_at", System.currentTimeMillis())
+                    },
+                    "id = ?",
+                    arrayOf(character.id.toString()),
+                )
+                setTransactionSuccessful()
+            } finally {
+                endTransaction()
+            }
+        }
     }
+
+    fun turningPoints(characterId: Long): List<CharacterTurningPoint> =
+        readableDatabase.rawQuery(
+            """
+            SELECT id, previous_persona, new_persona, created_at
+            FROM character_turning_points
+            WHERE character_id = ?
+            ORDER BY created_at DESC, id DESC
+            """.trimIndent(),
+            arrayOf(characterId.toString()),
+        ).use { cursor ->
+            buildList {
+                while (cursor.moveToNext()) {
+                    add(
+                        CharacterTurningPoint(
+                            cursor.getLong(0),
+                            cursor.getString(1),
+                            cursor.getString(2),
+                            cursor.getLong(3),
+                        ),
+                    )
+                }
+            }
+        }
 
     fun setCharacterActive(id: Long, active: Boolean) {
         writableDatabase.update(
@@ -639,4 +721,5 @@ private fun Cursor.residentCharacter() = ResidentCharacter(
     appearance = getString(5),
     clothing = getString(6),
     negativePrompt = getString(7),
+    cardJson = getString(8),
 )

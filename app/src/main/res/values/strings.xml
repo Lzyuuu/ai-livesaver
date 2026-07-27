@@ -118,6 +118,16 @@
     <string name="let_character_leave">让角色离场</string>
     <string name="bring_character_back">让角色回到世界</string>
     <string name="last_active_character">至少保留一位活跃的常驻角色。</string>
+    <string name="character_card">Character Card V2</string>
+    <string name="import_character_card">导入 JSON / PNG 角色卡</string>
+    <string name="character_card_imported">角色卡已作为新的常驻角色导入</string>
+    <string name="character_card_import_failed">角色卡导入失败</string>
+    <string name="export_json">导出 JSON</string>
+    <string name="export_png">导出 PNG</string>
+    <string name="character_card_exported">角色卡已导出</string>
+    <string name="character_card_export_failed">角色卡导出失败</string>
+    <string name="character_turning_points">角色转折</string>
+    <string name="character_turning_points_summary">人设的重要变化从发生时刻起影响未来，不追溯改写旧经历。</string>
     <string name="settings_title">设置</string>
     <string name="provider_settings">推理配置</string>
     <string name="provider_settings_summary">DeepSeek、OpenAI、OpenRouter 与自定义 Provider</string>
