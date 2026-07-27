@@ -209,6 +209,10 @@ internal fun SocialScreen(
                 store.updateUserPost(selectedPost.id, title, body)
                 onChanged()
             },
+            onUpdateMediaDescription = { description ->
+                store.updateMediaDescription(selectedPost.id, description)
+                onChanged()
+            },
             onDeletePost = {
                 if (selectedPost.authorKind == "user") {
                     store.deleteUserPost(selectedPost.id)
@@ -812,6 +816,7 @@ private fun PostDetailScreen(
     onComment: (SocialReplyDraft) -> Unit,
     onToggleReaction: () -> Unit,
     onUpdatePost: (String, String) -> Unit,
+    onUpdateMediaDescription: (String) -> Unit,
     onDeletePost: () -> Unit,
     onHidePost: () -> Unit,
     onRewritePost: () -> Unit,
@@ -824,6 +829,10 @@ private fun PostDetailScreen(
     var editing by rememberSaveable { mutableStateOf(false) }
     var editTitle by rememberSaveable(post.id) { mutableStateOf(post.title) }
     var editBody by rememberSaveable(post.id) { mutableStateOf(post.body) }
+    var editingDescription by rememberSaveable(post.id) { mutableStateOf(false) }
+    var editDescription by rememberSaveable(post.id) {
+        mutableStateOf(post.mediaDescription)
+    }
     val formatter = remember { DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT) }
     val visibleComments = remember(comments, post.kind) {
         if (post.kind == "forum") threadedComments(comments) else comments.map { it to 0 }
@@ -865,6 +874,51 @@ private fun PostDetailScreen(
                 Text(post.body, style = MaterialTheme.typography.bodyLarge)
             }
             PostMedia(post, onOpenImage)
+            if (post.mediaPath != null && post.mediaSource == "user") {
+                Text(
+                    stringResource(R.string.media_description_detail_title),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                )
+                if (editingDescription) {
+                    OutlinedTextField(
+                        value = editDescription,
+                        onValueChange = { editDescription = it },
+                        supportingText = {
+                            Text(stringResource(R.string.media_description_detail_summary))
+                        },
+                        minLines = 3,
+                        maxLines = 8,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        TextButton(
+                            onClick = {
+                                onUpdateMediaDescription(editDescription.trim())
+                                editingDescription = false
+                            },
+                        ) {
+                            Text(stringResource(R.string.save_media_description))
+                        }
+                        TextButton(onClick = {
+                            editDescription = post.mediaDescription
+                            editingDescription = false
+                        }) {
+                            Text(stringResource(R.string.cancel))
+                        }
+                    }
+                } else {
+                    Text(
+                        post.mediaDescription.ifBlank {
+                            stringResource(R.string.media_description_empty)
+                        },
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    TextButton(onClick = { editingDescription = true }) {
+                        Text(stringResource(R.string.edit_media_description))
+                    }
+                }
+            }
             Row(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,

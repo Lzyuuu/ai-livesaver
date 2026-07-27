@@ -155,6 +155,11 @@
     <string name="local_dream_parameters_optional">Local Dream 参数（可选）</string>
     <string name="local_dream_parameters_summary">可粘贴 JSON 或 key: value 参数；会恢复提示词、负面提示词、种子和尺寸。</string>
     <string name="media_description_privacy">只供角色理解，不公开展示。已有描述时不会调用视觉模型；留空且主动授权后才会发送这一张图片。</string>
+    <string name="media_description_detail_title">媒体描述</string>
+    <string name="media_description_detail_summary">仅供角色理解；清空后角色不会假装看见图片细节。</string>
+    <string name="media_description_empty">尚未填写媒体描述，角色不会假装看见图片细节。</string>
+    <string name="edit_media_description">编辑媒体描述</string>
+    <string name="save_media_description">保存媒体描述</string>
     <string name="allow_vision_analysis">允许视觉模型理解这一张图片</string>
     <string name="vision_analysis_failed">视觉理解失败，图片仍已保存在本地</string>
     <string name="redraw_directly">直接重新生图</string>
