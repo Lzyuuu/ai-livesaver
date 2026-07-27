@@ -165,6 +165,13 @@ private enum class Destination(
     Me(R.string.nav_me, "◇"),
 }
 
+internal fun routeWorldEvent(kind: String, currentDestination: String): String = when {
+    "message" in kind -> Destination.Chats.name
+    "forum" in kind || "commons" in kind -> Destination.Commons.name
+    "moment" in kind || "post" in kind || "interaction" in kind -> Destination.Moments.name
+    else -> currentDestination
+}
+
 @Composable
 private fun AiLivesaverTheme(themeMode: ThemeMode, content: @Composable () -> Unit) {
     val context = LocalContext.current
@@ -395,12 +402,7 @@ private fun AiLivesaverApp(
                     onOpenEvent = { event ->
                         worldStore.markWorldEventSeen(event.id)
                         worldRevision++
-                        destinationName = when {
-                            "message" in event.kind -> Destination.Chats.name
-                            "forum" in event.kind || "commons" in event.kind ->
-                                Destination.Commons.name
-                            else -> Destination.Moments.name
-                        }
+                        destinationName = routeWorldEvent(event.kind, destinationName)
                     },
                 )
                 Destination.Chats -> ChatsScreen(
