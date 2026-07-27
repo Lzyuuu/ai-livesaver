@@ -80,6 +80,9 @@ internal fun composeVisualPrompt(
         scene,
     ).map { it.orEmpty().trim() }.filter(String::isNotBlank).joinToString(", ")
 
+internal fun mediaPromptForEditing(mediaPrompt: String?, mediaDescription: String): String =
+    mediaPrompt.orEmpty().ifBlank { mediaDescription }
+
 internal fun threadedComments(
     comments: List<SocialComment>,
 ): List<Pair<SocialComment, Int>> {
@@ -1164,7 +1167,7 @@ private fun FullScreenMediaPreview(
     var menuOpen by rememberSaveable(post.id) { mutableStateOf(menuInitiallyOpen) }
     var editingPrompt by rememberSaveable(post.id) { mutableStateOf(false) }
     var versionListOpen by rememberSaveable(post.id) { mutableStateOf(false) }
-    val originalPrompt = post.mediaPrompt.orEmpty().ifBlank { post.mediaDescription }
+    val originalPrompt = mediaPromptForEditing(post.mediaPrompt, post.mediaDescription)
     var prompt by rememberSaveable(post.id) { mutableStateOf(originalPrompt) }
     val bitmap = remember(post.mediaPath) {
         post.mediaPath?.let { BitmapFactory.decodeFile(it) }
@@ -1176,6 +1179,9 @@ private fun FullScreenMediaPreview(
         menuOpen = menuInitiallyOpen
         editingPrompt = false
         versionListOpen = false
+    }
+    LaunchedEffect(post.id, originalPrompt) {
+        prompt = originalPrompt
     }
 
     fun dismissTopLayer() {

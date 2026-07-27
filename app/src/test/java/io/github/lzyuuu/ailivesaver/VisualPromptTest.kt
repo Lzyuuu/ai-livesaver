@@ -21,4 +21,10 @@ class VisualPromptTest {
         )
         assertEquals("深蓝外套, 雨夜车站", composeVisualPrompt(character.copy(appearance = ""), "雨夜车站"))
     }
+
+    @Test
+    fun editingUsesCurrentPromptBeforeDescriptionFallback() {
+        assertEquals("new scene", mediaPromptForEditing("new scene", "old description"))
+        assertEquals("saved description", mediaPromptForEditing("  ", "saved description"))
+    }
 }
