@@ -30,9 +30,10 @@ internal fun chooseWorldTurn(
     proactiveMessages: Boolean,
     proactivePosts: Boolean,
     hasBackgroundPair: Boolean = false,
+    allowInteraction: Boolean = true,
 ): String = when {
     eventCount % 5 == 4 -> "npc"
-    eventCount % 7 == 6 && hasBackgroundPair -> "interaction"
+    eventCount % 7 == 6 && hasBackgroundPair && allowInteraction -> "interaction"
     eventCount % 3 == 2 && proactiveMessages -> "message"
     proactivePosts -> "post"
     proactiveMessages -> "message"
@@ -303,16 +304,26 @@ internal object WorldEngine {
         }
         val eventCount = preferences(context).getInt("event_count", 0)
         val activeCharacters = store.characters(includeDeparted = false)
+        val messageCharacters = activeCharacters.filter { proactiveMessages(context, it.id) }
+        val postCharacters = activeCharacters.filter { proactivePosts(context, it.id) }
+        val interactionActor = postCharacters.firstOrNull()
         val turn = chooseWorldTurn(
             eventCount,
-            proactiveMessages(context, character.id),
-            proactivePosts(context, character.id),
-            hasBackgroundPair = activeCharacters.any { it.id != character.id },
+            proactiveMessages = messageCharacters.isNotEmpty(),
+            proactivePosts = postCharacters.isNotEmpty(),
+            hasBackgroundPair = interactionActor != null &&
+                activeCharacters.any { it.id != interactionActor.id },
+            allowInteraction = interactionActor != null,
         )
+        val actor = when (turn) {
+            "message" -> messageCharacters.firstOrNull()
+            "post", "interaction" -> interactionActor
+            else -> null
+        } ?: character
         val npcTurn = turn == "npc"
         val messageTurn = turn == "message"
         val interactionCharacter = if (turn == "interaction") {
-            val otherCharacters = activeCharacters.filter { it.id != character.id }
+            val otherCharacters = activeCharacters.filter { it.id != actor.id }
             otherCharacters[(eventCount / 7) % otherCharacters.size]
         } else {
             null
@@ -344,21 +355,21 @@ internal object WorldEngine {
                 "You are ${npc.name}, a peripheral member of a fictional social world. " +
                     "Never claim a close bond with the user."
             interactionCharacter != null ->
-                "You are ${character.name}. ${character.persona}\n" +
+                "You are ${actor.name}. ${actor.persona}\n" +
                     "You are having a low-key public exchange with " +
                     "${interactionCharacter.name}, who is another resident character. " +
                     "Do not address the user directly or imply a private bond with them."
             else -> buildString {
-                append("You are ${character.name}. ${character.persona}")
+                append("You are ${actor.name}. ${actor.persona}")
                 store.worldFacts().take(20).forEach { append("\nShared world fact: ${it.body}") }
-                store.characterCognition(character.id).take(20).forEach {
+                store.characterCognition(actor.id).take(20).forEach {
                     append("\nPrivate character knowledge or belief: ${it.body}")
                 }
                 store.memberWorldContext("user").let {
                     if (it.location.isNotBlank()) append("\nUser-disclosed location: ${it.location}")
                     if (it.timeZone.isNotBlank()) append("\nUser-disclosed time zone: ${it.timeZone}")
                 }
-                store.memberWorldContext("character:${character.id}").let {
+                store.memberWorldContext("character:${actor.id}").let {
                     if (it.location.isNotBlank()) append("\nYour current location: ${it.location}")
                     if (it.timeZone.isNotBlank()) append("\nYour current time zone: ${it.timeZone}")
                 }
@@ -376,7 +387,7 @@ internal object WorldEngine {
                 "Write one natural short public post adding background community activity. " +
                     "Keep it under 80 Chinese characters and do not address the user directly."
             interactionCharacter != null -> buildString {
-                append("Write one concise public Moment from ${character.name} that naturally responds to ")
+                append("Write one concise public Moment from ${actor.name} that naturally responds to ")
                 append("${interactionCharacter.name}'s perspective. Do not address the user or ask them to reply. ")
                 append("Keep it under 80 Chinese characters.")
                 interactionTarget?.let {
@@ -428,11 +439,11 @@ internal object WorldEngine {
                             )
                         interactionCharacter != null -> store.createPost(
                             "moment",
-                            character.name,
+                            actor.name,
                             "",
                             body,
                             authorKind = "resident",
-                            authorCharacterId = character.id,
+                            authorCharacterId = actor.id,
                             providerName = config.preset.displayName,
                             modelName = config.model,
                             worldEventKind = if (reconstructed) {
@@ -443,24 +454,24 @@ internal object WorldEngine {
                             eventNeedsResponse = false,
                         )
                         messageTurn -> {
-                            store.addMessage(character.id, "assistant", body)
+                            store.addMessage(actor.id, "assistant", body)
                             store.addWorldEvent(
                                 kind = if (reconstructed) "reconstructed_message" else "message",
                                 summary = body.take(120),
-                                actorName = character.name,
+                                actorName = actor.name,
                                 needsResponse = true,
                                 providerName = config.preset.displayName,
                                 modelName = config.model,
                             )
-                            notifyRelationship(context, character, body)
+                            notifyRelationship(context, actor, body)
                         }
                         else -> store.createPost(
                             "moment",
-                            character.name,
+                            actor.name,
                             "",
                             body,
                             authorKind = "resident",
-                            authorCharacterId = character.id,
+                            authorCharacterId = actor.id,
                             providerName = config.preset.displayName,
                             modelName = config.model,
                             worldEventKind = if (reconstructed) "reconstructed_moment" else "moment",
