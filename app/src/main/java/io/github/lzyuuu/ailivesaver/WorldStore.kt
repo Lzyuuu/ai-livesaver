@@ -905,17 +905,43 @@ internal class WorldStore(context: Context) :
     }
 
     fun updateIdentity(name: String, addressPreference: String, bio: String) {
-        writableDatabase.update(
-            "profile",
-            ContentValues().apply {
-                put("name", name.trim())
-                put("address_preference", addressPreference.trim())
-                put("bio", bio.trim())
-                put("updated_at", System.currentTimeMillis())
-            },
-            "id = 1",
-            null,
-        )
+        val current = identity()
+        val nextName = name.trim()
+        val nextAddressPreference = addressPreference.trim()
+        val nextBio = bio.trim()
+        val changed = current.name != nextName ||
+            current.addressPreference != nextAddressPreference ||
+            current.bio != nextBio
+        writableDatabase.beginTransaction()
+        try {
+            writableDatabase.update(
+                "profile",
+                ContentValues().apply {
+                    put("name", nextName)
+                    put("address_preference", nextAddressPreference)
+                    put("bio", nextBio)
+                    put("updated_at", System.currentTimeMillis())
+                },
+                "id = 1",
+                null,
+            )
+            if (changed) {
+                writableDatabase.insertOrThrow(
+                    "world_events",
+                    null,
+                    ContentValues().apply {
+                        put("kind", "identity_change")
+                        put("summary", "你更新了自己在这个世界中的身份。")
+                        put("actor_name", nextName)
+                        put("needs_response", 0)
+                        put("created_at", System.currentTimeMillis())
+                    },
+                )
+            }
+            writableDatabase.setTransactionSuccessful()
+        } finally {
+            writableDatabase.endTransaction()
+        }
     }
 
     fun addCharacter(
