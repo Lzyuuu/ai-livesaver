@@ -140,6 +140,7 @@ internal fun parseLocalDreamParameters(raw: String): LocalDreamImportParameters 
             .orEmpty()
     }
     fun number(vararg aliases: String): String = value(*aliases).substringBefore(" ").trim()
+    val size = number("size").toIntOrNull()
     return LocalDreamImportParameters(
         prompt = value("prompt", "positive_prompt", "positive prompt", "text_prompt"),
         negativePrompt = value("negative_prompt", "negative prompt", "negative"),
@@ -147,8 +148,8 @@ internal fun parseLocalDreamParameters(raw: String): LocalDreamImportParameters 
         steps = number("steps", "step_count").toIntOrNull(),
         cfg = number("cfg", "cfg_scale", "guidance_scale").toDoubleOrNull(),
         scheduler = value("scheduler", "sampler"),
-        width = number("width").toIntOrNull(),
-        height = number("height").toIntOrNull(),
+        width = number("width").toIntOrNull() ?: size,
+        height = number("height").toIntOrNull() ?: size,
     )
 }
 
@@ -179,7 +180,10 @@ internal fun isLocalDreamUnavailable(error: Throwable): Boolean =
     error is ConnectException ||
         error is SocketTimeoutException ||
         error.message.orEmpty().contains("failed to connect", ignoreCase = true) ||
-        error.message.orEmpty().contains("connection refused", ignoreCase = true)
+        error.message.orEmpty().contains("connection refused", ignoreCase = true) ||
+        error.message.orEmpty().contains("Local Dream HTTP 502") ||
+        error.message.orEmpty().contains("Local Dream HTTP 503") ||
+        error.message.orEmpty().contains("Local Dream HTTP 504")
 
 internal fun importUserImageToCache(context: Context, uri: Uri): String {
     if (!storageAllowsGeneration(StatFs(context.cacheDir.path).availableBytes)) {
@@ -258,7 +262,7 @@ internal object LocalDreamClient {
                         it.write(request.toString().toByteArray())
                     }
                     if (connection.responseCode !in 200..299) {
-                        throw IOException("Local Dream HTTP ${connection.responseCode}")
+                        throw localDreamHttpFailure(connection)
                     }
                     var completed: JSONObject? = null
                     connection.inputStream.bufferedReader().useLines { lines ->
@@ -289,7 +293,7 @@ internal object LocalDreamClient {
         return try {
             connection.outputStream.use { it.write(body.toString().toByteArray()) }
             if (connection.responseCode !in 200..299) {
-                throw IOException("Local Dream HTTP ${connection.responseCode}")
+                throw localDreamHttpFailure(connection)
             }
             connection.inputStream.bufferedReader().use { it.readText() }
         } finally {
@@ -304,7 +308,22 @@ internal object LocalDreamClient {
             readTimeout = 10 * 60_000
             doOutput = true
             setRequestProperty("Content-Type", "application/json")
+            setRequestProperty("Accept", "text/event-stream, application/json")
         }
+
+    private fun localDreamHttpFailure(connection: HttpURLConnection): IOException {
+        val status = connection.responseCode
+        val detail = runCatching {
+            connection.errorStream?.bufferedReader()?.use { it.readText() }
+        }.getOrNull().orEmpty().trim().take(240)
+        return IOException(
+            buildString {
+                append("Local Dream HTTP ")
+                append(status)
+                if (detail.isNotBlank()) append(": ").append(detail)
+            },
+        )
+    }
 
     private fun saveImage(context: Context, event: JSONObject): LocalDreamImage {
         val image = decodeLocalDreamRgb(event)

@@ -5,6 +5,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
+import java.io.IOException
 import java.nio.file.Files
 
 class LocalDreamImportTest {
@@ -29,6 +30,10 @@ class LocalDreamImportTest {
         assertEquals(768, json.width)
         assertEquals(512, json.height)
 
+        val square = parseLocalDreamParameters("""{"prompt":"square","size":768}""")
+        assertEquals(768, square.width)
+        assertEquals(768, square.height)
+
         val text = parseLocalDreamParameters(
             "prompt: quiet library\nnegative_prompt: text, watermark\nseed: 7\nscheduler: dpm++",
         )
@@ -36,6 +41,13 @@ class LocalDreamImportTest {
         assertEquals("text, watermark", text.negativePrompt)
         assertEquals(7L, text.seed)
         assertEquals("dpm++", text.scheduler)
+    }
+
+    @Test
+    fun treatsLocalDreamNotReadyStatusesAsWaiting() {
+        assertTrue(isLocalDreamUnavailable(IOException("Local Dream HTTP 503: model is not loaded")))
+        assertTrue(isLocalDreamUnavailable(IOException("Local Dream HTTP 504")))
+        assertFalse(isLocalDreamUnavailable(IOException("Local Dream HTTP 500: generation failed")))
     }
 
     @Test
