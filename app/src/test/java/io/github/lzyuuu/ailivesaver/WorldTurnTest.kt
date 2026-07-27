@@ -55,6 +55,7 @@ class WorldTurnTest {
         assertEquals(false, isLocalDreamUnavailable(IOException("generation failed")))
         assertEquals(true, isBackedUpWorldSetting("daily_budget"))
         assertEquals(true, isBackedUpWorldSetting("character_42_notifications"))
+        assertEquals(true, isBackedUpWorldSetting("global_style"))
         assertEquals(false, isBackedUpWorldSetting("budget_used"))
         assertEquals(false, isBackedUpWorldSetting("character_bad_notifications"))
     }

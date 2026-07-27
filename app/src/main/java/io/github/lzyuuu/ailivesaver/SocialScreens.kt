@@ -65,10 +65,15 @@ private data class SocialReplyDraft(
     val replyToName: String,
 )
 
-internal fun composeVisualPrompt(character: ResidentCharacter?, scene: String): String =
+internal fun composeVisualPrompt(
+    character: ResidentCharacter?,
+    scene: String,
+    globalStyle: String = "",
+): String =
     listOf(
         character?.appearance,
         character?.clothing,
+        globalStyle,
         scene,
     ).map { it.orEmpty().trim() }.filter(String::isNotBlank).joinToString(", ")
 
@@ -684,6 +689,7 @@ private fun PostComposer(
                         composeVisualPrompt(
                             characters.firstOrNull { it.id == visualCharacterId },
                             prompt,
+                            WorldEngine.globalStyle(context),
                         ).ifBlank { null },
                         if (kind == "moment") audience else "world",
                         selectedCharacterIds.joinToString(","),

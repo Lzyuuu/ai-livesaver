@@ -349,6 +349,8 @@
     <string name="activity_natural">自然</string>
     <string name="activity_active">活跃</string>
     <string name="activity_summary">控制世界成员产生主动消息和社交活动的整体节奏，与系统通知分开。</string>
+    <string name="global_style">全局配图风格</string>
+    <string name="global_style_summary">可选；会加入角色配图提示词，例如“柔和胶片感、低饱和”。不会绑定具体模型。</string>
     <string name="continuous_world">持续世界</string>
     <string name="continuous_world_summary">使用前台服务提高推进可靠性；会显示常驻系统通知并增加耗电。</string>
     <string name="relationship_notifications">核心关系通知</string>

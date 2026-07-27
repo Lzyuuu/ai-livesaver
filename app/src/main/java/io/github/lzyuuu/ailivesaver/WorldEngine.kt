@@ -66,6 +66,7 @@ private val BASE_WORLD_SETTING_KEYS = setOf(
     "notifications",
     "notification_preview",
     "do_not_disturb",
+    "global_style",
 )
 private val CHARACTER_SETTING_PATTERN =
     Regex("""character_\d+_(messages|posts|notifications)""")
@@ -141,6 +142,12 @@ internal object WorldEngine {
         } else {
             schedule(context)
         }
+    }
+
+    fun globalStyle(context: Context) = preferences(context).getString("global_style", "").orEmpty()
+
+    fun setGlobalStyle(context: Context, value: String) {
+        preferences(context).edit { putString("global_style", value.trim()) }
     }
 
     fun dailyBudget(context: Context) = preferences(context).getInt("daily_budget", 20)

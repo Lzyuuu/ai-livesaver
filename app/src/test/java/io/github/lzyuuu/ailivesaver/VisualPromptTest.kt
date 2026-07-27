@@ -15,6 +15,10 @@ class VisualPromptTest {
         )
 
         assertEquals("短银发, 深蓝外套, 雨夜车站", composeVisualPrompt(character, "雨夜车站"))
+        assertEquals(
+            "短银发, 深蓝外套, 柔和胶片感, 雨夜车站",
+            composeVisualPrompt(character, "雨夜车站", "柔和胶片感"),
+        )
         assertEquals("深蓝外套, 雨夜车站", composeVisualPrompt(character.copy(appearance = ""), "雨夜车站"))
     }
 }

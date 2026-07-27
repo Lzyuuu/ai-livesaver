@@ -1593,6 +1593,7 @@ private fun WorldSettingsScreen(
     val context = LocalContext.current
     var enabled by remember { mutableStateOf(WorldEngine.isEnabled(context)) }
     var activity by remember { mutableStateOf(WorldEngine.activity(context)) }
+    var globalStyle by remember { mutableStateOf(WorldEngine.globalStyle(context)) }
     var budget by remember { mutableIntStateOf(WorldEngine.dailyBudget(context)) }
     var continuous by remember { mutableStateOf(WorldEngine.continuous(context)) }
     var notifications by remember { mutableStateOf(WorldEngine.notificationsEnabled(context)) }
@@ -1689,6 +1690,20 @@ private fun WorldSettingsScreen(
             Text(
                 stringResource(R.string.activity_summary),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        item {
+            OutlinedTextField(
+                value = globalStyle,
+                onValueChange = {
+                    globalStyle = it
+                    WorldEngine.setGlobalStyle(context, it)
+                },
+                label = { Text(stringResource(R.string.global_style)) },
+                supportingText = { Text(stringResource(R.string.global_style_summary)) },
+                minLines = 2,
+                maxLines = 4,
+                modifier = Modifier.fillMaxWidth(),
             )
         }
         item {
