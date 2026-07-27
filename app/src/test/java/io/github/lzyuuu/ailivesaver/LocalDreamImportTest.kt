@@ -1,7 +1,11 @@
 package io.github.lzyuuu.ailivesaver
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.io.File
+import java.nio.file.Files
 
 class LocalDreamImportTest {
     @Test
@@ -24,5 +28,30 @@ class LocalDreamImportTest {
         assertEquals("text, watermark", text.negativePrompt)
         assertEquals(7L, text.seed)
         assertEquals("dpm++", text.scheduler)
+    }
+
+    @Test
+    fun onlyStaleOwnedCacheNamesAreEligibleForCleanup() {
+        val directory = Files.createTempDirectory("ai-livesaver-cache-").toFile()
+        try {
+            val staleImport = File(directory, "import-crashed").apply {
+                writeText("temporary")
+                setLastModified(1_000L)
+            }
+            val recentImport = File(directory, "import-active").apply {
+                writeText("temporary")
+                setLastModified(9_500L)
+            }
+            val staleOther = File(directory, "world.db").apply {
+                writeText("keep")
+                setLastModified(1_000L)
+            }
+
+            assertTrue(isStaleTemporaryCacheFile(staleImport, now = 10_000L, maxAgeMs = 5_000L))
+            assertFalse(isStaleTemporaryCacheFile(recentImport, now = 10_000L, maxAgeMs = 5_000L))
+            assertFalse(isStaleTemporaryCacheFile(staleOther, now = 10_000L, maxAgeMs = 5_000L))
+        } finally {
+            directory.deleteRecursively()
+        }
     }
 }

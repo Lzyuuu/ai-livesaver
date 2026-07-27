@@ -19,6 +19,33 @@ import java.util.Base64
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
 
+private const val TEMP_CACHE_MAX_AGE_MS = 24L * 60 * 60 * 1000
+private val TEMP_CACHE_PREFIXES = setOf(
+    "backup-",
+    "import-",
+    "local-dream-",
+    "restore-",
+    "rollback-",
+)
+
+internal fun isStaleTemporaryCacheFile(
+    file: File,
+    now: Long,
+    maxAgeMs: Long = TEMP_CACHE_MAX_AGE_MS,
+): Boolean = file.parentFile?.isDirectory == true &&
+    file.name.startsWithAny(TEMP_CACHE_PREFIXES) &&
+    file.lastModified() > 0L &&
+    now >= file.lastModified() &&
+    now - file.lastModified() >= maxAgeMs
+
+internal fun cleanupTemporaryCache(context: Context, now: Long = System.currentTimeMillis()): Int =
+    context.cacheDir.listFiles()
+        ?.filter { isStaleTemporaryCacheFile(it, now) }
+        ?.count { it.deleteRecursively() }
+        ?: 0
+
+private fun String.startsWithAny(prefixes: Set<String>): Boolean = prefixes.any(::startsWith)
+
 internal data class LocalDreamImage(
     val path: String,
     val seed: Long,

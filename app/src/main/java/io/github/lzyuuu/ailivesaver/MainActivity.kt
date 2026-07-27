@@ -95,6 +95,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        cleanupTemporaryCache(this)
         LocalDreamQueue.resume(this)
     }
 }
