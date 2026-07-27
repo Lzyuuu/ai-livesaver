@@ -1111,10 +1111,13 @@ private fun LocalDreamSettingsScreen(
         item {
             Button(
                 onClick = {
-                    context.packageManager
-                        .getLaunchIntentForPackage("io.github.xororz.localdream")
-                        ?.let(context::startActivity)
-                        ?: run { status = unavailable }
+                    try {
+                        val intent = context.packageManager
+                            .getLaunchIntentForPackage("io.github.xororz.localdream")
+                        if (intent == null) status = unavailable else context.startActivity(intent)
+                    } catch (_: ActivityNotFoundException) {
+                        status = unavailable
+                    }
                 },
                 modifier = Modifier.fillMaxWidth(),
             ) {
