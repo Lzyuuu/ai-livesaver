@@ -29,6 +29,12 @@ class MainActivitySmokeTest {
     }
 
     @Test
+    fun exposesWorldChronicleEntry() {
+        composeRule.onNodeWithText("世界纪事", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithText("全部已读", useUnmergedTree = true).assertIsDisplayed()
+    }
+
+    @Test
     fun opensUpdateScreenFromMe() {
         composeRule.onNodeWithText("Me", useUnmergedTree = true).performClick()
         composeRule.waitForIdle()

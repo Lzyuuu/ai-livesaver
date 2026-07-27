@@ -224,6 +224,10 @@ private fun AiLivesaverApp(
     val latestForumReplyCount = remember(worldRevision, latestForum?.id) {
         latestForum?.let { worldStore.comments(it.id).size } ?: 0
     }
+    val worldEvents = remember(worldRevision) { worldStore.worldEvents() }
+    val chronicleEvents = remember(worldEvents) {
+        worldEvents.filterNot { it.needsResponse && !it.seen }
+    }
     val responseEvents = remember(worldRevision) { worldStore.worldEvents(needsResponseOnly = true) }
     val queueCount = remember(worldRevision) { worldStore.queueCount() }
     val budgetExhausted = remember(worldRevision) { WorldEngine.budgetExhausted(context) }
@@ -371,6 +375,7 @@ private fun AiLivesaverApp(
                     latestMoment = latestMoment,
                     latestForum = latestForum,
                     latestForumReplyCount = latestForumReplyCount,
+                    chronicleEvents = chronicleEvents,
                     responseEvents = responseEvents,
                     queueCount = queueCount,
                     budgetExhausted = budgetExhausted,
@@ -383,6 +388,10 @@ private fun AiLivesaverApp(
                     onOpenCommons = { destinationName = Destination.Commons.name },
                     onOpenQueue = { showLocalDream = true },
                     onManageCircle = { showCharacters = true },
+                    onMarkAllEventsSeen = {
+                        worldEvents.filter { !it.seen }.forEach { worldStore.markWorldEventSeen(it.id) }
+                        worldRevision++
+                    },
                     onOpenEvent = { event ->
                         worldStore.markWorldEventSeen(event.id)
                         worldRevision++
@@ -452,6 +461,7 @@ private fun WorldScreen(
     latestMoment: SocialPost?,
     latestForum: SocialPost?,
     latestForumReplyCount: Int,
+    chronicleEvents: List<WorldEvent>,
     responseEvents: List<WorldEvent>,
     queueCount: Int,
     budgetExhausted: Boolean,
@@ -460,6 +470,7 @@ private fun WorldScreen(
     onOpenCommons: () -> Unit,
     onOpenQueue: () -> Unit,
     onManageCircle: () -> Unit,
+    onMarkAllEventsSeen: () -> Unit,
     onOpenEvent: (WorldEvent) -> Unit,
 ) {
     LazyColumn(
@@ -530,6 +541,48 @@ private fun WorldScreen(
             )
             Spacer(Modifier.height(12.dp))
             CircleStrip(characters, onAdd = onManageCircle)
+        }
+        item {
+            WorldSection(
+                title = stringResource(R.string.world_chronicle),
+                action = stringResource(R.string.mark_all_read),
+                onAction = onMarkAllEventsSeen,
+            ) {
+                if (chronicleEvents.isEmpty()) {
+                    Text(
+                        stringResource(R.string.no_world_history),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                } else {
+                    val formatter = remember {
+                        SimpleDateFormat("MM-dd HH:mm", Locale.getDefault())
+                    }
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        chronicleEvents.take(3).forEach { event ->
+                            val source = event.providerName
+                                .takeIf { it.isNotBlank() }
+                                ?.let { "$it · ${event.modelName}" }
+                                ?: stringResource(R.string.world_provider)
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { onOpenEvent(event) },
+                            ) {
+                                PersonMessage(
+                                    event.actorName.take(1).uppercase(),
+                                    event.actorName,
+                                    event.summary,
+                                    stringResource(
+                                        R.string.world_event_time,
+                                        formatter.format(Date(event.createdAt)),
+                                        source,
+                                    ),
+                                )
+                            }
+                        }
+                    }
+                }
+            }
         }
         item {
             WorldSection(
