@@ -391,7 +391,13 @@ private fun ConversationScreen(
 
     BackHandler(showContext) { showContext = false }
     LaunchedEffect(messages.size) {
-        if (messages.isNotEmpty()) listState.animateScrollToItem(messages.lastIndex + 1)
+        if (messages.isNotEmpty()) {
+            if (systemAnimationsEnabled(context)) {
+                listState.animateScrollToItem(messages.lastIndex + 1)
+            } else {
+                listState.scrollToItem(messages.lastIndex + 1)
+            }
+        }
     }
 
     if (showContext) {

@@ -50,4 +50,14 @@ class MainActivitySmokeTest {
             .performTouchInput { swipeLeft() }
         composeRule.onNodeWithText("备用 Provider", useUnmergedTree = true).assertIsDisplayed()
     }
+
+    @Test
+    fun exposesThemeChoiceInMe() {
+        composeRule.onNodeWithText("Me", useUnmergedTree = true).performClick()
+        composeRule.onNodeWithText("外观", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithText("跟随系统", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithText("深色", useUnmergedTree = true).performClick()
+        composeRule.onNodeWithText("浅色", useUnmergedTree = true).performClick()
+        composeRule.onNodeWithText("跟随系统", useUnmergedTree = true).performClick()
+    }
 }

@@ -7,6 +7,7 @@ import android.content.pm.PackageManager
 import android.graphics.BitmapFactory
 import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
 import android.text.format.Formatter
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
@@ -82,13 +83,66 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+private const val APP_PREFERENCES = "app_settings"
+private const val THEME_MODE_KEY = "theme_mode"
+
+private enum class ThemeMode {
+    System,
+    Light,
+    Dark,
+}
+
+private fun readThemeMode(context: android.content.Context): ThemeMode =
+    runCatching {
+        ThemeMode.valueOf(
+            context.getSharedPreferences(APP_PREFERENCES, android.content.Context.MODE_PRIVATE)
+                .getString(THEME_MODE_KEY, ThemeMode.System.name) ?: ThemeMode.System.name,
+        )
+    }.getOrDefault(ThemeMode.System)
+
+private fun writeThemeMode(context: android.content.Context, mode: ThemeMode) {
+    context.getSharedPreferences(APP_PREFERENCES, android.content.Context.MODE_PRIVATE)
+        .edit()
+        .putString(THEME_MODE_KEY, mode.name)
+        .apply()
+}
+
+internal fun animationsEnabled(
+    animatorDurationScale: Float,
+    transitionAnimationScale: Float,
+    windowAnimationScale: Float,
+): Boolean = animatorDurationScale > 0f &&
+    transitionAnimationScale > 0f &&
+    windowAnimationScale > 0f
+
+internal fun systemAnimationsEnabled(context: android.content.Context): Boolean {
+    val resolver = context.contentResolver
+    fun scale(name: String) = runCatching {
+        Settings.Global.getFloat(resolver, name, 1f)
+    }.getOrDefault(1f)
+    return animationsEnabled(
+        animatorDurationScale = scale(Settings.Global.ANIMATOR_DURATION_SCALE),
+        transitionAnimationScale = scale(Settings.Global.TRANSITION_ANIMATION_SCALE),
+        windowAnimationScale = scale(Settings.Global.WINDOW_ANIMATION_SCALE),
+    )
+}
+
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            AiLivesaverTheme {
-                AiLivesaverApp()
+            var themeModeName by rememberSaveable { mutableStateOf(readThemeMode(this).name) }
+            val themeMode = runCatching { ThemeMode.valueOf(themeModeName) }
+                .getOrDefault(ThemeMode.System)
+            AiLivesaverTheme(themeMode) {
+                AiLivesaverApp(
+                    themeMode = themeMode,
+                    onThemeModeChanged = { next ->
+                        writeThemeMode(this, next)
+                        themeModeName = next.name
+                    },
+                )
             }
         }
     }
@@ -112,9 +166,13 @@ private enum class Destination(
 }
 
 @Composable
-private fun AiLivesaverTheme(content: @Composable () -> Unit) {
+private fun AiLivesaverTheme(themeMode: ThemeMode, content: @Composable () -> Unit) {
     val context = LocalContext.current
-    val dark = isSystemInDarkTheme()
+    val dark = when (themeMode) {
+        ThemeMode.System -> isSystemInDarkTheme()
+        ThemeMode.Light -> false
+        ThemeMode.Dark -> true
+    }
     val scheme: ColorScheme = when {
         Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && dark -> dynamicDarkColorScheme(context)
         Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> dynamicLightColorScheme(context)
@@ -136,7 +194,10 @@ private fun AiLivesaverTheme(content: @Composable () -> Unit) {
 }
 
 @Composable
-private fun AiLivesaverApp() {
+private fun AiLivesaverApp(
+    themeMode: ThemeMode,
+    onThemeModeChanged: (ThemeMode) -> Unit,
+) {
     val context = LocalContext.current
     val worldStore = remember { WorldStore(context) }
     var worldRevision by remember { mutableIntStateOf(0) }
@@ -357,6 +418,8 @@ private fun AiLivesaverApp() {
                     identity = identity,
                     store = worldStore,
                     revision = worldRevision,
+                    themeMode = themeMode,
+                    onThemeModeChanged = onThemeModeChanged,
                     onOpenIdentity = { showIdentity = true },
                     onOpenCharacters = { showCharacters = true },
                     onOpenUpdates = { showUpdates = true },
@@ -787,6 +850,8 @@ private fun MeScreen(
     identity: UserIdentity,
     store: WorldStore,
     revision: Int,
+    themeMode: ThemeMode,
+    onThemeModeChanged: (ThemeMode) -> Unit,
     onOpenIdentity: () -> Unit,
     onOpenCharacters: () -> Unit,
     onOpenUpdates: () -> Unit,
@@ -853,6 +918,37 @@ private fun MeScreen(
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
             )
+        }
+        item {
+            Text(stringResource(R.string.appearance_settings), fontWeight = FontWeight.Bold)
+            Text(
+                stringResource(R.string.appearance_settings_summary),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                ThemeMode.entries.forEach { option ->
+                    FilterChip(
+                        selected = themeMode == option,
+                        onClick = { onThemeModeChanged(option) },
+                        label = {
+                            Text(
+                                stringResource(
+                                    when (option) {
+                                        ThemeMode.System -> R.string.theme_system
+                                        ThemeMode.Light -> R.string.theme_light
+                                        ThemeMode.Dark -> R.string.theme_dark
+                                    },
+                                ),
+                            )
+                        },
+                    )
+                }
+            }
         }
         item {
             Text(

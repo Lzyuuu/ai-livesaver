@@ -217,6 +217,11 @@
     <string name="character_turning_points">角色转折</string>
     <string name="character_turning_points_summary">人设的重要变化从发生时刻起影响未来，不追溯改写旧经历。</string>
     <string name="settings_title">设置</string>
+    <string name="appearance_settings">外观</string>
+    <string name="appearance_settings_summary">默认跟随系统，也可以固定使用浅色或深色主题。</string>
+    <string name="theme_system">跟随系统</string>
+    <string name="theme_light">浅色</string>
+    <string name="theme_dark">深色</string>
     <string name="my_posts">我的动态</string>
     <string name="my_posts_summary">你在这个世界里留下的 Moments 与 Commons。</string>
     <string name="no_my_posts">还没有发布动态。去和这个世界分享一点什么吧。</string>
