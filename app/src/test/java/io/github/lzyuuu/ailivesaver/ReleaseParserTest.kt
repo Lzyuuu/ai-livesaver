@@ -96,6 +96,7 @@ class ReleaseParserTest {
     fun stableVersionSortsAfterMilestones() {
         assertTrue(ReleaseParser.compareVersions("0.1.0", "0.1.0-m4") > 0)
         assertTrue(ReleaseParser.compareVersions("0.1.0-m3", "0.1.0-m2") > 0)
+        assertTrue(ReleaseParser.compareVersions("0.1.0-m2.1", "0.1.0-m2") > 0)
         assertTrue(ReleaseParser.compareVersions("v0.2.0-m1", "0.1.0") > 0)
     }
 }

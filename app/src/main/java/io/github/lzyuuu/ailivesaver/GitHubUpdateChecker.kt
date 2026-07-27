@@ -149,7 +149,7 @@ internal object ReleaseParser {
         return compareValuesBy(a, b, Version::major, Version::minor, Version::patch)
             .takeIf { it != 0 }
             ?: when {
-                a.milestone == b.milestone -> 0
+                a.milestone == b.milestone -> a.revision.compareTo(b.revision)
                 a.milestone == null -> 1
                 b.milestone == null -> -1
                 else -> a.milestone.compareTo(b.milestone)
@@ -161,9 +161,10 @@ internal object ReleaseParser {
         val minor: Int,
         val patch: Int,
         val milestone: Int?,
+        val revision: Int,
     ) {
         companion object {
-            private val pattern = Regex("""^v?(\d+)\.(\d+)\.(\d+)(?:-m(\d+))?$""")
+            private val pattern = Regex("""^v?(\d+)\.(\d+)\.(\d+)(?:-m(\d+)(?:\.(\d+))?)?$""")
 
             fun parse(raw: String): Version? {
                 val match = pattern.matchEntire(raw.trim()) ?: return null
@@ -172,6 +173,7 @@ internal object ReleaseParser {
                     minor = match.groupValues[2].toInt(),
                     patch = match.groupValues[3].toInt(),
                     milestone = match.groupValues[4].takeIf { it.isNotEmpty() }?.toInt(),
+                    revision = match.groupValues[5].takeIf { it.isNotEmpty() }?.toInt() ?: 0,
                 )
             }
         }
