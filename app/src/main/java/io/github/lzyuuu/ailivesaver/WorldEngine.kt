@@ -27,8 +27,10 @@ internal fun chooseWorldTurn(
     eventCount: Int,
     proactiveMessages: Boolean,
     proactivePosts: Boolean,
+    hasBackgroundPair: Boolean = false,
 ): String = when {
     eventCount % 5 == 4 -> "npc"
+    eventCount % 7 == 6 && hasBackgroundPair -> "interaction"
     eventCount % 3 == 2 && proactiveMessages -> "message"
     proactivePosts -> "post"
     proactiveMessages -> "message"
@@ -282,13 +284,21 @@ internal object WorldEngine {
             return false
         }
         val eventCount = preferences(context).getInt("event_count", 0)
+        val activeCharacters = store.characters(includeDeparted = false)
         val turn = chooseWorldTurn(
             eventCount,
             proactiveMessages(context, character.id),
             proactivePosts(context, character.id),
+            hasBackgroundPair = activeCharacters.any { it.id != character.id },
         )
         val npcTurn = turn == "npc"
         val messageTurn = turn == "message"
+        val interactionCharacter = if (turn == "interaction") {
+            val otherCharacters = activeCharacters.filter { it.id != character.id }
+            otherCharacters[(eventCount / 7) % otherCharacters.size]
+        } else {
+            null
+        }
         val npc = if (npcTurn) {
             val profiles = listOf(
                 "Noa" to "偶尔参与城市话题与日常闲聊的临时世界成员。",
@@ -311,11 +321,16 @@ internal object WorldEngine {
             store.close()
             return false
         }
-        val system = if (npc != null) {
-            "You are ${npc.name}, a peripheral member of a fictional social world. " +
-                "Never claim a close bond with the user."
-        } else {
-            buildString {
+        val system = when {
+            npc != null ->
+                "You are ${npc.name}, a peripheral member of a fictional social world. " +
+                    "Never claim a close bond with the user."
+            interactionCharacter != null ->
+                "You are ${character.name}. ${character.persona}\n" +
+                    "You are having a low-key public exchange with " +
+                    "${interactionCharacter.name}, who is another resident character. " +
+                    "Do not address the user directly or imply a private bond with them."
+            else -> buildString {
                 append("You are ${character.name}. ${character.persona}")
                 store.worldFacts().take(20).forEach { append("\nShared world fact: ${it.body}") }
                 store.characterCognition(character.id).take(20).forEach {
@@ -331,6 +346,9 @@ internal object WorldEngine {
                 }
             }
         }
+        val interactionTarget = interactionCharacter?.let { target ->
+            store.posts("moment").firstOrNull { it.authorCharacterId == target.id }
+        }
         val prompt = when {
             npcForumTarget != null ->
                 "Write one concise public reply to this forum topic as a peripheral participant. " +
@@ -339,6 +357,14 @@ internal object WorldEngine {
             npc != null ->
                 "Write one natural short public post adding background community activity. " +
                     "Keep it under 80 Chinese characters and do not address the user directly."
+            interactionCharacter != null -> buildString {
+                append("Write one concise public Moment from ${character.name} that naturally responds to ")
+                append("${interactionCharacter.name}'s perspective. Do not address the user or ask them to reply. ")
+                append("Keep it under 80 Chinese characters.")
+                interactionTarget?.let {
+                    append("\nTheir recent public Moment was:\n${it.body}")
+                }
+            }
             messageTurn ->
                 "Write one brief proactive private message to ${store.userName()}. " +
                     "Make it relationship-relevant and give the user a natural reason to reply."
@@ -380,6 +406,22 @@ internal object WorldEngine {
                                     "moment"
                                 },
                             )
+                        interactionCharacter != null -> store.createPost(
+                            "moment",
+                            character.name,
+                            "",
+                            body,
+                            authorKind = "resident",
+                            authorCharacterId = character.id,
+                            providerName = config.preset.displayName,
+                            modelName = config.model,
+                            worldEventKind = if (reconstructed) {
+                                "reconstructed_character_interaction"
+                            } else {
+                                "character_interaction"
+                            },
+                            eventNeedsResponse = false,
+                        )
                         messageTurn -> {
                             store.addMessage(character.id, "assistant", body)
                             store.addWorldEvent(

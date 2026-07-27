@@ -1400,6 +1400,7 @@ internal class WorldStore(context: Context) :
         providerName: String = "",
         modelName: String = "",
         worldEventKind: String? = null,
+        eventNeedsResponse: Boolean = authorKind == "resident",
     ): Long {
         val postId = writableDatabase.insertOrThrow(
             "social_posts",
@@ -1423,7 +1424,7 @@ internal class WorldStore(context: Context) :
             kind = worldEventKind ?: if (kind == "moment") "moment" else "commons",
             summary = title.ifBlank { body }.take(120),
             actorName = authorName,
-            needsResponse = authorKind == "resident",
+            needsResponse = eventNeedsResponse,
             sourcePostId = postId,
         )
         return postId

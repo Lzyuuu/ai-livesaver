@@ -10,6 +10,8 @@ class WorldTurnTest {
     fun keepsNpcActivityBoundedAndHonorsCharacterControls() {
         val turns = (0 until 10).map { chooseWorldTurn(it, true, true) }
         assertEquals(2, turns.count { it == "npc" })
+        assertEquals("interaction", chooseWorldTurn(6, true, true, hasBackgroundPair = true))
+        assertEquals("post", chooseWorldTurn(6, true, true, hasBackgroundPair = false))
         assertEquals("none", chooseWorldTurn(0, false, false))
         assertEquals("message", chooseWorldTurn(0, true, false))
         assertEquals("post", chooseWorldTurn(0, false, true))
