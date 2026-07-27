@@ -4,6 +4,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 import java.io.IOException
 import java.net.ConnectException
+import android.app.Notification
 
 class WorldTurnTest {
     @Test
@@ -26,6 +27,14 @@ class WorldTurnTest {
         assertEquals(true, isDefaultQuietHour(23))
         assertEquals(true, isDefaultQuietHour(7))
         assertEquals(false, isDefaultQuietHour(12))
+        assertEquals(
+            Notification.VISIBILITY_PRIVATE,
+            relationshipNotificationVisibility(preview = false),
+        )
+        assertEquals(
+            Notification.VISIBILITY_PUBLIC,
+            relationshipNotificationVisibility(preview = true),
+        )
         assertEquals(
             true,
             shouldReconstructWorld(

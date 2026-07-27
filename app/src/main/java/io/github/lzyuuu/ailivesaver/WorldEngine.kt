@@ -48,6 +48,9 @@ internal fun allowsAutomaticInference(limit: Int, used: Int): Boolean =
 
 internal fun isDefaultQuietHour(hour: Int): Boolean = hour >= 23 || hour < 8
 
+internal fun relationshipNotificationVisibility(preview: Boolean): Int =
+    if (preview) Notification.VISIBILITY_PUBLIC else Notification.VISIBILITY_PRIVATE
+
 internal fun shouldReconstructWorld(
     previousOpen: Long,
     now: Long,
@@ -699,7 +702,7 @@ internal object WorldEngine {
                 .setContentText(text)
                 .setContentIntent(appIntent(context))
                 .setAutoCancel(true)
-                .setVisibility(Notification.VISIBILITY_PUBLIC)
+                .setVisibility(relationshipNotificationVisibility(notificationPreview(context)))
                 .build(),
         )
     }
@@ -716,14 +719,14 @@ internal object WorldEngine {
                 CONTINUOUS_CHANNEL,
                 context.getString(R.string.world_channel_name),
                 NotificationManager.IMPORTANCE_LOW,
-            ),
+            ).apply { lockscreenVisibility = Notification.VISIBILITY_PRIVATE },
         )
         manager.createNotificationChannel(
             NotificationChannel(
                 RELATIONSHIP_CHANNEL,
                 context.getString(R.string.relationship_channel_name),
                 NotificationManager.IMPORTANCE_DEFAULT,
-            ),
+            ).apply { lockscreenVisibility = Notification.VISIBILITY_PRIVATE },
         )
     }
 
