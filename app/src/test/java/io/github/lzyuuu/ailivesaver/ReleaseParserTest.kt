@@ -99,4 +99,15 @@ class ReleaseParserTest {
         assertTrue(ReleaseParser.compareVersions("0.1.0-m2.1", "0.1.0-m2") > 0)
         assertTrue(ReleaseParser.compareVersions("v0.2.0-m1", "0.1.0") > 0)
     }
+
+    @Test
+    fun parsesSha256FromChecksumAsset() {
+        assertEquals(
+            "59703eee747a7812ba95314f91ff9a09a3cd415c133af05bae75ec5a54ce6aae",
+            ReleaseParser.parseChecksum(
+                "59703EEE747A7812BA95314F91FF9A09A3CD415C133AF05BAE75EC5A54CE6AAE  ai-livesaver.apk",
+            ),
+        )
+        assertEquals(null, ReleaseParser.parseChecksum("not a checksum"))
+    }
 }

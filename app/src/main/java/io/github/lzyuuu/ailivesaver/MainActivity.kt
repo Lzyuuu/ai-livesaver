@@ -2574,6 +2574,13 @@ private fun UpdateScreen(
                                 Spacer(Modifier.height(12.dp))
                                 Text(stringResource(R.string.apk_size, humanFileSize(size)))
                             }
+                            snapshot.release.checksumSha256?.let { checksum ->
+                                Spacer(Modifier.height(8.dp))
+                                Text(
+                                    stringResource(R.string.apk_checksum, checksum),
+                                    style = MaterialTheme.typography.labelSmall,
+                                )
+                            }
                             Text(
                                 if (snapshot.release.checksumUrl != null) {
                                     stringResource(R.string.checksum_available)

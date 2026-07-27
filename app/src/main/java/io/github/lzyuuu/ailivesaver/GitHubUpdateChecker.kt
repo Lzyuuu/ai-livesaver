@@ -13,6 +13,7 @@ internal data class GitHubRelease(
     val downloadUrl: String,
     val apkSizeBytes: Long?,
     val checksumUrl: String?,
+    val checksumSha256: String? = null,
 )
 
 internal sealed interface UpdateState {
@@ -40,6 +41,12 @@ internal class GitHubUpdateChecker(
                 }.getOrElse {
                     ReleaseParser.selectTestingUpdateFromAtom(fetch(feedUrl), currentVersion)
                 }
+            }.map { state ->
+                val available = state as? UpdateState.Available ?: return@map state
+                val checksum = available.release.checksumUrl?.let { url ->
+                    runCatching { ReleaseParser.parseChecksum(fetch(url)) }.getOrNull()
+                }
+                available.copy(release = available.release.copy(checksumSha256 = checksum))
             }
             Handler(Looper.getMainLooper()).post { callback(result) }
         }.start()
@@ -63,6 +70,13 @@ internal class GitHubUpdateChecker(
 }
 
 internal object ReleaseParser {
+    fun parseChecksum(raw: String): String? =
+        Regex("\\b([a-fA-F0-9]{64})\\b")
+            .find(raw)
+            ?.groupValues
+            ?.getOrNull(1)
+            ?.lowercase()
+
     fun selectTestingUpdate(
         json: String,
         currentVersion: String,

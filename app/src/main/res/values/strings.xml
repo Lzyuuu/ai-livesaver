@@ -403,6 +403,7 @@
     <string name="update_failed">检查失败：%1$s</string>
     <string name="release_notes">版本说明</string>
     <string name="apk_size">APK 大小：%1$s</string>
+    <string name="apk_checksum">SHA-256：%1$s</string>
     <string name="checksum_available">提供 SHA-256 校验文件</string>
     <string name="checksum_missing">未提供独立校验文件</string>
     <string name="download_update">前往 GitHub 下载</string>
