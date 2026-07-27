@@ -1,0 +1,1109 @@
+<!-- PROTOTYPE — Three world-entry variants, switchable via ?variant=A|B|C. Throw away after the decision. -->
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Virtual World Entry Prototype</title>
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --primary: #65558f;
+      --on-primary: #fff;
+      --primary-container: #e9ddff;
+      --on-primary-container: #211047;
+      --secondary-container: #e8def8;
+      --tertiary-container: #ffd9e3;
+      --surface: #fff8f8;
+      --surface-container: #f5eef1;
+      --surface-high: #eee7eb;
+      --on-surface: #211a1d;
+      --on-surface-variant: #4d444b;
+      --outline: #7e747c;
+      --outline-variant: #d0c5cc;
+      --error: #ba1a1a;
+      --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+      --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background:
+        radial-gradient(circle at 20% 10%, rgba(221, 196, 255, .55), transparent 32rem),
+        radial-gradient(circle at 82% 90%, rgba(255, 205, 220, .55), transparent 30rem),
+        #ece6ea;
+      color: var(--on-surface);
+      overflow: hidden;
+    }
+
+    button, input { font: inherit; }
+    button { color: inherit; }
+
+    .phone {
+      position: relative;
+      width: min(100vw, 430px);
+      height: 100dvh;
+      margin: 0 auto;
+      overflow: hidden;
+      background: var(--surface);
+      box-shadow: 0 24px 80px rgba(34, 20, 30, .2);
+    }
+
+    .status-bar {
+      position: absolute;
+      z-index: 20;
+      inset: 0 0 auto;
+      height: 34px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: env(safe-area-inset-top, 0) 18px 0;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: .02em;
+      background: color-mix(in srgb, var(--surface) 92%, transparent);
+    }
+
+    .screen {
+      position: absolute;
+      inset: 34px 0 80px;
+      overflow-y: auto;
+      overscroll-behavior-y: contain;
+      scrollbar-width: none;
+    }
+
+    .screen::-webkit-scrollbar { display: none; }
+
+    .top-app-bar {
+      min-height: 72px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 20px;
+    }
+
+    .eyebrow {
+      margin: 0 0 4px;
+      color: var(--primary);
+      font-size: 12px;
+      font-weight: 750;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+
+    h1, h2, h3, p { margin-top: 0; }
+    h1 {
+      margin-bottom: 0;
+      font-size: 30px;
+      line-height: 1.05;
+      letter-spacing: -.025em;
+    }
+    h2 {
+      margin-bottom: 12px;
+      font-size: 20px;
+      line-height: 1.2;
+      letter-spacing: -.012em;
+    }
+    h3 {
+      margin-bottom: 4px;
+      font-size: 16px;
+      line-height: 1.3;
+    }
+    p {
+      margin-bottom: 0;
+      color: var(--on-surface-variant);
+      line-height: 1.45;
+    }
+
+    .avatar {
+      display: grid;
+      place-items: center;
+      flex: 0 0 auto;
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background:
+        radial-gradient(circle at 50% 32%, #f1c7a6 0 13%, transparent 14%),
+        radial-gradient(circle at 50% 53%, #4a2538 0 25%, transparent 26%),
+        linear-gradient(145deg, #d7b8ff, #7e5b93);
+      color: #fff;
+      box-shadow: inset 0 0 0 2px rgba(255,255,255,.6);
+      font-weight: 800;
+    }
+    .avatar.root { background:
+      radial-gradient(circle at 50% 32%, #f1c7a6 0 13%, transparent 14%),
+      radial-gradient(circle at 50% 53%, #35252b 0 25%, transparent 26%),
+      linear-gradient(145deg, #e5c9b9, #4e3546); }
+    .avatar.vira { background:
+      radial-gradient(circle at 50% 32%, #eac3a8 0 13%, transparent 14%),
+      radial-gradient(circle at 50% 53%, #2a1d38 0 25%, transparent 26%),
+      linear-gradient(145deg, #cbb9ff, #69558f); }
+    .avatar.mira { background:
+      radial-gradient(circle at 50% 32%, #d9ad8c 0 13%, transparent 14%),
+      radial-gradient(circle at 50% 53%, #39241b 0 25%, transparent 26%),
+      linear-gradient(145deg, #ffc9a9, #8f5743); }
+
+    .icon-button, .action-button, .chip, .nav-item, .switcher button, .menu-item {
+      border: 0;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .icon-button {
+      display: grid;
+      place-items: center;
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: var(--surface-container);
+      transition: transform 120ms var(--ease-out);
+    }
+    .icon-button:active, .action-button:active, .chip:active, .menu-item:active {
+      transform: scale(.97);
+    }
+
+    .content { padding: 0 16px 28px; }
+
+    .card {
+      border-radius: 24px;
+      background: var(--surface-container);
+      box-shadow: 0 1px 0 rgba(45, 30, 40, .04);
+    }
+
+    .hero-card {
+      position: relative;
+      overflow: hidden;
+      min-height: 180px;
+      padding: 24px;
+      background:
+        radial-gradient(circle at 88% 10%, rgba(255,255,255,.55), transparent 35%),
+        linear-gradient(140deg, var(--primary-container), var(--tertiary-container));
+    }
+
+    .hero-card::after {
+      content: "";
+      position: absolute;
+      right: -38px;
+      bottom: -70px;
+      width: 170px;
+      height: 170px;
+      border: 26px solid rgba(101,85,143,.12);
+      border-radius: 50%;
+    }
+
+    .hero-number {
+      display: block;
+      margin: 20px 0 3px;
+      font-size: 46px;
+      font-variant-numeric: tabular-nums;
+      font-weight: 750;
+      letter-spacing: -.04em;
+    }
+
+    .section-header {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      margin: 26px 4px 12px;
+    }
+    .section-header h2 { margin: 0; }
+    .text-button {
+      border: 0;
+      background: transparent;
+      color: var(--primary);
+      font-weight: 700;
+    }
+
+    .timeline {
+      position: relative;
+      display: grid;
+      gap: 12px;
+    }
+
+    .event-card {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 12px;
+      padding: 16px;
+      border-radius: 22px;
+      background: var(--surface-container);
+    }
+
+    .event-card.unread {
+      background: color-mix(in srgb, var(--primary-container) 58%, var(--surface-container));
+    }
+
+    .event-meta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 3px;
+    }
+
+    .event-time { color: var(--outline); font-size: 12px; }
+    .event-badge {
+      display: inline-flex;
+      align-items: center;
+      min-height: 24px;
+      padding: 0 9px;
+      border-radius: 999px;
+      background: var(--secondary-container);
+      color: var(--on-primary-container);
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .social-image {
+      position: relative;
+      min-height: 210px;
+      margin-top: 12px;
+      overflow: hidden;
+      border-radius: 18px;
+      cursor: zoom-in;
+      user-select: none;
+      touch-action: manipulation;
+      transition: transform 120ms var(--ease-out);
+      background:
+        linear-gradient(155deg, transparent 0 58%, rgba(40,25,56,.18) 59% 61%, transparent 62%),
+        radial-gradient(circle at 67% 29%, #fff4c5 0 9%, transparent 10%),
+        linear-gradient(25deg, #4b3b70 0 32%, #a683bb 33% 47%, #efb0bd 48% 70%, #ffe4c8);
+    }
+    .social-image:active { transform: scale(.995); }
+
+    .social-image::before {
+      content: "";
+      position: absolute;
+      inset: auto 14% 0 44%;
+      height: 72%;
+      border-radius: 50% 50% 14% 14%;
+      background:
+        radial-gradient(circle at 50% 22%, #e5b38f 0 14%, transparent 15%),
+        radial-gradient(circle at 50% 31%, #2d2032 0 24%, transparent 25%),
+        linear-gradient(#79536e, #35263f);
+      filter: saturate(.85);
+      opacity: .9;
+    }
+
+    .image-hint {
+      position: absolute;
+      right: 10px;
+      bottom: 10px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: rgba(22,16,25,.72);
+      color: #fff;
+      font-size: 11px;
+      backdrop-filter: blur(12px);
+    }
+
+    .bottom-nav {
+      position: absolute;
+      z-index: 15;
+      inset: auto 0 0;
+      height: 80px;
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      align-items: center;
+      padding: 6px 8px max(8px, env(safe-area-inset-bottom));
+      background: color-mix(in srgb, var(--surface) 96%, transparent);
+      border-top: 1px solid var(--outline-variant);
+    }
+
+    .nav-item {
+      display: grid;
+      justify-items: center;
+      gap: 3px;
+      padding: 5px 2px;
+      border-radius: 18px;
+      background: transparent;
+      color: var(--on-surface-variant);
+      font-size: 10px;
+      font-weight: 650;
+    }
+
+    .nav-icon {
+      display: grid;
+      place-items: center;
+      width: 54px;
+      height: 30px;
+      border-radius: 999px;
+      font-size: 17px;
+    }
+
+    .nav-item.active { color: var(--on-primary-container); }
+    .nav-item.active .nav-icon { background: var(--secondary-container); }
+
+    .relationship-hero {
+      display: grid;
+      justify-items: center;
+      padding: 26px 22px 22px;
+      text-align: center;
+      background:
+        radial-gradient(circle at 50% 15%, rgba(255,255,255,.8), transparent 34%),
+        linear-gradient(165deg, var(--tertiary-container), var(--primary-container));
+    }
+
+    .relationship-hero .avatar {
+      width: 92px;
+      height: 92px;
+      margin-bottom: 14px;
+      box-shadow: 0 0 0 8px rgba(255,255,255,.46), 0 14px 32px rgba(72,47,72,.15);
+    }
+
+    .relationship-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 8px;
+      color: var(--primary);
+      font-size: 13px;
+      font-weight: 750;
+    }
+
+    .hero-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      width: 100%;
+      margin-top: 22px;
+    }
+
+    .action-button {
+      min-height: 48px;
+      border-radius: 999px;
+      background: var(--primary);
+      color: var(--on-primary);
+      font-weight: 750;
+      transition: transform 120ms var(--ease-out);
+    }
+    .action-button.tonal {
+      background: var(--secondary-container);
+      color: var(--on-primary-container);
+    }
+
+    .people-strip {
+      display: flex;
+      gap: 14px;
+      overflow-x: auto;
+      padding: 2px 4px 8px;
+      scrollbar-width: none;
+    }
+    .person {
+      min-width: 72px;
+      text-align: center;
+      font-size: 12px;
+      font-weight: 650;
+    }
+    .person .avatar { margin: 0 auto 7px; }
+    .attention-dot {
+      display: inline-block;
+      width: 7px;
+      height: 7px;
+      margin-left: 3px;
+      border-radius: 50%;
+      background: #b3261e;
+    }
+
+    .relationship-card {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      align-items: center;
+      gap: 12px;
+      padding: 16px;
+      border-radius: 22px;
+      background: var(--surface-container);
+    }
+    .relationship-card + .relationship-card { margin-top: 10px; }
+    .trailing {
+      color: var(--primary);
+      font-size: 13px;
+      font-weight: 750;
+    }
+
+    .briefing-header {
+      padding: 18px 20px 24px;
+      background:
+        linear-gradient(150deg, #251e2f, #4b395e 60%, #6a4456);
+      color: #fff;
+      border-radius: 0 0 32px 32px;
+    }
+    .briefing-header p, .briefing-header .eyebrow { color: #e7d8f2; }
+    .briefing-header .top-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 30px;
+    }
+
+    .metric-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-top: 22px;
+    }
+    .metric {
+      padding: 12px 10px;
+      border: 1px solid rgba(255,255,255,.15);
+      border-radius: 18px;
+      background: rgba(255,255,255,.1);
+    }
+    .metric strong {
+      display: block;
+      margin-bottom: 2px;
+      font-size: 23px;
+      font-variant-numeric: tabular-nums;
+    }
+    .metric span { color: #e7d8f2; font-size: 11px; }
+
+    .brief-section {
+      margin-top: 14px;
+      padding: 18px;
+      border-radius: 24px;
+      background: var(--surface-container);
+    }
+    .brief-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 14px;
+    }
+    .brief-title h2 { margin: 0; }
+    .brief-list { display: grid; gap: 14px; }
+    .brief-row {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 12px;
+      align-items: start;
+    }
+
+    .context-menu {
+      position: fixed;
+      z-index: 80;
+      width: 230px;
+      padding: 8px;
+      border: 1px solid rgba(255,255,255,.7);
+      border-radius: 20px;
+      background: rgba(255,248,248,.94);
+      box-shadow: 0 18px 50px rgba(37,25,36,.24);
+      backdrop-filter: blur(22px) saturate(150%);
+      opacity: 0;
+      transform: scale(.96);
+      transform-origin: var(--origin-x, 50%) var(--origin-y, 50%);
+      pointer-events: none;
+      transition: transform 160ms var(--ease-out), opacity 140ms var(--ease-out);
+    }
+    .context-menu.open {
+      opacity: 1;
+      transform: scale(1);
+      pointer-events: auto;
+    }
+    .menu-item {
+      width: 100%;
+      min-height: 48px;
+      padding: 0 14px;
+      border-radius: 14px;
+      background: transparent;
+      text-align: left;
+      font-weight: 680;
+      transition: transform 120ms var(--ease-out), background-color 120ms ease;
+    }
+    .menu-item + .menu-item { margin-top: 2px; }
+    @media (hover: hover) and (pointer: fine) {
+      .menu-item:hover { background: var(--surface-high); }
+      .icon-button:hover { background: var(--surface-high); }
+    }
+
+    .scrim, .viewer, .sheet {
+      position: fixed;
+      z-index: 40;
+      inset: 0;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 180ms var(--ease-out);
+    }
+    .scrim {
+      background: rgba(24,18,24,.34);
+    }
+    .scrim.open, .viewer.open, .sheet.open {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .viewer {
+      z-index: 60;
+      display: grid;
+      place-items: center;
+      padding: 20px;
+      background: rgba(18,14,19,.96);
+    }
+    .viewer-image {
+      width: min(92vw, 500px);
+      aspect-ratio: 4 / 5;
+      border-radius: 26px;
+      background:
+        linear-gradient(155deg, transparent 0 58%, rgba(40,25,56,.18) 59% 61%, transparent 62%),
+        radial-gradient(circle at 67% 29%, #fff4c5 0 9%, transparent 10%),
+        linear-gradient(25deg, #4b3b70 0 32%, #a683bb 33% 47%, #efb0bd 48% 70%, #ffe4c8);
+      transform: scale(.96);
+      transition: transform 220ms var(--ease-out);
+    }
+    .viewer.open .viewer-image { transform: scale(1); }
+    .viewer-close, .viewer-more {
+      position: absolute;
+      top: max(18px, env(safe-area-inset-top));
+      color: #fff;
+      background: rgba(255,255,255,.14);
+    }
+    .viewer-close { left: 18px; }
+    .viewer-more { right: 18px; }
+
+    .sheet {
+      z-index: 70;
+      display: grid;
+      align-items: end;
+      background: rgba(24,18,24,.34);
+    }
+    .sheet-panel {
+      padding: 14px 20px calc(24px + env(safe-area-inset-bottom));
+      border-radius: 30px 30px 0 0;
+      background: var(--surface);
+      transform: translateY(100%);
+      transition: transform 240ms cubic-bezier(.32,.72,0,1);
+    }
+    .sheet.open .sheet-panel { transform: translateY(0); }
+    .handle {
+      width: 34px;
+      height: 4px;
+      margin: 0 auto 20px;
+      border-radius: 999px;
+      background: var(--outline-variant);
+    }
+    .field {
+      width: 100%;
+      min-height: 132px;
+      margin: 8px 0 18px;
+      padding: 14px 16px;
+      border: 1px solid var(--outline);
+      border-radius: 16px;
+      background: transparent;
+      color: var(--on-surface);
+      line-height: 1.5;
+      resize: vertical;
+    }
+
+    .toast {
+      position: fixed;
+      z-index: 100;
+      left: 50%;
+      bottom: 96px;
+      max-width: calc(100vw - 32px);
+      padding: 12px 16px;
+      border-radius: 14px;
+      background: #302a2e;
+      color: #fff;
+      opacity: 0;
+      transform: translate(-50%, 12px);
+      pointer-events: none;
+      transition: transform 160ms var(--ease-out), opacity 140ms var(--ease-out);
+    }
+    .toast.open {
+      opacity: 1;
+      transform: translate(-50%, 0);
+    }
+
+    .switcher {
+      position: fixed;
+      z-index: 120;
+      left: 50%;
+      bottom: 90px;
+      display: grid;
+      grid-template-columns: 42px minmax(160px, auto) 42px;
+      align-items: center;
+      padding: 4px;
+      border-radius: 999px;
+      background: #171318;
+      color: #fff;
+      box-shadow: 0 12px 36px rgba(0,0,0,.28);
+      transform: translateX(-50%);
+    }
+    .switcher.suppressed { display: none; }
+    .switcher button {
+      width: 42px;
+      height: 42px;
+      border-radius: 50%;
+      background: transparent;
+      color: #fff;
+      font-size: 20px;
+    }
+    .switcher-label {
+      padding: 0 10px;
+      text-align: center;
+      font-size: 12px;
+      font-weight: 750;
+      white-space: nowrap;
+    }
+
+    .prototype-note {
+      display: none;
+      position: fixed;
+      top: 16px;
+      left: 16px;
+      max-width: 270px;
+      padding: 12px 14px;
+      border-radius: 14px;
+      background: #171318;
+      color: #fff;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    @media (min-width: 760px) {
+      .phone {
+        height: min(920px, calc(100vh - 36px));
+        margin-top: 18px;
+        border: 8px solid #211c20;
+        border-radius: 44px;
+      }
+      .prototype-note { display: block; }
+      .switcher { bottom: 100px; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: .01ms !important;
+        transition-duration: .01ms !important;
+        scroll-behavior: auto !important;
+      }
+      .viewer-image, .sheet-panel, .context-menu, .toast {
+        transform: none !important;
+      }
+      .switcher { transform: translateX(-50%) !important; }
+    }
+  </style>
+</head>
+<body>
+  <main class="phone" aria-live="polite">
+    <div class="status-bar"><span>10:32</span><span>5G&nbsp;&nbsp;▮▮▮&nbsp;&nbsp;95%</span></div>
+    <section class="screen" id="screen"></section>
+    <nav class="bottom-nav" aria-label="主导航">
+      <button class="nav-item active"><span class="nav-icon">◉</span><span>World</span></button>
+      <button class="nav-item"><span class="nav-icon">✦</span><span>Chats</span></button>
+      <button class="nav-item"><span class="nav-icon">◎</span><span>Moments</span></button>
+      <button class="nav-item"><span class="nav-icon">#</span><span>Commons</span></button>
+      <button class="nav-item"><span class="nav-icon">▣</span><span>Library</span></button>
+    </nav>
+  </main>
+
+  <aside class="prototype-note">
+    <strong>Throwaway prototype</strong><br>
+    只比较世界入口的信息结构。点击图片放大；双击或长按打开重绘菜单。
+  </aside>
+
+  <div class="switcher" aria-label="原型版本切换器">
+    <button id="previous" aria-label="上一个版本">←</button>
+    <div class="switcher-label" id="variant-label"></div>
+    <button id="next" aria-label="下一个版本">→</button>
+  </div>
+
+  <div class="scrim" id="scrim"></div>
+  <div class="context-menu" id="context-menu" role="menu" aria-hidden="true">
+    <button class="menu-item" data-action="regenerate" role="menuitem">↻ 直接重新生图</button>
+    <button class="menu-item" data-action="edit" role="menuitem">✎ 修改提示词后生图</button>
+    <button class="menu-item" data-action="versions" role="menuitem">▣ 查看生图版本</button>
+  </div>
+
+  <div class="viewer" id="viewer" aria-hidden="true">
+    <button class="icon-button viewer-close" aria-label="关闭图片">←</button>
+    <button class="icon-button viewer-more" aria-label="图片更多操作">⋮</button>
+    <div class="viewer-image" role="img" aria-label="Vira 在黄昏城市天台发布的照片"></div>
+  </div>
+
+  <div class="sheet" id="sheet" aria-hidden="true">
+    <div class="sheet-panel">
+      <div class="handle"></div>
+      <p class="eyebrow">Regenerate image</p>
+      <h2>修改提示词</h2>
+      <textarea class="field" id="prompt" rows="5">cinematic rooftop portrait, violet dusk, candid moment</textarea>
+      <button class="action-button" id="generate" style="width:100%">生成新版本</button>
+    </div>
+  </div>
+
+  <div class="toast" id="toast" role="status"></div>
+
+  <script>
+    const variants = {
+      A: {
+        name: "World Chronicle",
+        render: () => `
+          <header class="top-app-bar">
+            <div><p class="eyebrow">Sunday · Your world</p><h1>晚上好，焰宇</h1></div>
+            <button class="avatar" aria-label="打开个人资料">焰</button>
+          </header>
+          <div class="content">
+            <section class="card hero-card">
+              <p>你离开的 4 小时里</p>
+              <strong class="hero-number">7</strong>
+              <p>件值得留意的事发生了</p>
+            </section>
+            <div class="section-header"><h2>世界纪事</h2><button class="text-button">全部已读</button></div>
+            <div class="timeline">
+              <article class="event-card unread">
+                <div class="avatar root"></div>
+                <div>
+                  <div class="event-meta"><span class="event-badge">2 条未读</span><span class="event-time">6 分钟前</span></div>
+                  <h3>Root 想起了你</h3>
+                  <p>“你今天是不是又忘记吃晚饭了？”</p>
+                </div>
+              </article>
+              <article class="event-card">
+                <div class="avatar vira"></div>
+                <div>
+                  <div class="event-meta"><span class="event-badge">Moments</span><span class="event-time">42 分钟前</span></div>
+                  <h3>Vira 分享了黄昏</h3>
+                  <p>有些城市只有在太阳落下后，才肯说真话。</p>
+                  <div class="social-image" tabindex="0" role="button" aria-label="打开 Vira 的图片">
+                    <span class="image-hint">双击可重绘</span>
+                  </div>
+                </div>
+              </article>
+              <article class="event-card">
+                <div class="avatar mira"></div>
+                <div>
+                  <div class="event-meta"><span class="event-badge">关系变化</span><span class="event-time">2 小时前</span></div>
+                  <h3>Mira 对你更亲近了一点</h3>
+                  <p>她记住了你不喜欢被催促，也改变了说话方式。</p>
+                </div>
+              </article>
+              <article class="event-card">
+                <div class="avatar">N</div>
+                <div>
+                  <div class="event-meta"><span class="event-badge">Commons</span><span class="event-time">3 小时前</span></div>
+                  <h3>“AI 会梦见谁？”有 9 条新回复</h3>
+                  <p>Root 回复了一个 NPC，而话题最后绕回了你。</p>
+                </div>
+              </article>
+            </div>
+          </div>`
+      },
+      B: {
+        name: "Relationship Center",
+        render: () => `
+          <header class="top-app-bar">
+            <div><p class="eyebrow">Your inner circle</p><h1>离你最近的人</h1></div>
+            <button class="icon-button" aria-label="世界通知">♢</button>
+          </header>
+          <div class="content">
+            <section class="card relationship-hero">
+              <div class="avatar root"></div>
+              <h1>Root</h1>
+              <p>特别关注 · 刚刚在线</p>
+              <span class="relationship-label">♥ 关系正在变得亲近</span>
+              <div class="hero-actions">
+                <button class="action-button">继续对话</button>
+                <button class="action-button tonal">查看近况</button>
+              </div>
+            </section>
+            <div class="section-header"><h2>你的圈子</h2><button class="text-button">管理</button></div>
+            <div class="people-strip">
+              <div class="person"><div class="avatar root"></div>Root<span class="attention-dot"></span></div>
+              <div class="person"><div class="avatar vira"></div>Vira<span class="attention-dot"></span></div>
+              <div class="person"><div class="avatar mira"></div>Mira</div>
+              <div class="person"><div class="avatar">S</div>Sol</div>
+              <div class="person"><div class="avatar">+</div>添加</div>
+            </div>
+            <div class="section-header"><h2>关系正在发生</h2><button class="text-button">查看世界</button></div>
+            <article class="relationship-card">
+              <div class="avatar root"></div>
+              <div><h3>Root 发来两条消息</h3><p>她想确认你今天过得好不好。</p></div>
+              <span class="trailing">打开</span>
+            </article>
+            <article class="relationship-card">
+              <div class="avatar vira"></div>
+              <div><h3>Vira 发布了一张照片</h3><p>这张图的描述里提到了你。</p></div>
+              <span class="trailing">Moments</span>
+            </article>
+            <div class="social-image" tabindex="0" role="button" aria-label="打开 Vira 的图片" style="margin-top:12px">
+              <span class="image-hint">双击可重绘</span>
+            </div>
+            <article class="relationship-card" style="margin-top:12px">
+              <div class="avatar mira"></div>
+              <div><h3>Mira 记住了一件事</h3><p>“焰宇不喜欢别人替他做决定。”</p></div>
+              <span class="trailing">记忆</span>
+            </article>
+          </div>`
+      },
+      C: {
+        name: "Living Brief",
+        render: () => `
+          <header class="briefing-header">
+            <div class="top-row">
+              <div><p class="eyebrow">Live world brief</p><strong>10:32</strong></div>
+              <button class="avatar" aria-label="打开个人资料">焰</button>
+            </div>
+            <h1>你的世界，正在发生</h1>
+            <p style="margin-top:8px">Root 在等你回复，Vira 刚发了照片，Commons 的讨论开始升温。</p>
+            <div class="metric-grid">
+              <div class="metric"><strong>3</strong><span>未读消息</span></div>
+              <div class="metric"><strong>2</strong><span>新 Moments</span></div>
+              <div class="metric"><strong>9</strong><span>论坛回复</span></div>
+            </div>
+          </header>
+          <div class="content">
+            <section class="brief-section">
+              <div class="brief-title"><h2>先回应这些</h2><button class="text-button">Chats</button></div>
+              <div class="brief-list">
+                <div class="brief-row"><div class="avatar root"></div><div><h3>Root · 特别关注</h3><p>“忙完了吗？我有件事想和你说。”</p></div></div>
+                <div class="brief-row"><div class="avatar mira"></div><div><h3>Mira</h3><p>对你昨天的帖子做出了回应。</p></div></div>
+              </div>
+            </section>
+            <section class="brief-section">
+              <div class="brief-title"><h2>Moments</h2><button class="text-button">进入</button></div>
+              <div class="brief-row"><div class="avatar vira"></div><div><h3>Vira · 42 分钟前</h3><p>有些城市只有在太阳落下后，才肯说真话。</p></div></div>
+              <div class="social-image" tabindex="0" role="button" aria-label="打开 Vira 的图片">
+                <span class="image-hint">双击可重绘</span>
+              </div>
+            </section>
+            <section class="brief-section">
+              <div class="brief-title"><h2>Commons</h2><button class="text-button">9 条回复</button></div>
+              <h3>AI 会梦见谁？</h3>
+              <p>这个讨论原本由一个 NPC 发起，但 Root 刚刚把话题转向了你。</p>
+            </section>
+            <section class="brief-section">
+              <div class="brief-title"><h2>创作队列</h2><span class="event-badge">Local Dream 未连接</span></div>
+              <p>一条配图意图正在等待。文字世界仍会继续推进。</p>
+            </section>
+          </div>`
+      },
+      D: {
+        name: "Chosen World",
+        render: () => `
+          <header class="top-app-bar">
+            <div><p class="eyebrow">Your inner circle</p><h1>离你最近的人</h1></div>
+            <button class="icon-button" aria-label="世界通知">♢</button>
+          </header>
+          <div class="content">
+            <section class="card relationship-hero">
+              <div class="avatar root"></div>
+              <h1>Root</h1>
+              <p>特别关注 · 刚刚在线</p>
+              <span class="relationship-label">♥ 关系正在变得亲近</span>
+              <div class="hero-actions">
+                <button class="action-button">继续对话</button>
+                <button class="action-button tonal">查看近况</button>
+              </div>
+            </section>
+            <div class="section-header"><h2>你的圈子</h2><button class="text-button">管理</button></div>
+            <div class="people-strip">
+              <div class="person"><div class="avatar root"></div>Root<span class="attention-dot"></span></div>
+              <div class="person"><div class="avatar vira"></div>Vira<span class="attention-dot"></span></div>
+              <div class="person"><div class="avatar mira"></div>Mira</div>
+              <div class="person"><div class="avatar">S</div>Sol</div>
+              <div class="person"><div class="avatar">+</div>添加</div>
+            </div>
+            <section class="brief-section">
+              <div class="brief-title"><h2>先回应这些</h2><button class="text-button">Chats</button></div>
+              <div class="brief-list">
+                <div class="brief-row"><div class="avatar root"></div><div><h3>Root · 特别关注</h3><p>“忙完了吗？我有件事想和你说。”</p></div></div>
+                <div class="brief-row"><div class="avatar mira"></div><div><h3>Mira</h3><p>对你昨天的帖子做出了回应。</p></div></div>
+              </div>
+            </section>
+            <section class="brief-section">
+              <div class="brief-title"><h2>Moments</h2><button class="text-button">进入</button></div>
+              <div class="brief-row"><div class="avatar vira"></div><div><h3>Vira · 42 分钟前</h3><p>有些城市只有在太阳落下后，才肯说真话。</p></div></div>
+              <div class="social-image" tabindex="0" role="button" aria-label="打开 Vira 的图片">
+                <span class="image-hint">双击可重绘</span>
+              </div>
+            </section>
+            <section class="brief-section">
+              <div class="brief-title"><h2>Commons</h2><button class="text-button">9 条回复</button></div>
+              <h3>AI 会梦见谁？</h3>
+              <p>这个讨论原本由一个 NPC 发起，但 Root 刚刚把话题转向了你。</p>
+            </section>
+            <section class="brief-section">
+              <div class="brief-title"><h2>创作队列</h2><span class="event-badge">Local Dream 未连接</span></div>
+              <p>一条配图意图正在等待。文字世界仍会继续推进。</p>
+            </section>
+          </div>`
+      }
+    };
+
+    const screen = document.querySelector("#screen");
+    const label = document.querySelector("#variant-label");
+    const menu = document.querySelector("#context-menu");
+    const scrim = document.querySelector("#scrim");
+    const viewer = document.querySelector("#viewer");
+    const sheet = document.querySelector("#sheet");
+    const toast = document.querySelector("#toast");
+    const keys = Object.keys(variants);
+    let current = new URLSearchParams(location.search).get("variant")?.toUpperCase();
+    if (!variants[current]) current = "A";
+    let clickTimer;
+    let holdTimer;
+    let activeImage;
+
+    function setVariant(key, instant = false) {
+      current = key;
+      const url = new URL(location.href);
+      url.searchParams.set("variant", key);
+      history.replaceState({}, "", url);
+      screen.dataset.instant = instant ? "true" : "false";
+      screen.innerHTML = variants[key].render();
+      screen.scrollTop = 0;
+      label.textContent = `${key} — ${variants[key].name}`;
+      bindImages();
+      closeMenu();
+    }
+
+    function cycle(direction, instant = false) {
+      const index = keys.indexOf(current);
+      setVariant(keys[(index + direction + keys.length) % keys.length], instant);
+    }
+
+    function bindImages() {
+      document.querySelectorAll(".social-image").forEach(image => {
+        image.addEventListener("click", event => {
+          clearTimeout(clickTimer);
+          clickTimer = setTimeout(() => openViewer(image), 220);
+        });
+        image.addEventListener("dblclick", event => {
+          clearTimeout(clickTimer);
+          event.preventDefault();
+          openMenu(image, event.clientX, event.clientY);
+        });
+        image.addEventListener("pointerdown", event => {
+          holdTimer = setTimeout(() => openMenu(image, event.clientX, event.clientY), 520);
+        });
+        ["pointerup", "pointercancel", "pointermove"].forEach(type =>
+          image.addEventListener(type, () => clearTimeout(holdTimer))
+        );
+        image.addEventListener("keydown", event => {
+          if (event.key === "Enter" || event.key === " ") openViewer(image);
+          if (event.key === "ContextMenu") openMenu(image);
+        });
+      });
+    }
+
+    function openMenu(image, x, y) {
+      activeImage = image;
+      const rect = image.getBoundingClientRect();
+      const menuWidth = 230;
+      const left = Math.min(Math.max(12, x - menuWidth / 2), innerWidth - menuWidth - 12);
+      const top = Math.min(Math.max(48, y + 12), innerHeight - 190);
+      menu.style.left = `${left}px`;
+      menu.style.top = `${top}px`;
+      menu.style.setProperty("--origin-x", `${x - left}px`);
+      menu.style.setProperty("--origin-y", `${Math.max(0, y - top)}px`);
+      menu.classList.add("open");
+      menu.setAttribute("aria-hidden", "false");
+      scrim.classList.add("open");
+      document.querySelector(".switcher").classList.add("suppressed");
+      navigator.vibrate?.(18);
+    }
+
+    function closeMenu() {
+      menu.classList.remove("open");
+      menu.setAttribute("aria-hidden", "true");
+      scrim.classList.remove("open");
+      if (!viewer.classList.contains("open") && !sheet.classList.contains("open")) {
+        document.querySelector(".switcher").classList.remove("suppressed");
+      }
+    }
+
+    function openViewer(image) {
+      activeImage = image;
+      viewer.classList.add("open");
+      viewer.setAttribute("aria-hidden", "false");
+      document.querySelector(".switcher").classList.add("suppressed");
+    }
+
+    function closeViewer() {
+      viewer.classList.remove("open");
+      viewer.setAttribute("aria-hidden", "true");
+      if (!menu.classList.contains("open") && !sheet.classList.contains("open")) {
+        document.querySelector(".switcher").classList.remove("suppressed");
+      }
+    }
+
+    function openSheet() {
+      closeMenu();
+      sheet.classList.add("open");
+      sheet.setAttribute("aria-hidden", "false");
+      document.querySelector(".switcher").classList.add("suppressed");
+      setTimeout(() => document.querySelector("#prompt").focus(), 250);
+    }
+
+    function closeSheet() {
+      sheet.classList.remove("open");
+      sheet.setAttribute("aria-hidden", "true");
+      if (!menu.classList.contains("open") && !viewer.classList.contains("open")) {
+        document.querySelector(".switcher").classList.remove("suppressed");
+      }
+    }
+
+    function showToast(message) {
+      toast.textContent = message;
+      toast.classList.add("open");
+      setTimeout(() => toast.classList.remove("open"), 1800);
+    }
+
+    document.querySelector("#previous").addEventListener("click", () => cycle(-1));
+    document.querySelector("#next").addEventListener("click", () => cycle(1));
+    document.addEventListener("keydown", event => {
+      const target = event.target;
+      if (target.matches("input, textarea, [contenteditable]")) return;
+      if (event.key === "ArrowLeft") cycle(-1, true);
+      if (event.key === "ArrowRight") cycle(1, true);
+      if (event.key === "Escape") {
+        closeMenu();
+        closeViewer();
+        closeSheet();
+      }
+    });
+
+    scrim.addEventListener("click", closeMenu);
+    document.querySelector(".viewer-close").addEventListener("click", closeViewer);
+    document.querySelector(".viewer-image").addEventListener("click", closeViewer);
+    document.querySelector(".viewer-more").addEventListener("click", event => {
+      const rect = event.currentTarget.getBoundingClientRect();
+      openMenu(activeImage, rect.left, rect.bottom);
+    });
+    viewer.addEventListener("click", event => {
+      if (event.target !== viewer) return;
+      if (menu.classList.contains("open")) closeMenu();
+      else closeViewer();
+    });
+    sheet.addEventListener("click", event => {
+      if (event.target === sheet) closeSheet();
+    });
+
+    menu.addEventListener("click", event => {
+      const action = event.target.closest("[data-action]")?.dataset.action;
+      if (action === "regenerate") {
+        closeMenu();
+        showToast("已加入 Local Dream 队列，将生成新版本");
+      }
+      if (action === "edit") openSheet();
+      if (action === "versions") {
+        closeMenu();
+        showToast("当前共有 3 个生图版本");
+      }
+    });
+
+    document.querySelector("#generate").addEventListener("click", () => {
+      closeSheet();
+      showToast("新提示词已加入 Local Dream 队列");
+    });
+
+    if (location.hostname && !["localhost", "127.0.0.1"].includes(location.hostname)) {
+      document.querySelector(".switcher").hidden = true;
+    }
+
+    setVariant(current, true);
+  </script>
+</body>
+</html>
