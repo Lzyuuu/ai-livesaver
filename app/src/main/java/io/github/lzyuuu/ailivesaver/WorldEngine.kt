@@ -88,6 +88,9 @@ internal fun socialResponseRetryBatchSize(pendingCount: Int): Int =
 
 internal fun isWorldBootAction(action: String?): Boolean = action == Intent.ACTION_BOOT_COMPLETED
 
+internal fun shouldKeepContinuousWorldService(enabled: Boolean, continuous: Boolean): Boolean =
+    enabled && continuous
+
 private val BASE_WORLD_SETTING_KEYS = setOf(
     "enabled",
     "activity",
@@ -912,7 +915,13 @@ internal class ContinuousWorldService : Service() {
         super.onDestroy()
     }
 
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_STICKY
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (!shouldKeepContinuousWorldService(WorldEngine.isEnabled(this), WorldEngine.continuous(this))) {
+            stopSelf(startId)
+            return START_NOT_STICKY
+        }
+        return START_STICKY
+    }
 
     override fun onBind(intent: Intent?): IBinder? = null
 }

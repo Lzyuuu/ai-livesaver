@@ -15,6 +15,9 @@ class WorldTurnTest {
         assertTrue(isWorldBootAction(Intent.ACTION_BOOT_COMPLETED))
         assertFalse(isWorldBootAction(Intent.ACTION_TIME_CHANGED))
         assertFalse(isWorldBootAction(null))
+        assertTrue(shouldKeepContinuousWorldService(enabled = true, continuous = true))
+        assertFalse(shouldKeepContinuousWorldService(enabled = false, continuous = true))
+        assertFalse(shouldKeepContinuousWorldService(enabled = true, continuous = false))
     }
 
     @Test
