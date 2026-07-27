@@ -16,5 +16,8 @@ class RelationshipProgressionTest {
 
         val closer = RelationshipState("更了解彼此", "", 2, 2)
         assertNull(nextRelationship(closer, sharedPersonalFact = true))
+
+        val pinned = RelationshipState("刚认识", "", null, 0, pinned = true)
+        assertNull(nextRelationship(pinned, sharedPersonalFact = true))
     }
 }

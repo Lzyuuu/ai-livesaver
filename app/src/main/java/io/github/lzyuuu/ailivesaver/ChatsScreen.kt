@@ -199,6 +199,7 @@ private fun ConversationScreen(
     val memories = remember(revision) { store.memories(character.id) }
     val recap = remember(revision) { store.conversationRecap(character.id) }
     val relationship = remember(revision) { store.relationship(character.id) }
+    val relationshipEvents = remember(revision) { store.relationshipEvents(character.id) }
     val listState = rememberLazyListState()
     var input by rememberSaveable { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
@@ -369,6 +370,8 @@ private fun ConversationScreen(
             retiredMessages = retiredMessages,
             recap = recap,
             memories = memories,
+            relationship = relationship,
+            relationshipEvents = relationshipEvents,
             onBack = { showContext = false },
             onSaveRecap = { body, throughMessageId ->
                 store.saveConversationRecap(character.id, body, throughMessageId)
@@ -392,6 +395,14 @@ private fun ConversationScreen(
             },
             onDelete = {
                 store.deleteMemory(it)
+                onChanged()
+            },
+            onCorrectRelationship = { label, summary, pinned ->
+                store.correctRelationship(character.id, label, summary, pinned)
+                onChanged()
+            },
+            onPinRelationship = { pinned ->
+                store.setRelationshipPinned(character.id, pinned)
                 onChanged()
             },
         )
@@ -667,6 +678,8 @@ private fun ConversationContextScreen(
     retiredMessages: List<ChatMessage>,
     recap: ConversationRecap?,
     memories: List<LongTermMemory>,
+    relationship: RelationshipState,
+    relationshipEvents: List<RelationshipEvent>,
     onBack: () -> Unit,
     onSaveRecap: (String, Long) -> Unit,
     onUpdateRecap: (String) -> Unit,
@@ -674,6 +687,8 @@ private fun ConversationContextScreen(
     onUpdate: (Long, String) -> Unit,
     onPin: (Long, Boolean) -> Unit,
     onDelete: (Long) -> Unit,
+    onCorrectRelationship: (String, String, Boolean) -> Unit,
+    onPinRelationship: (Boolean) -> Unit,
 ) {
     val context = LocalContext.current
     val provider = remember { ProviderStore(context) }
@@ -685,6 +700,11 @@ private fun ConversationContextScreen(
     var recapText by rememberSaveable(recap?.createdAt) { mutableStateOf(recap?.body.orEmpty()) }
     var editingId by rememberSaveable { mutableStateOf<Long?>(null) }
     var editText by rememberSaveable { mutableStateOf("") }
+    var editingRelationship by rememberSaveable { mutableStateOf(false) }
+    var relationshipLabel by rememberSaveable(relationship.createdAt) { mutableStateOf(relationship.label) }
+    var relationshipSummary by rememberSaveable(relationship.createdAt) {
+        mutableStateOf(relationship.summary)
+    }
     val formatter = remember { DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT) }
 
     LazyColumn(
@@ -708,6 +728,161 @@ private fun ConversationContextScreen(
                 stringResource(R.string.conversation_recap_summary),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+        }
+        item {
+            Card(Modifier.fillMaxWidth()) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text(
+                        stringResource(R.string.relationship_state),
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    if (editingRelationship) {
+                        OutlinedTextField(
+                            value = relationshipLabel,
+                            onValueChange = { relationshipLabel = it },
+                            label = { Text(stringResource(R.string.relationship_label)) },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        OutlinedTextField(
+                            value = relationshipSummary,
+                            onValueChange = { relationshipSummary = it },
+                            label = { Text(stringResource(R.string.relationship_summary)) },
+                            minLines = 3,
+                            maxLines = 6,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Button(
+                                onClick = {
+                                    if (
+                                        relationshipLabel.isNotBlank() &&
+                                        relationshipSummary.isNotBlank()
+                                    ) {
+                                        onCorrectRelationship(
+                                            relationshipLabel,
+                                            relationshipSummary,
+                                            relationship.pinned,
+                                        )
+                                        editingRelationship = false
+                                    }
+                                },
+                                enabled = relationshipLabel.isNotBlank() &&
+                                    relationshipSummary.isNotBlank(),
+                            ) {
+                                Text(stringResource(R.string.save))
+                            }
+                            TextButton(onClick = { editingRelationship = false }) {
+                                Text(stringResource(R.string.cancel))
+                            }
+                        }
+                    } else {
+                        Text(relationship.label, style = MaterialTheme.typography.titleMedium)
+                        Text(relationship.summary)
+                    }
+                    relationship.sourceMessageId?.let { sourceMessageId ->
+                        Text(
+                            stringResource(
+                                R.string.relationship_source_message,
+                                sourceMessageId,
+                                formatter.format(Date(relationship.createdAt)),
+                                character.name,
+                            ),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    } ?: Text(
+                        stringResource(
+                            if (relationship.source == "user_correction") {
+                                R.string.relationship_source_user
+                            } else {
+                                R.string.relationship_source_automatic
+                            },
+                            formatter.format(Date(relationship.createdAt)),
+                            character.name,
+                        ),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        TextButton(onClick = { onPinRelationship(!relationship.pinned) }) {
+                            Text(stringResource(if (relationship.pinned) R.string.unpin else R.string.pin))
+                        }
+                        TextButton(
+                            onClick = {
+                                relationshipLabel = relationship.label
+                                relationshipSummary = relationship.summary
+                                editingRelationship = true
+                            },
+                        ) {
+                            Text(stringResource(R.string.edit))
+                        }
+                    }
+                    Text(
+                        stringResource(R.string.relationship_state_summary),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
+        if (relationshipEvents.isNotEmpty()) {
+            item {
+                Text(
+                    stringResource(R.string.relationship_history),
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    stringResource(R.string.relationship_history_summary),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            items(relationshipEvents, key = { "relationship-${it.id}" }) { event ->
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (event.active) {
+                            MaterialTheme.colorScheme.surfaceVariant
+                        } else {
+                            MaterialTheme.colorScheme.surface
+                        },
+                    ),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Column(
+                        Modifier.padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        if (event.active) {
+                            Text(
+                                stringResource(R.string.relationship_current_event),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                        }
+                        Text(event.label, fontWeight = FontWeight.Bold)
+                        Text(event.summary)
+                        val source = if (event.source == "user_correction") {
+                            stringResource(R.string.relationship_user_source)
+                        } else {
+                            stringResource(R.string.relationship_automatic_source)
+                        }
+                        Text(
+                            stringResource(
+                                R.string.relationship_event_source,
+                                source,
+                                formatter.format(Date(event.createdAt)),
+                            ),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
         }
         item {
             Card(Modifier.fillMaxWidth()) {

@@ -37,17 +37,35 @@ internal data class RelationshipState(
     val summary: String,
     val sourceMessageId: Long?,
     val createdAt: Long,
+    val pinned: Boolean = false,
+    val source: String = "conversation",
+)
+
+internal data class RelationshipEvent(
+    val id: Long,
+    val characterId: Long,
+    val label: String,
+    val summary: String,
+    val sourceMessageId: Long?,
+    val createdAt: Long,
+    val active: Boolean,
+    val pinned: Boolean,
+    val source: String,
 )
 
 internal fun nextRelationship(
     current: RelationshipState,
     sharedPersonalFact: Boolean,
-): Pair<String, String>? = when {
-    current.createdAt == 0L ->
-        "开始交谈" to "你主动开启了一段只属于你们的对话。"
-    sharedPersonalFact && current.label != "更了解彼此" ->
-        "更了解彼此" to "你分享了一件值得长期记住的事。"
-    else -> null
+): Pair<String, String>? = if (current.pinned) {
+    null
+} else {
+    when {
+        current.createdAt == 0L ->
+            "开始交谈" to "你主动开启了一段只属于你们的对话。"
+        sharedPersonalFact && current.label != "更了解彼此" ->
+            "更了解彼此" to "你分享了一件值得长期记住的事。"
+        else -> null
+    }
 }
 
 internal data class ChatMessage(
@@ -198,7 +216,7 @@ internal data class MemberWorldContext(
 )
 
 internal class WorldStore(context: Context) :
-    SQLiteOpenHelper(context, "world.db", null, 15) {
+    SQLiteOpenHelper(context, "world.db", null, 16) {
     private val mediaDirectory = File(context.filesDir, "media").canonicalFile
 
     override fun onCreate(database: SQLiteDatabase) {
@@ -329,6 +347,7 @@ internal class WorldStore(context: Context) :
         if (oldVersion < 13) migrateMediaQueue(database)
         if (oldVersion < 14) migrateMediaDescriptions(database)
         if (oldVersion < 15) migrateChatTimeline(database)
+        if (oldVersion < 16) migrateRelationshipControls(database)
     }
 
     private fun createSocialTables(database: SQLiteDatabase) {
@@ -651,9 +670,21 @@ internal class WorldStore(context: Context) :
                 summary TEXT NOT NULL,
                 source_message_id INTEGER REFERENCES messages(id) ON DELETE SET NULL,
                 created_at INTEGER NOT NULL,
-                active INTEGER NOT NULL DEFAULT 1
+                active INTEGER NOT NULL DEFAULT 1,
+                pinned INTEGER NOT NULL DEFAULT 0,
+                source TEXT NOT NULL DEFAULT 'conversation'
             )
             """.trimIndent(),
+        )
+    }
+
+    private fun migrateRelationshipControls(database: SQLiteDatabase) {
+        addColumnIfMissing(database, "relationship_events", "pinned", "INTEGER NOT NULL DEFAULT 0")
+        addColumnIfMissing(
+            database,
+            "relationship_events",
+            "source",
+            "TEXT NOT NULL DEFAULT 'conversation'",
         )
     }
 
@@ -900,7 +931,7 @@ internal class WorldStore(context: Context) :
     fun relationship(characterId: Long): RelationshipState =
         readableDatabase.rawQuery(
             """
-            SELECT label, summary, source_message_id, created_at
+            SELECT label, summary, source_message_id, created_at, pinned, source
             FROM relationship_events
             WHERE character_id = ? AND active = 1
             ORDER BY created_at DESC, id DESC
@@ -914,6 +945,8 @@ internal class WorldStore(context: Context) :
                     cursor.getString(1),
                     cursor.getLong(2).takeUnless { cursor.isNull(2) },
                     cursor.getLong(3),
+                    cursor.getInt(4) == 1,
+                    cursor.getString(5),
                 )
             } else {
                 RelationshipState("刚认识", "你们的共同经历才刚刚开始。", null, 0)
@@ -926,6 +959,7 @@ internal class WorldStore(context: Context) :
         sharedPersonalFact: Boolean,
     ) {
         val current = relationship(characterId)
+        if (current.pinned) return
         val next = nextRelationship(current, sharedPersonalFact) ?: return
         writableDatabase.insertOrThrow(
             "relationship_events",
@@ -936,7 +970,93 @@ internal class WorldStore(context: Context) :
                 put("summary", next.second)
                 put("source_message_id", sourceMessageId)
                 put("created_at", System.currentTimeMillis())
+                put("source", "conversation")
             },
+        )
+    }
+
+    fun relationshipEvents(characterId: Long): List<RelationshipEvent> =
+        readableDatabase.rawQuery(
+            """
+            SELECT id, character_id, label, summary, source_message_id, created_at, active,
+                   pinned, source
+            FROM relationship_events
+            WHERE character_id = ?
+            ORDER BY created_at DESC, id DESC
+            """.trimIndent(),
+            arrayOf(characterId.toString()),
+        ).use { cursor ->
+            buildList {
+                while (cursor.moveToNext()) {
+                    add(
+                        RelationshipEvent(
+                            id = cursor.getLong(0),
+                            characterId = cursor.getLong(1),
+                            label = cursor.getString(2),
+                            summary = cursor.getString(3),
+                            sourceMessageId = cursor.getLong(4).takeUnless { cursor.isNull(4) },
+                            createdAt = cursor.getLong(5),
+                            active = cursor.getInt(6) == 1,
+                            pinned = cursor.getInt(7) == 1,
+                            source = cursor.getString(8),
+                        ),
+                    )
+                }
+            }
+        }
+
+    fun correctRelationship(
+        characterId: Long,
+        label: String,
+        summary: String,
+        pinned: Boolean,
+    ) {
+        val cleanLabel = label.trim()
+        val cleanSummary = summary.trim()
+        require(cleanLabel.isNotEmpty() && cleanSummary.isNotEmpty())
+        writableDatabase.beginTransaction()
+        try {
+            writableDatabase.update(
+                "relationship_events",
+                ContentValues().apply { put("active", 0) },
+                "character_id = ? AND active = 1",
+                arrayOf(characterId.toString()),
+            )
+            writableDatabase.insertOrThrow(
+                "relationship_events",
+                null,
+                ContentValues().apply {
+                    put("character_id", characterId)
+                    put("label", cleanLabel)
+                    put("summary", cleanSummary)
+                    putNull("source_message_id")
+                    put("created_at", System.currentTimeMillis())
+                    put("active", 1)
+                    put("pinned", if (pinned) 1 else 0)
+                    put("source", "user_correction")
+                },
+            )
+            writableDatabase.setTransactionSuccessful()
+        } finally {
+            writableDatabase.endTransaction()
+        }
+    }
+
+    fun setRelationshipPinned(characterId: Long, pinned: Boolean) {
+        val id = readableDatabase.rawQuery(
+            """
+            SELECT id FROM relationship_events
+            WHERE character_id = ? AND active = 1
+            ORDER BY created_at DESC, id DESC
+            LIMIT 1
+            """.trimIndent(),
+            arrayOf(characterId.toString()),
+        ).use { cursor -> if (cursor.moveToFirst()) cursor.getLong(0) else null } ?: return
+        writableDatabase.update(
+            "relationship_events",
+            ContentValues().apply { put("pinned", if (pinned) 1 else 0) },
+            "id = ?",
+            arrayOf(id.toString()),
         )
     }
 
