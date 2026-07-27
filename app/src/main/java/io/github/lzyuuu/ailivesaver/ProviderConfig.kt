@@ -238,8 +238,15 @@ internal class ProviderStore(context: Context) {
     }
 
     fun clearTask(task: ProviderTask) {
-        if (task != ProviderTask.Chat) {
-            preferences.edit { putBoolean("${task.prefix}enabled", false) }
+        val prefix = task.prefix
+        preferences.edit(commit = true) {
+            if (task != ProviderTask.Chat) remove("${prefix}enabled")
+            remove("${prefix}preset")
+            remove("${prefix}base_url")
+            remove("${prefix}model")
+            remove("${prefix}api_key")
+            remove("${prefix}extra_headers")
+            remove("${prefix}capabilities")
         }
     }
 
