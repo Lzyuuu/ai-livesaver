@@ -340,11 +340,11 @@ internal fun SocialScreen(
                             }
                             if (analyzeImage && description.isBlank()) {
                                 val configStore = ProviderStore(context)
-                                val vision = configStore.loadVision() ?: configStore.load()
+                                val vision = configStore.loadFor(ProviderTask.Vision)
                                 ProviderVisionClient.describe(vision, path) { result ->
-                                    result.onSuccess {
-                                        store.updateMediaDescription(postId, it)
-                                        respond(it)
+                                    result.onSuccess { response ->
+                                        store.updateMediaDescription(postId, response.text)
+                                        respond(response.text)
                                     }.onFailure {
                                         generationStatus =
                                             "$visionAnalysisFailed：" +

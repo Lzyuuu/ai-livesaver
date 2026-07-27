@@ -62,7 +62,7 @@ private fun captureLongTermMemory(
     }
     if (!MemoryExtractor.shouldInspect(message.body)) return
     val config = ProviderStore(context).loadFor(ProviderTask.Memory)
-    if (!config.isValid() || !config.capabilities.supports(ProviderCapability.Structured)) return
+    if (!config.supports(ProviderCapability.Structured)) return
     ProviderTextClient.completeStructured(
         config,
         "Extract only durable facts the user explicitly shares for future conversation context. " +
@@ -70,7 +70,8 @@ private fun captureLongTermMemory(
             "Return NONE when this message contains no durable fact.",
         "User message:\n${message.body}\nReturn one concise fact in body, or NONE.",
     ) { result ->
-        val memory = result.getOrNull()?.let(MemoryExtractor::fromProvider) ?: return@completeStructured
+        val memory = result.getOrNull()?.text?.let(MemoryExtractor::fromProvider)
+            ?: return@completeStructured
         if (store.rememberIfCurrent(character.id, message.id, memory)) {
             store.recordConversationRelationship(character.id, message.id, sharedPersonalFact = true)
             onChanged()
@@ -246,7 +247,7 @@ private fun ConversationScreen(
 
     fun requestReply(existingMessageId: Long? = null) {
         if (ActiveChatReplies.contains(character.id)) return
-        val config = provider.load()
+        val config = provider.loadFor(ProviderTask.Chat)
         error = null
         streamingText = ""
         val reply = runCatching {
@@ -285,13 +286,13 @@ private fun ConversationScreen(
         ) { result ->
             try {
                 result.fold(
-                    onSuccess = { body ->
+                    onSuccess = { response ->
                         runCatching {
                             store.completeAssistantReply(
                                 reply.id,
-                                body,
-                                config.preset.displayName,
-                                config.model,
+                                response.text,
+                                response.config.preset.displayName,
+                                response.config.model,
                             )
                         }.onFailure {
                             store.failAssistantReply(reply.id, it.message.orEmpty())
@@ -979,7 +980,7 @@ private fun ConversationContextScreen(
                                 ) { result ->
                                     generating = false
                                     result.onSuccess {
-                                        onSaveRecap(it, messages.last().id)
+                                        onSaveRecap(it.text, messages.last().id)
                                     }.onFailure {
                                         recapError = "$recapFailedPrefix ${it.message.orEmpty()}"
                                     }

@@ -283,6 +283,9 @@
 
     <string name="provider_title">推理配置</string>
     <string name="provider_privacy">API Key 仅保存在本机，并由 Android Keystore 加密；不会进入备份或日志。</string>
+    <string name="provider_fallback">备用 Provider</string>
+    <string name="provider_fallback_summary">仅在主 Provider 失败时使用；不会静默启用，生成记录会保留实际使用的 Provider。</string>
+    <string name="remove_fallback_provider">移除备用 Provider</string>
     <string name="provider_base_url">Base URL</string>
     <string name="provider_model">模型名</string>
     <string name="provider_api_key">API Key</string>

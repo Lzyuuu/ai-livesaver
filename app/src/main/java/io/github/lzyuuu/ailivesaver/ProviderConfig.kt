@@ -86,9 +86,27 @@ internal data class ProviderConfig(
     val apiKey: String = "",
     val extraHeaders: String = "",
     val capabilities: ProviderCapabilities = ProviderCapabilities(),
+    val fallback: ProviderConfig? = null,
 ) {
     fun isValid() = baseUrl.startsWith("https://") && model.isNotBlank() && apiKey.isNotBlank()
+
+    fun supports(capability: ProviderCapability): Boolean =
+        isValid() && (
+            capabilities.supports(capability) ||
+                fallback?.let { it.isValid() && it.capabilities.supports(capability) } == true
+            )
 }
+
+internal data class ProviderResponse(
+    val text: String,
+    val config: ProviderConfig,
+)
+
+internal fun providerCandidates(config: ProviderConfig): List<ProviderConfig> =
+    listOfNotNull(
+        config.takeIf(ProviderConfig::isValid)?.copy(fallback = null),
+        config.fallback?.takeIf(ProviderConfig::isValid)?.copy(fallback = null),
+    ).distinctBy { "${it.baseUrl}\u0000${it.model}\u0000${it.apiKey}" }
 
 internal object ProviderProtocol {
     fun chatCompletionsUrl(baseUrl: String) =
@@ -195,9 +213,17 @@ internal class ProviderStore(context: Context) {
         }
     }
 
-    fun loadFor(task: ProviderTask): ProviderConfig = loadTask(task) ?: load()
+    fun loadFor(task: ProviderTask): ProviderConfig {
+        val primary = loadTask(task) ?: load()
+        return primary.copy(fallback = loadFallback(task))
+    }
 
     fun loadVision() = loadTask(ProviderTask.Vision)
+
+    fun loadFallback(task: ProviderTask): ProviderConfig? {
+        val prefix = fallbackPrefix(task)
+        return if (preferences.getBoolean("${prefix}enabled", false)) load(prefix) else null
+    }
 
     private fun load(prefix: String) = ProviderConfig(
         preset = runCatching {
@@ -233,6 +259,25 @@ internal class ProviderStore(context: Context) {
         }
     }
 
+    fun saveFallback(task: ProviderTask, config: ProviderConfig) {
+        val prefix = fallbackPrefix(task)
+        preferences.edit { putBoolean("${prefix}enabled", true) }
+        save(config, prefix)
+    }
+
+    fun clearFallback(task: ProviderTask) {
+        val prefix = fallbackPrefix(task)
+        preferences.edit(commit = true) {
+            remove("${prefix}enabled")
+            remove("${prefix}preset")
+            remove("${prefix}base_url")
+            remove("${prefix}model")
+            remove("${prefix}api_key")
+            remove("${prefix}extra_headers")
+            remove("${prefix}capabilities")
+        }
+    }
+
     fun clearVision() {
         clearTask(ProviderTask.Vision)
     }
@@ -255,6 +300,8 @@ internal class ProviderStore(context: Context) {
         val keyStore = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
         if (keyStore.containsAlias(KEY_ALIAS)) keyStore.deleteEntry(KEY_ALIAS)
     }
+
+    private fun fallbackPrefix(task: ProviderTask) = "fallback_${task.key}_"
 
     private fun save(config: ProviderConfig, prefix: String) {
         preferences.edit {
@@ -450,7 +497,7 @@ internal object ProviderChatClient {
         userContext: MemberWorldContext,
         characterContext: MemberWorldContext,
         onDelta: (String) -> Unit,
-        callback: (Result<String>) -> Unit,
+        callback: (Result<ProviderResponse>) -> Unit,
     ) {
         Thread {
             val result = runCatching {
@@ -473,14 +520,25 @@ internal object ProviderChatClient {
                             .put("content", message.body),
                     )
                 }
-                val body = JSONObject()
-                    .put("model", config.model)
-                    .put("messages", requestMessages)
-                    .put("stream", true)
-                ProviderHttp.stream(config, body) { accumulated ->
-                    Handler(Looper.getMainLooper()).post { onDelta(accumulated) }
+                var lastFailure: Throwable? = null
+                for (candidate in providerCandidates(config)) {
+                    var delivered = false
+                    try {
+                        val body = JSONObject()
+                            .put("model", candidate.model)
+                            .put("messages", requestMessages)
+                            .put("stream", true)
+                        val text = ProviderHttp.stream(candidate, body) { accumulated ->
+                            delivered = true
+                            Handler(Looper.getMainLooper()).post { onDelta(accumulated) }
+                        }.ifBlank { throw IOException("Provider returned an empty reply") }
+                        return@runCatching ProviderResponse(text, candidate)
+                    } catch (failure: Throwable) {
+                        lastFailure = failure
+                        if (delivered) throw failure
+                    }
                 }
-                    .ifBlank { throw IOException("Provider returned an empty reply") }
+                throw lastFailure ?: IOException("No valid Provider is configured")
             }
             Handler(Looper.getMainLooper()).post { callback(result) }
         }.start()
@@ -542,19 +600,28 @@ internal object ProviderTextClient {
         config: ProviderConfig,
         system: String,
         prompt: String,
-        callback: (Result<String>) -> Unit,
+        callback: (Result<ProviderResponse>) -> Unit,
     ) {
         Thread {
             val result = runCatching {
                 val messages = JSONArray()
                     .put(JSONObject().put("role", "system").put("content", system))
                     .put(JSONObject().put("role", "user").put("content", prompt))
-                val body = JSONObject()
-                    .put("model", config.model)
-                    .put("messages", messages)
-                    .put("max_tokens", 180)
-                ProviderProtocol.parseReply(ProviderHttp.post(config, body))
-                    .ifBlank { throw IOException("Provider returned an empty reply") }
+                var lastFailure: Throwable? = null
+                for (candidate in providerCandidates(config)) {
+                    try {
+                        val body = JSONObject()
+                            .put("model", candidate.model)
+                            .put("messages", messages)
+                            .put("max_tokens", 180)
+                        val text = ProviderProtocol.parseReply(ProviderHttp.post(candidate, body))
+                            .ifBlank { throw IOException("Provider returned an empty reply") }
+                        return@runCatching ProviderResponse(text, candidate)
+                    } catch (failure: Throwable) {
+                        lastFailure = failure
+                    }
+                }
+                throw lastFailure ?: IOException("No valid Provider is configured")
             }
             Handler(Looper.getMainLooper()).post { callback(result) }
         }.start()
@@ -564,23 +631,32 @@ internal object ProviderTextClient {
         config: ProviderConfig,
         system: String,
         prompt: String,
-        callback: (Result<String>) -> Unit,
+        callback: (Result<ProviderResponse>) -> Unit,
     ) {
         Thread {
             val result = runCatching {
-                if (!config.capabilities.supports(ProviderCapability.Structured)) {
-                    throw IOException("Provider structured JSON capability is not qualified")
+                var lastFailure: Throwable? = null
+                for (candidate in providerCandidates(config)) {
+                    try {
+                        if (!candidate.capabilities.supports(ProviderCapability.Structured)) {
+                            throw IOException("Provider structured JSON capability is not qualified")
+                        }
+                        val text = ProviderProtocol.parseStructuredBody(
+                            ProviderHttp.post(
+                                candidate,
+                                ProviderProtocol.structuredRequest(
+                                    candidate.model,
+                                    "$system\nReturn a JSON object with only one string field named body.",
+                                    "$prompt\nReturn only the JSON object; put the response text in body.",
+                                ),
+                            ),
+                        )
+                        return@runCatching ProviderResponse(text, candidate)
+                    } catch (failure: Throwable) {
+                        lastFailure = failure
+                    }
                 }
-                ProviderProtocol.parseStructuredBody(
-                    ProviderHttp.post(
-                        config,
-                        ProviderProtocol.structuredRequest(
-                            config.model,
-                            "$system\nReturn a JSON object with only one string field named body.",
-                            "$prompt\nReturn only the JSON object; put the response text in body.",
-                        ),
-                    ),
-                )
+                throw lastFailure ?: IOException("No valid Provider is configured")
             }
             Handler(Looper.getMainLooper()).post { callback(result) }
         }.start()
@@ -591,17 +667,29 @@ internal object ProviderVisionClient {
     fun describe(
         config: ProviderConfig,
         imagePath: String,
-        callback: (Result<String>) -> Unit,
+        callback: (Result<ProviderResponse>) -> Unit,
     ) {
         Thread {
             val result = runCatching {
-                if (!config.capabilities.supports(ProviderCapability.Vision)) {
-                    throw IOException("Provider vision capability is not qualified")
-                }
                 val dataUrl = minimizedImageDataUrl(imagePath)
-                ProviderProtocol.parseReply(
-                    ProviderHttp.post(config, ProviderProtocol.visionRequest(config.model, dataUrl)),
-                ).ifBlank { throw IOException("Vision Provider returned an empty description") }
+                var lastFailure: Throwable? = null
+                for (candidate in providerCandidates(config)) {
+                    try {
+                        if (!candidate.capabilities.supports(ProviderCapability.Vision)) {
+                            throw IOException("Provider vision capability is not qualified")
+                        }
+                        val text = ProviderProtocol.parseReply(
+                            ProviderHttp.post(
+                                candidate,
+                                ProviderProtocol.visionRequest(candidate.model, dataUrl),
+                            ),
+                        ).ifBlank { throw IOException("Vision Provider returned an empty description") }
+                        return@runCatching ProviderResponse(text, candidate)
+                    } catch (failure: Throwable) {
+                        lastFailure = failure
+                    }
+                }
+                throw lastFailure ?: IOException("No valid Provider is configured")
             }
             Handler(Looper.getMainLooper()).post { callback(result) }
         }.start()

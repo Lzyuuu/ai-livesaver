@@ -1988,16 +1988,28 @@ private fun ProviderScreen(
     var memoryConfig by remember { mutableStateOf(store.loadTask(ProviderTask.Memory)) }
     var visionConfig by remember { mutableStateOf(store.loadVision()) }
     var profile by rememberSaveable { mutableStateOf(ProviderTask.Chat.key) }
-    val task = when (profile) {
+    val editingFallback = profile.endsWith(":fallback")
+    val task = when (profile.substringBefore(':')) {
         "text" -> ProviderTask.Chat
         "vision" -> ProviderTask.Vision
-        else -> ProviderTask.entries.firstOrNull { it.key == profile } ?: ProviderTask.Chat
+        else -> ProviderTask.entries.firstOrNull { it.key == profile.substringBefore(':') }
+            ?: ProviderTask.Chat
     }
-    val initial = when (task) {
+    val primaryInitial = when (task) {
         ProviderTask.Chat -> textConfig
         ProviderTask.World -> worldConfig ?: textConfig
         ProviderTask.Memory -> memoryConfig ?: textConfig
         ProviderTask.Vision -> visionConfig ?: textConfig
+    }
+    val initial = if (editingFallback) {
+        store.loadFallback(task) ?: primaryInitial.copy(
+            apiKey = "",
+            extraHeaders = "",
+            capabilities = ProviderCapabilities(),
+            fallback = null,
+        )
+    } else {
+        primaryInitial
     }
     var presetName by rememberSaveable { mutableStateOf(initial.preset.name) }
     var baseUrl by rememberSaveable { mutableStateOf(initial.baseUrl) }
@@ -2016,8 +2028,8 @@ private fun ProviderScreen(
     val visionRemoved = stringResource(R.string.vision_provider_removed)
     val capabilitiesSaved = stringResource(R.string.capabilities_saved)
 
-    fun showProfile(nextTask: ProviderTask, config: ProviderConfig) {
-        profile = nextTask.key
+    fun showProfile(nextTask: ProviderTask, config: ProviderConfig, fallback: Boolean = false) {
+        profile = nextTask.key + if (fallback) ":fallback" else ""
         presetName = config.preset.name
         baseUrl = config.baseUrl
         model = config.model
@@ -2025,6 +2037,16 @@ private fun ProviderScreen(
         extraHeaders = config.extraHeaders
         capabilities = config.capabilities
         status = null
+    }
+
+    fun showFallback(nextTask: ProviderTask) {
+        val base = store.loadFor(nextTask).copy(
+            apiKey = "",
+            extraHeaders = "",
+            capabilities = ProviderCapabilities(),
+            fallback = null,
+        )
+        showProfile(nextTask, store.loadFallback(nextTask) ?: base, fallback = true)
     }
 
     fun currentConfig() = ProviderConfig(
@@ -2065,7 +2087,9 @@ private fun ProviderScreen(
                 fontWeight = FontWeight.Bold,
             )
             Text(
-                if (task == ProviderTask.Vision) {
+                if (editingFallback) {
+                    stringResource(R.string.provider_fallback_summary)
+                } else if (task == ProviderTask.Vision) {
                     stringResource(R.string.vision_provider_summary)
                 } else {
                     stringResource(R.string.provider_privacy)
@@ -2085,24 +2109,23 @@ private fun ProviderScreen(
                 )
                 FilterChip(
                     selected = task == ProviderTask.World,
-                    onClick = {
-                        showProfile(ProviderTask.World, worldConfig ?: textConfig)
-                    },
+                    onClick = { showProfile(ProviderTask.World, worldConfig ?: textConfig) },
                     label = { Text(stringResource(R.string.world_provider)) },
                 )
                 FilterChip(
                     selected = task == ProviderTask.Memory,
-                    onClick = {
-                        showProfile(ProviderTask.Memory, memoryConfig ?: textConfig)
-                    },
+                    onClick = { showProfile(ProviderTask.Memory, memoryConfig ?: textConfig) },
                     label = { Text(stringResource(R.string.memory_provider)) },
                 )
                 FilterChip(
                     selected = task == ProviderTask.Vision,
-                    onClick = {
-                        showProfile(ProviderTask.Vision, visionConfig ?: textConfig)
-                    },
+                    onClick = { showProfile(ProviderTask.Vision, visionConfig ?: textConfig) },
                     label = { Text(stringResource(R.string.vision_provider)) },
+                )
+                FilterChip(
+                    selected = editingFallback,
+                    onClick = { showFallback(task) },
+                    label = { Text(stringResource(R.string.provider_fallback)) },
                 )
             }
         }
@@ -2172,8 +2195,12 @@ private fun ProviderScreen(
                     onClick = {
                         val config = currentConfig()
                         status = if (config.isValid()) {
-                            store.saveTask(task, config)
-                            rememberSavedConfig(task, config)
+                            if (editingFallback) {
+                                store.saveFallback(task, config)
+                            } else {
+                                store.saveTask(task, config)
+                                rememberSavedConfig(task, config)
+                            }
                             savedMessage
                         } else {
                             requiredFields
@@ -2270,8 +2297,12 @@ private fun ProviderScreen(
                                             if (task == testedTask) {
                                                 capabilities = updated.capabilities
                                             }
-                                            store.saveTask(testedTask, updated)
-                                            rememberSavedConfig(testedTask, updated)
+                                            if (editingFallback) {
+                                                store.saveFallback(testedTask, updated)
+                                            } else {
+                                                store.saveTask(testedTask, updated)
+                                                rememberSavedConfig(testedTask, updated)
+                                            }
                                             status = capabilitiesSaved
                                         },
                                         onFailure = {
@@ -2318,28 +2349,44 @@ private fun ProviderScreen(
         status?.let { message ->
             item { StatusCard(message) }
         }
-        val configured = when (task) {
-            ProviderTask.Chat -> null
-            ProviderTask.World -> worldConfig
-            ProviderTask.Memory -> memoryConfig
-            ProviderTask.Vision -> visionConfig
+        val configured = if (editingFallback) {
+            store.loadFallback(task)
+        } else {
+            when (task) {
+                ProviderTask.Chat -> null
+                ProviderTask.World -> worldConfig
+                ProviderTask.Memory -> memoryConfig
+                ProviderTask.Vision -> visionConfig
+            }
         }
         if (configured != null) {
             item {
                 TextButton(
                     onClick = {
-                        store.clearTask(task)
-                        when (task) {
-                            ProviderTask.World -> worldConfig = null
-                            ProviderTask.Memory -> memoryConfig = null
-                            ProviderTask.Vision -> visionConfig = null
-                            ProviderTask.Chat -> Unit
+                        if (editingFallback) {
+                            store.clearFallback(task)
+                        } else {
+                            store.clearTask(task)
+                            when (task) {
+                                ProviderTask.World -> worldConfig = null
+                                ProviderTask.Memory -> memoryConfig = null
+                                ProviderTask.Vision -> visionConfig = null
+                                ProviderTask.Chat -> Unit
+                            }
                         }
-                        status = if (task == ProviderTask.Vision) visionRemoved else savedMessage
+                        status = if (editingFallback) {
+                            savedMessage
+                        } else if (task == ProviderTask.Vision) {
+                            visionRemoved
+                        } else {
+                            savedMessage
+                        }
                     },
                 ) {
                     Text(
-                        if (task == ProviderTask.Vision) {
+                        if (editingFallback) {
+                            stringResource(R.string.remove_fallback_provider)
+                        } else if (task == ProviderTask.Vision) {
                             stringResource(R.string.remove_vision_provider)
                         } else {
                             stringResource(R.string.remove_task_provider)

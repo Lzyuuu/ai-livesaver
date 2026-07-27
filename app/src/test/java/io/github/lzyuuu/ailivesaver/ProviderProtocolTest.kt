@@ -129,4 +129,32 @@ class ProviderProtocolTest {
         assertFalse(isTransientProviderFailure("HTTP 401"))
         assertFalse(isTransientProviderFailure("HTTP 404"))
     }
+
+    @Test
+    fun fallbackIsExplicitAndKeepsPrimaryFirst() {
+        val fallback = ProviderConfig(
+            baseUrl = "https://fallback.example/v1",
+            model = "fallback-model",
+            apiKey = "fallback-key",
+            capabilities = ProviderCapabilities(
+                supported = setOf(ProviderCapability.Structured),
+            ),
+        )
+        val primary = ProviderConfig(
+            baseUrl = "https://primary.example/v1",
+            model = "primary-model",
+            apiKey = "primary-key",
+            fallback = fallback,
+        )
+
+        assertTrue(primary.supports(ProviderCapability.Structured))
+        assertEquals(
+            listOf("primary-model", "fallback-model"),
+            providerCandidates(primary).map(ProviderConfig::model),
+        )
+        assertEquals(
+            listOf("primary-model"),
+            providerCandidates(primary.copy(fallback = null)).map(ProviderConfig::model),
+        )
+    }
 }

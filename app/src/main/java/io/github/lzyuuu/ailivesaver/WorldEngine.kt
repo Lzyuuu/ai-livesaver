@@ -299,8 +299,7 @@ internal object WorldEngine {
         val config = ProviderStore(context).loadFor(ProviderTask.World)
         if (
             character == null ||
-            !config.isValid() ||
-            !config.capabilities.supports(ProviderCapability.Structured)
+            !config.supports(ProviderCapability.Structured)
         ) {
             store.close()
             return false
@@ -406,7 +405,9 @@ internal object WorldEngine {
         }
         ProviderTextClient.completeStructured(config, system, prompt) { result ->
             val created = result.fold(
-                onSuccess = { body ->
+                onSuccess = { response ->
+                    val body = response.text
+                    val usedConfig = response.config
                     when {
                         npcForumTarget != null -> {
                             val npcName = requireNotNull(npc).name
@@ -422,8 +423,8 @@ internal object WorldEngine {
                                 npcName,
                                 needsResponse = false,
                                 sourcePostId = npcForumTarget.id,
-                                providerName = config.preset.displayName,
-                                modelName = config.model,
+                                providerName = usedConfig.preset.displayName,
+                                modelName = usedConfig.model,
                             )
                         }
                         npc != null -> store.createPost(
@@ -432,8 +433,8 @@ internal object WorldEngine {
                                 "",
                                 body,
                                 authorKind = "npc",
-                                providerName = config.preset.displayName,
-                                modelName = config.model,
+                                providerName = usedConfig.preset.displayName,
+                                modelName = usedConfig.model,
                                 worldEventKind = if (reconstructed) {
                                     "reconstructed_moment"
                                 } else {
@@ -447,8 +448,8 @@ internal object WorldEngine {
                             body,
                             authorKind = "resident",
                             authorCharacterId = actor.id,
-                            providerName = config.preset.displayName,
-                            modelName = config.model,
+                            providerName = usedConfig.preset.displayName,
+                            modelName = usedConfig.model,
                             worldEventKind = if (reconstructed) {
                                 "reconstructed_character_interaction"
                             } else {
@@ -463,8 +464,8 @@ internal object WorldEngine {
                                 summary = body.take(120),
                                 actorName = actor.name,
                                 needsResponse = true,
-                                providerName = config.preset.displayName,
-                                modelName = config.model,
+                                providerName = usedConfig.preset.displayName,
+                                modelName = usedConfig.model,
                             )
                             notifyRelationship(context, actor, body)
                         }
@@ -475,8 +476,8 @@ internal object WorldEngine {
                             body,
                             authorKind = "resident",
                             authorCharacterId = actor.id,
-                            providerName = config.preset.displayName,
-                            modelName = config.model,
+                            providerName = usedConfig.preset.displayName,
+                            modelName = usedConfig.model,
                             worldEventKind = if (reconstructed) "reconstructed_moment" else "moment",
                         )
                     }
@@ -521,8 +522,7 @@ internal object WorldEngine {
         val config = ProviderStore(context).loadFor(ProviderTask.World)
         if (
             character == null ||
-            !config.isValid() ||
-            !config.capabilities.supports(ProviderCapability.Structured)
+            !config.supports(ProviderCapability.Structured)
         ) {
             store.close()
             return false
@@ -539,7 +539,9 @@ internal object WorldEngine {
             "$prompt\n\nUser post:\n$body",
         ) { result ->
             val created = result.fold(
-                onSuccess = { reply ->
+                onSuccess = { response ->
+                    val reply = response.text
+                    val usedConfig = response.config
                     store.addComment(
                         postId,
                         reply,
@@ -553,8 +555,8 @@ internal object WorldEngine {
                         character.name,
                         needsResponse = true,
                         sourcePostId = postId,
-                        providerName = config.preset.displayName,
-                        modelName = config.model,
+                        providerName = usedConfig.preset.displayName,
+                        modelName = usedConfig.model,
                     )
                     consumeBudget(context)
                     recordSuccess(context)
@@ -624,8 +626,7 @@ internal object WorldEngine {
         if (post.authorKind == "user") return false
         val config = ProviderStore(context).loadFor(ProviderTask.World)
         if (
-            !config.isValid() ||
-            !config.capabilities.supports(ProviderCapability.Structured)
+            !config.supports(ProviderCapability.Structured)
         ) return false
         val store = WorldStore(context)
         val character = post.authorCharacterId?.let { id ->
@@ -643,12 +644,12 @@ internal object WorldEngine {
                 "and stay under 120 Chinese characters.\n\n${post.body}",
         ) { result ->
             val updated = result.fold(
-                onSuccess = {
+                onSuccess = { response ->
                     store.rewriteAiPost(
                         post.id,
-                        it,
-                        config.preset.displayName,
-                        config.model,
+                        response.text,
+                        response.config.preset.displayName,
+                        response.config.model,
                     )
                     true
                 },
