@@ -23,6 +23,7 @@ internal data class UserIdentity(
     val name: String,
     val addressPreference: String,
     val bio: String,
+    val avatarPath: String = "",
 )
 
 internal data class CharacterTurningPoint(
@@ -277,7 +278,7 @@ internal data class MemberWorldContext(
 )
 
 internal class WorldStore(context: Context) :
-    SQLiteOpenHelper(context, "world.db", null, 18),
+    SQLiteOpenHelper(context, "world.db", null, 19),
     java.io.Closeable {
     private val mediaDirectory = File(context.filesDir, "media").canonicalFile
 
@@ -289,6 +290,7 @@ internal class WorldStore(context: Context) :
                 name TEXT NOT NULL,
                 address_preference TEXT NOT NULL DEFAULT '',
                 bio TEXT NOT NULL DEFAULT '',
+                avatar_path TEXT NOT NULL DEFAULT '',
                 updated_at INTEGER NOT NULL DEFAULT 0
             )
             """.trimIndent(),
@@ -413,6 +415,7 @@ internal class WorldStore(context: Context) :
         if (oldVersion < 16) migrateRelationshipControls(database)
         if (oldVersion < 17) createSocialResponseQueueTable(database)
         if (oldVersion < 18) migrateWorldEventProvenance(database)
+        if (oldVersion < 19) addColumnIfMissing(database, "profile", "avatar_path", "TEXT NOT NULL DEFAULT ''")
     }
 
     private fun createSocialTables(database: SQLiteDatabase) {
@@ -867,11 +870,11 @@ internal class WorldStore(context: Context) :
         }
 
     fun identity(): UserIdentity = readableDatabase.rawQuery(
-        "SELECT name, address_preference, bio FROM profile WHERE id = 1",
+        "SELECT name, address_preference, bio, avatar_path FROM profile WHERE id = 1",
         null,
     ).use { cursor ->
         if (cursor.moveToFirst()) {
-            UserIdentity(cursor.getString(0), cursor.getString(1), cursor.getString(2))
+            UserIdentity(cursor.getString(0), cursor.getString(1), cursor.getString(2), cursor.getString(3))
         } else {
             UserIdentity("你", "", "")
         }
@@ -914,14 +917,21 @@ internal class WorldStore(context: Context) :
         }
     }
 
-    fun updateIdentity(name: String, addressPreference: String, bio: String) {
+    fun updateIdentity(
+        name: String,
+        addressPreference: String,
+        bio: String,
+        avatarPath: String? = null,
+    ) {
         val current = identity()
         val nextName = name.trim()
         val nextAddressPreference = addressPreference.trim()
         val nextBio = bio.trim()
+        val nextAvatarPath = avatarPath ?: current.avatarPath
         val changed = current.name != nextName ||
             current.addressPreference != nextAddressPreference ||
-            current.bio != nextBio
+            current.bio != nextBio ||
+            current.avatarPath != nextAvatarPath
         writableDatabase.beginTransaction()
         try {
             writableDatabase.update(
@@ -930,6 +940,7 @@ internal class WorldStore(context: Context) :
                     put("name", nextName)
                     put("address_preference", nextAddressPreference)
                     put("bio", nextBio)
+                    put("avatar_path", nextAvatarPath)
                     put("updated_at", System.currentTimeMillis())
                 },
                 "id = 1",

@@ -169,6 +169,10 @@
     <string name="address_preference">称呼偏好</string>
     <string name="address_preference_hint">角色应该如何称呼你</string>
     <string name="identity_bio">自我描述</string>
+    <string name="identity_avatar_summary">头像只保存在本机，用于这个世界里的身份展示。</string>
+    <string name="choose_avatar">选择头像</string>
+    <string name="remove_avatar">移除头像</string>
+    <string name="identity_avatar_invalid">无法读取这张图片，请重新选择。</string>
     <string name="save_identity">保存身份</string>
     <string name="identity_saved">身份已更新；既有关系与记忆不会被改写</string>
     <string name="identity_name_required">昵称不能为空</string>

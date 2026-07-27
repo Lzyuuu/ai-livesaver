@@ -91,6 +91,7 @@ internal fun SocialScreen(
     onStartWorld: () -> Unit,
 ) {
     val context = LocalContext.current
+    val identity = remember(revision) { store.identity() }
     val character = remember(revision) { store.primaryCharacter() }
     val characters = remember(revision) { store.characters(includeDeparted = false) }
     var forumSort by rememberSaveable { mutableStateOf("latest") }
@@ -165,6 +166,9 @@ internal fun SocialScreen(
         PostDetailScreen(
             contentPadding = contentPadding,
             post = selectedPost,
+            authorAvatarPath = selectedPost.authorKind
+                .takeIf { it == "user" }
+                ?.let { identity.avatarPath },
             comments = remember(revision, selectedPost.id) {
                 store.comments(selectedPost.id)
             },
@@ -414,6 +418,9 @@ internal fun SocialScreen(
         items(posts, key = SocialPost::id) { post ->
             PostCard(
                 post = post,
+                authorAvatarPath = post.authorKind
+                    .takeIf { it == "user" }
+                    ?.let { identity.avatarPath },
                 onOpen = { selectedPostId = post.id },
                 onToggleReaction = {
                     store.toggleReaction(post.id)
@@ -649,6 +656,7 @@ private fun PostComposer(
 @Composable
 private fun PostCard(
     post: SocialPost,
+    authorAvatarPath: String?,
     onOpen: () -> Unit,
     onToggleReaction: () -> Unit,
     onOpenAuthor: () -> Unit,
@@ -667,12 +675,20 @@ private fun PostCard(
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(
-                    post.authorName.removeSuffix(" · NPC"),
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.clickable(onClick = onOpenAuthor),
-                )
+                Row(
+                    modifier = Modifier.weight(1f),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Avatar(post.authorName.take(1).uppercase(), 36.dp, authorAvatarPath)
+                    Text(
+                        post.authorName.removeSuffix(" · NPC"),
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.clickable(onClick = onOpenAuthor),
+                    )
+                }
                 Text(
                     formatter.format(Date(post.createdAt)),
                     style = MaterialTheme.typography.labelMedium,
@@ -709,6 +725,7 @@ private fun PostCard(
 private fun PostDetailScreen(
     contentPadding: PaddingValues,
     post: SocialPost,
+    authorAvatarPath: String?,
     comments: List<SocialComment>,
     versions: List<SocialPostVersion>,
     status: String?,
@@ -769,11 +786,17 @@ private fun PostDetailScreen(
                 Text(post.body, style = MaterialTheme.typography.bodyLarge)
             }
             PostMedia(post, onOpenImage)
-            TextButton(onClick = onOpenAuthor) {
-                Text(
-                    "${post.authorName.removeSuffix(" · NPC")} · " +
-                        formatter.format(Date(post.createdAt)),
-                )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Avatar(post.authorName.take(1).uppercase(), 36.dp, authorAvatarPath)
+                TextButton(onClick = onOpenAuthor) {
+                    Text(
+                        "${post.authorName.removeSuffix(" · NPC")} · " +
+                            formatter.format(Date(post.createdAt)),
+                    )
+                }
             }
             if (post.kind == "moment" && post.authorKind == "user") {
                 Text(

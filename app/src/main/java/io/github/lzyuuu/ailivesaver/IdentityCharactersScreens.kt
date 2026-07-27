@@ -1,8 +1,10 @@
 package io.github.lzyuuu.ailivesaver
 
+import android.graphics.BitmapFactory
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -34,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import java.text.DateFormat
 import java.util.Date
+import java.io.File
 
 @Composable
 internal fun IdentityScreen(
@@ -42,17 +45,57 @@ internal fun IdentityScreen(
     onBack: () -> Unit,
     onChanged: () -> Unit,
 ) {
+    val context = LocalContext.current
     val identity = remember { store.identity() }
     var name by rememberSaveable { mutableStateOf(identity.name.takeUnless { it == "你" }.orEmpty()) }
     var address by rememberSaveable { mutableStateOf(identity.addressPreference) }
     var bio by rememberSaveable { mutableStateOf(identity.bio) }
+    var avatarPath by rememberSaveable { mutableStateOf(identity.avatarPath) }
     var status by remember { mutableStateOf<String?>(null) }
     val saved = stringResource(R.string.identity_saved)
     val incomplete = stringResource(R.string.identity_name_required)
+    val avatarInvalid = stringResource(R.string.identity_avatar_invalid)
+    val avatarPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickVisualMedia(),
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        runCatching {
+            val directory = File(context.filesDir, "media").apply { mkdirs() }
+            val target = File(directory, "user-avatar-${System.currentTimeMillis()}.jpg")
+            context.contentResolver.openInputStream(uri)?.use { input ->
+                target.outputStream().use { output -> input.copyTo(output) }
+            } ?: error(avatarInvalid)
+            check(BitmapFactory.decodeFile(target.path) != null) { avatarInvalid }
+            avatarPath = target.path
+        }.onFailure { status = it.message ?: avatarInvalid }
+    }
 
     SettingsList(contentPadding) {
         item {
             ScreenHeading(onBack, R.string.user_identity, R.string.user_identity_summary)
+        }
+        item {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Avatar(name.trim().ifBlank { "你" }.take(1).uppercase(), 88.dp, avatarPath)
+                Text(
+                    stringResource(R.string.identity_avatar_summary),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TextButton(
+                        onClick = {
+                            avatarPicker.launch(
+                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+                            )
+                        },
+                    ) { Text(stringResource(R.string.choose_avatar)) }
+                    if (avatarPath.isNotBlank()) {
+                        TextButton(onClick = { avatarPath = "" }) {
+                            Text(stringResource(R.string.remove_avatar))
+                        }
+                    }
+                }
+            }
         }
         item {
             OutlinedTextField(
@@ -89,7 +132,7 @@ internal fun IdentityScreen(
                     if (name.isBlank()) {
                         status = incomplete
                     } else {
-                        store.updateIdentity(name, address, bio)
+                        store.updateIdentity(name, address, bio, avatarPath)
                         onChanged()
                         status = saved
                     }

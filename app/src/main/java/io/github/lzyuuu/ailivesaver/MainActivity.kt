@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.BitmapFactory
 import android.os.Build
 import android.os.Bundle
 import android.text.format.Formatter
@@ -18,6 +19,7 @@ import androidx.core.net.toUri
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -65,6 +67,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -145,6 +149,7 @@ private fun AiLivesaverApp() {
     var showIdentity by rememberSaveable { mutableStateOf(false) }
     var showCharacters by rememberSaveable { mutableStateOf(false) }
     val destination = Destination.valueOf(destinationName)
+    val identity = remember(worldRevision) { worldStore.identity() }
     val primaryCharacter = remember(worldRevision) { worldStore.primaryCharacter() }
     val primaryRelationship = remember(worldRevision, primaryCharacter?.id) {
         primaryCharacter?.let { worldStore.relationship(it.id) }
@@ -277,6 +282,7 @@ private fun AiLivesaverApp() {
                 Destination.World -> WorldScreen(
                     contentPadding = padding,
                     character = primaryCharacter,
+                    identity = identity,
                     relationship = primaryRelationship,
                     characters = characters,
                     latestMoment = latestMoment,
@@ -330,7 +336,7 @@ private fun AiLivesaverApp() {
                 )
                 Destination.Me -> MeScreen(
                     contentPadding = padding,
-                    identity = worldStore.identity(),
+                    identity = identity,
                     store = worldStore,
                     revision = worldRevision,
                     onOpenIdentity = { showIdentity = true },
@@ -355,6 +361,7 @@ private fun AiLivesaverApp() {
 private fun WorldScreen(
     contentPadding: PaddingValues,
     character: ResidentCharacter?,
+    identity: UserIdentity,
     relationship: RelationshipState?,
     characters: List<ResidentCharacter>,
     latestMoment: SocialPost?,
@@ -400,7 +407,7 @@ private fun WorldScreen(
                     color = MaterialTheme.colorScheme.secondaryContainer,
                 ) {
                     Box(contentAlignment = Alignment.Center) {
-                        Text("♢", fontSize = 22.sp)
+                        Avatar(identity.name.take(1).uppercase(), 48.dp, identity.avatarPath)
                     }
                 }
             }
@@ -720,18 +727,32 @@ private fun PersonMessage(initial: String, name: String, message: String, source
 }
 
 @Composable
-private fun Avatar(initial: String, size: androidx.compose.ui.unit.Dp) {
+internal fun Avatar(
+    initial: String,
+    size: androidx.compose.ui.unit.Dp,
+    imagePath: String? = null,
+) {
+    val bitmap = remember(imagePath) { imagePath?.let(BitmapFactory::decodeFile)?.asImageBitmap() }
     Surface(
         modifier = Modifier.size(size),
         shape = CircleShape,
         color = MaterialTheme.colorScheme.secondaryContainer,
     ) {
-        Box(contentAlignment = Alignment.Center) {
-            Text(
-                initial,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSecondaryContainer,
+        if (bitmap != null) {
+            Image(
+                bitmap = bitmap,
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop,
             )
+        } else {
+            Box(contentAlignment = Alignment.Center) {
+                Text(
+                    initial,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                )
+            }
         }
     }
 }
@@ -789,16 +810,24 @@ private fun MeScreen(
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         item {
-            Eyebrow(stringResource(R.string.me_eyebrow))
-            Text(
-                identity.name,
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold,
-            )
-            Text(
-                identity.bio.ifBlank { stringResource(R.string.me_description) },
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Avatar(identity.name.take(1).uppercase(), 56.dp, identity.avatarPath)
+                Column {
+                    Eyebrow(stringResource(R.string.me_eyebrow))
+                    Text(
+                        identity.name,
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        identity.bio.ifBlank { stringResource(R.string.me_description) },
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
         }
         item {
             Text(
