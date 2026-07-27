@@ -6,6 +6,21 @@ import org.junit.Test
 
 class ReleaseParserTest {
     @Test
+    fun atomFeedIsUsedWhenApiIsRateLimited() {
+        val state = ReleaseParser.selectTestingUpdateFromAtom(
+            """
+            <feed>
+              <entry><link href="https://github.com/Lzyuuu/ai-livesaver/releases/tag/v0.1.0-m2"/></entry>
+            </feed>
+            """.trimIndent(),
+            "0.1.0-m1",
+        )
+
+        assertTrue(state is UpdateState.Available)
+        assertEquals("v0.1.0-m2", (state as UpdateState.Available).release.tagName)
+    }
+
+    @Test
     fun selectsNewestTestingApkAndChecksum() {
         val result = ReleaseParser.selectTestingUpdate(
             json = """

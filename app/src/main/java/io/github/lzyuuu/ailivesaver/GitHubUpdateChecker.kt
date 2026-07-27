@@ -26,6 +26,8 @@ internal sealed interface UpdateState {
 internal class GitHubUpdateChecker(
     private val releasesUrl: String =
         "https://api.github.com/repos/Lzyuuu/ai-livesaver/releases?per_page=20",
+    private val feedUrl: String =
+        "https://github.com/Lzyuuu/ai-livesaver/releases.atom",
 ) {
     fun checkAsync(
         currentVersion: String,
@@ -33,24 +35,30 @@ internal class GitHubUpdateChecker(
     ) {
         Thread {
             val result = runCatching {
-                val connection = URL(releasesUrl).openConnection() as HttpURLConnection
-                connection.connectTimeout = 10_000
-                connection.readTimeout = 15_000
-                connection.setRequestProperty("Accept", "application/vnd.github+json")
-                connection.setRequestProperty("X-GitHub-Api-Version", "2022-11-28")
-                connection.setRequestProperty("User-Agent", "AI-Livesaver/${BuildConfig.VERSION_NAME}")
-                try {
-                    if (connection.responseCode !in 200..299) {
-                        throw IOException("GitHub HTTP ${connection.responseCode}")
-                    }
-                    val body = connection.inputStream.bufferedReader().use { it.readText() }
-                    ReleaseParser.selectTestingUpdate(body, currentVersion)
-                } finally {
-                    connection.disconnect()
+                runCatching {
+                    ReleaseParser.selectTestingUpdate(fetch(releasesUrl), currentVersion)
+                }.getOrElse {
+                    ReleaseParser.selectTestingUpdateFromAtom(fetch(feedUrl), currentVersion)
                 }
             }
             Handler(Looper.getMainLooper()).post { callback(result) }
         }.start()
+    }
+
+    private fun fetch(url: String): String {
+        val connection = URL(url).openConnection() as HttpURLConnection
+        connection.connectTimeout = 10_000
+        connection.readTimeout = 15_000
+        connection.setRequestProperty("Accept", "application/vnd.github+json")
+        connection.setRequestProperty("User-Agent", "AI-Livesaver/${BuildConfig.VERSION_NAME}")
+        return try {
+            if (connection.responseCode !in 200..299) {
+                throw IOException("GitHub HTTP ${connection.responseCode}")
+            }
+            connection.inputStream.bufferedReader().use { it.readText() }
+        } finally {
+            connection.disconnect()
+        }
     }
 }
 
@@ -104,6 +112,32 @@ internal object ReleaseParser {
 
         return if (newest != null && compareVersions(newest.tagName, currentVersion) > 0) {
             UpdateState.Available(newest)
+        } else {
+            UpdateState.UpToDate
+        }
+    }
+
+    fun selectTestingUpdateFromAtom(xml: String, currentVersion: String): UpdateState {
+        val tag = Regex("""href="https://github\.com/Lzyuuu/ai-livesaver/releases/tag/([^"]+)"""")
+            .findAll(xml)
+            .map { it.groupValues[1] }
+            .filter { Version.parse(it) != null }
+            .maxWithOrNull(::compareVersions)
+            ?: return UpdateState.UpToDate
+        return if (compareVersions(tag, currentVersion) > 0) {
+            UpdateState.Available(
+                GitHubRelease(
+                    tagName = tag,
+                    notes = "",
+                    downloadUrl =
+                        "https://github.com/Lzyuuu/ai-livesaver/releases/download/$tag/" +
+                            "ai-livesaver-$tag.apk",
+                    apkSizeBytes = null,
+                    checksumUrl =
+                        "https://github.com/Lzyuuu/ai-livesaver/releases/download/$tag/" +
+                            "ai-livesaver-$tag.apk.sha256",
+                ),
+            )
         } else {
             UpdateState.UpToDate
         }
