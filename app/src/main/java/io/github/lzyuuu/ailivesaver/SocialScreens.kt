@@ -36,6 +36,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -1111,6 +1112,12 @@ private fun FullScreenMediaPreview(
     var prompt by rememberSaveable(post.id) { mutableStateOf(originalPrompt) }
     val bitmap = remember(post.mediaPath) {
         post.mediaPath?.let { BitmapFactory.decodeFile(it) }
+    }
+
+    LaunchedEffect(post.id, menuInitiallyOpen) {
+        menuOpen = menuInitiallyOpen
+        editingPrompt = false
+        versionListOpen = false
     }
 
     fun dismissTopLayer() {
