@@ -267,6 +267,7 @@ internal data class WorldEvent(
     val needsResponse: Boolean,
     val seen: Boolean,
     val createdAt: Long,
+    val sourcePostId: Long? = null,
     val providerName: String = "",
     val modelName: String = "",
 )
@@ -2151,6 +2152,7 @@ internal class WorldStore(context: Context) :
             """
             SELECT world_events.id, world_events.kind, world_events.summary, world_events.actor_name,
                    world_events.needs_response, world_events.seen, world_events.created_at,
+                   world_events.source_post_id,
                    COALESCE(NULLIF(world_events.provider_name, ''), social_posts.provider_name, ''),
                    COALESCE(NULLIF(world_events.model_name, ''), social_posts.model_name, '')
             FROM world_events
@@ -2172,8 +2174,9 @@ internal class WorldStore(context: Context) :
                             cursor.getInt(4) == 1,
                             cursor.getInt(5) == 1,
                             cursor.getLong(6),
-                            cursor.getString(7),
+                            if (cursor.isNull(7)) null else cursor.getLong(7),
                             cursor.getString(8),
+                            cursor.getString(9),
                         ),
                     )
                 }

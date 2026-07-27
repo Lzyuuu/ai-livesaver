@@ -105,6 +105,8 @@ internal fun SocialScreen(
     contentPadding: PaddingValues,
     store: WorldStore,
     revision: Int,
+    openPostId: Long?,
+    onOpenPostConsumed: () -> Unit,
     onChanged: () -> Unit,
     onStartWorld: () -> Unit,
 ) {
@@ -130,6 +132,12 @@ internal fun SocialScreen(
     val previewPost = posts.firstOrNull { it.id == previewPostId }
     val previewVersions = remember(revision, previewPostId) {
         previewPostId?.let(store::mediaVersions).orEmpty()
+    }
+
+    LaunchedEffect(openPostId, posts) {
+        val postId = openPostId ?: return@LaunchedEffect
+        if (posts.any { it.id == postId }) selectedPostId = postId
+        onOpenPostConsumed()
     }
 
     npcProfile?.let { npc ->

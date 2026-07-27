@@ -172,6 +172,11 @@ internal fun routeWorldEvent(kind: String, currentDestination: String): String =
     else -> currentDestination
 }
 
+private data class PendingSocialPostRoute(
+    val destination: String,
+    val postId: Long,
+)
+
 @Composable
 private fun AiLivesaverTheme(themeMode: ThemeMode, content: @Composable () -> Unit) {
     val context = LocalContext.current
@@ -223,6 +228,7 @@ private fun AiLivesaverApp(
     var showBackups by rememberSaveable { mutableStateOf(false) }
     var showIdentity by rememberSaveable { mutableStateOf(false) }
     var showCharacters by rememberSaveable { mutableStateOf(false) }
+    var pendingSocialPostRoute by remember { mutableStateOf<PendingSocialPostRoute?>(null) }
     val destination = Destination.valueOf(destinationName)
     val identity = remember(worldRevision) { worldStore.identity() }
     val primaryCharacter = remember(worldRevision) { worldStore.primaryCharacter() }
@@ -243,6 +249,14 @@ private fun AiLivesaverApp(
     val responseEvents = remember(worldRevision) { worldStore.worldEvents(needsResponseOnly = true) }
     val queueCount = remember(worldRevision) { worldStore.queueCount() }
     val budgetExhausted = remember(worldRevision) { WorldEngine.budgetExhausted(context) }
+
+    fun openWorldEvent(event: WorldEvent) {
+        worldStore.markWorldEventSeen(event.id)
+        val target = routeWorldEvent(event.kind, destinationName)
+        pendingSocialPostRoute = event.sourcePostId?.let { PendingSocialPostRoute(target, it) }
+        worldRevision++
+        destinationName = target
+    }
 
     val activity = context as? ComponentActivity
     DisposableEffect(activity) {
@@ -351,9 +365,7 @@ private fun AiLivesaverApp(
                 },
                 onOpenEvent = { event ->
                     showWorldChronicle = false
-                    worldStore.markWorldEventSeen(event.id)
-                    worldRevision++
-                    destinationName = routeWorldEvent(event.kind, destinationName)
+                    openWorldEvent(event)
                 },
             )
         } else if (showLocalDream) {
@@ -427,11 +439,7 @@ private fun AiLivesaverApp(
                         worldEvents.filter { !it.seen }.forEach { worldStore.markWorldEventSeen(it.id) }
                         worldRevision++
                     },
-                    onOpenEvent = { event ->
-                        worldStore.markWorldEventSeen(event.id)
-                        worldRevision++
-                        destinationName = routeWorldEvent(event.kind, destinationName)
-                    },
+                onOpenEvent = ::openWorldEvent,
                 )
                 Destination.Chats -> ChatsScreen(
                     contentPadding = padding,
@@ -445,6 +453,10 @@ private fun AiLivesaverApp(
                     contentPadding = padding,
                     store = worldStore,
                     revision = worldRevision,
+                    openPostId = pendingSocialPostRoute
+                        ?.takeIf { it.destination == Destination.Moments.name }
+                        ?.postId,
+                    onOpenPostConsumed = { pendingSocialPostRoute = null },
                     onChanged = { worldRevision++ },
                     onStartWorld = { destinationName = Destination.Chats.name },
                 )
@@ -453,6 +465,10 @@ private fun AiLivesaverApp(
                     contentPadding = padding,
                     store = worldStore,
                     revision = worldRevision,
+                    openPostId = pendingSocialPostRoute
+                        ?.takeIf { it.destination == Destination.Commons.name }
+                        ?.postId,
+                    onOpenPostConsumed = { pendingSocialPostRoute = null },
                     onChanged = { worldRevision++ },
                     onStartWorld = { destinationName = Destination.Chats.name },
                 )
