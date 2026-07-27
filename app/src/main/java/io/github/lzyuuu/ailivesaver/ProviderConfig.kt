@@ -66,6 +66,20 @@ internal object ProviderProtocol {
         .getString("content")
         .trim()
 
+    fun parseStreamDelta(json: String): String {
+        val choice = JSONObject(json).getJSONArray("choices").optJSONObject(0) ?: return ""
+        val delta = choice.optJSONObject("delta") ?: return ""
+        return delta.optString("content")
+    }
+
+    fun streamFinished(json: String): Boolean {
+        val reason = JSONObject(json)
+            .getJSONArray("choices")
+            .optJSONObject(0)
+            ?.opt("finish_reason")
+        return reason != null && reason != JSONObject.NULL
+    }
+
     fun visionRequest(model: String, dataUrl: String): JSONObject = JSONObject()
         .put("model", model)
         .put("max_tokens", 180)
@@ -218,7 +232,7 @@ internal object ProviderConnectionTester {
 }
 
 internal object ProviderChatClient {
-    fun complete(
+    fun stream(
         config: ProviderConfig,
         character: ResidentCharacter,
         messages: List<ChatMessage>,
@@ -228,6 +242,7 @@ internal object ProviderChatClient {
         cognition: List<CharacterCognition>,
         userContext: MemberWorldContext,
         characterContext: MemberWorldContext,
+        onDelta: (String) -> Unit,
         callback: (Result<String>) -> Unit,
     ) {
         Thread {
@@ -254,7 +269,10 @@ internal object ProviderChatClient {
                 val body = JSONObject()
                     .put("model", config.model)
                     .put("messages", requestMessages)
-                ProviderProtocol.parseReply(ProviderHttp.post(config, body))
+                    .put("stream", true)
+                ProviderHttp.stream(config, body) { accumulated ->
+                    Handler(Looper.getMainLooper()).post { onDelta(accumulated) }
+                }
                     .ifBlank { throw IOException("Provider returned an empty reply") }
             }
             Handler(Looper.getMainLooper()).post { callback(result) }
@@ -266,10 +284,14 @@ internal fun recentMessagesForContext(
     messages: List<ChatMessage>,
     recap: ConversationRecap?,
 ): List<ChatMessage> = if (recap == null) {
-    messages.takeLast(40)
+    messages.filter(::isCanonicalContextMessage).takeLast(40)
 } else {
-    messages.filter { it.id > recap.throughMessageId }.takeLast(20)
+    messages.filter { it.id > recap.throughMessageId && isCanonicalContextMessage(it) }
+        .takeLast(20)
 }
+
+private fun isCanonicalContextMessage(message: ChatMessage) =
+    message.active && message.status == "complete"
 
 internal fun buildChatSystemPrompt(
     character: ResidentCharacter,
@@ -393,23 +415,38 @@ private object ProviderHttp {
         throw lastFailure ?: IOException("Provider request failed")
     }
 
-    private fun postOnce(config: ProviderConfig, body: JSONObject): String {
-        val connection = URL(
-            ProviderProtocol.chatCompletionsUrl(config.baseUrl),
-        ).openConnection() as HttpURLConnection
-        connection.requestMethod = "POST"
-        connection.connectTimeout = 15_000
-        connection.readTimeout = 60_000
-        connection.doOutput = true
-        connection.setRequestProperty("Authorization", "Bearer ${config.apiKey}")
-        connection.setRequestProperty("Content-Type", "application/json")
-        ProviderProtocol.parseHeaders(config.extraHeaders).forEach {
-            connection.setRequestProperty(it.key, it.value)
-        }
-        return try {
-            connection.outputStream.use {
-                it.write(body.toString().toByteArray())
+    fun stream(
+        config: ProviderConfig,
+        body: JSONObject,
+        onDelta: (String) -> Unit,
+    ): String {
+        var lastFailure: IOException? = null
+        repeat(3) { attempt ->
+            var delivered = false
+            try {
+                return streamOnce(config, body) {
+                    delivered = true
+                    onDelta(it)
+                }
+            } catch (failure: IOException) {
+                lastFailure = failure
+                if (
+                    delivered ||
+                    !isTransientProviderFailure(failure.message.orEmpty()) ||
+                    attempt == 2
+                ) {
+                    throw failure
+                }
+                Thread.sleep(500L shl attempt)
             }
+        }
+        throw lastFailure ?: IOException("Provider request failed")
+    }
+
+    private fun postOnce(config: ProviderConfig, body: JSONObject): String {
+        val connection = open(config)
+        return try {
+            write(connection, body)
             if (connection.responseCode !in 200..299) {
                 throw IOException("HTTP ${connection.responseCode}")
             }
@@ -417,6 +454,69 @@ private object ProviderHttp {
         } finally {
             connection.disconnect()
         }
+    }
+
+    private fun streamOnce(
+        config: ProviderConfig,
+        body: JSONObject,
+        onDelta: (String) -> Unit,
+    ): String {
+        val connection = open(config)
+        return try {
+            connection.setRequestProperty("Accept", "text/event-stream")
+            write(connection, body)
+            if (connection.responseCode !in 200..299) {
+                throw IOException("HTTP ${connection.responseCode}")
+            }
+            if (!connection.contentType.orEmpty().contains("text/event-stream", ignoreCase = true)) {
+                return ProviderProtocol.parseReply(
+                    connection.inputStream.bufferedReader().use { it.readText() },
+                )
+            }
+            val accumulated = StringBuilder()
+            var complete = false
+            connection.inputStream.bufferedReader().useLines { lines ->
+                lines.forEach { line ->
+                    if (!line.startsWith("data:")) return@forEach
+                    val data = line.removePrefix("data:").trim()
+                    if (data == "[DONE]") {
+                        complete = true
+                        return@forEach
+                    }
+                    if (runCatching { ProviderProtocol.streamFinished(data) }.getOrDefault(false)) {
+                        complete = true
+                    }
+                    val delta = runCatching { ProviderProtocol.parseStreamDelta(data) }
+                        .getOrDefault("")
+                    if (delta.isNotEmpty()) {
+                        accumulated.append(delta)
+                        onDelta(accumulated.toString())
+                    }
+                }
+            }
+            if (!complete) throw IOException("Provider stream ended before [DONE]")
+            accumulated.toString()
+        } finally {
+            connection.disconnect()
+        }
+    }
+
+    private fun open(config: ProviderConfig): HttpURLConnection =
+        (URL(ProviderProtocol.chatCompletionsUrl(config.baseUrl))
+            .openConnection() as HttpURLConnection).apply {
+            requestMethod = "POST"
+            connectTimeout = 15_000
+            readTimeout = 60_000
+            doOutput = true
+            setRequestProperty("Authorization", "Bearer ${config.apiKey}")
+            setRequestProperty("Content-Type", "application/json")
+            ProviderProtocol.parseHeaders(config.extraHeaders).forEach {
+                setRequestProperty(it.key, it.value)
+            }
+        }
+
+    private fun write(connection: HttpURLConnection, body: JSONObject) {
+        connection.outputStream.use { it.write(body.toString().toByteArray()) }
     }
 }
 

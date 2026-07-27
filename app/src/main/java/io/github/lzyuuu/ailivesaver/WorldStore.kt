@@ -56,6 +56,21 @@ internal data class ChatMessage(
     val sender: String,
     val body: String,
     val createdAt: Long,
+    val status: String = "complete",
+    val active: Boolean = true,
+    val draftBody: String = "",
+    val providerName: String = "",
+    val modelName: String = "",
+    val error: String = "",
+)
+
+internal data class MessageVersion(
+    val id: Long,
+    val messageId: Long,
+    val body: String,
+    val providerName: String,
+    val modelName: String,
+    val createdAt: Long,
 )
 
 internal data class LongTermMemory(
@@ -183,7 +198,7 @@ internal data class MemberWorldContext(
 )
 
 internal class WorldStore(context: Context) :
-    SQLiteOpenHelper(context, "world.db", null, 14) {
+    SQLiteOpenHelper(context, "world.db", null, 15) {
     private val mediaDirectory = File(context.filesDir, "media").canonicalFile
 
     override fun onCreate(database: SQLiteDatabase) {
@@ -223,10 +238,17 @@ internal class WorldStore(context: Context) :
                 character_id INTEGER NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
                 sender TEXT NOT NULL,
                 body TEXT NOT NULL,
-                created_at INTEGER NOT NULL
+                created_at INTEGER NOT NULL,
+                status TEXT NOT NULL DEFAULT 'complete',
+                active INTEGER NOT NULL DEFAULT 1,
+                draft_body TEXT NOT NULL DEFAULT '',
+                provider_name TEXT NOT NULL DEFAULT '',
+                model_name TEXT NOT NULL DEFAULT '',
+                error TEXT NOT NULL DEFAULT ''
             )
             """.trimIndent(),
         )
+        createMessageVersionsTable(database)
         database.execSQL(
             """
             CREATE TABLE memories (
@@ -306,6 +328,7 @@ internal class WorldStore(context: Context) :
         if (oldVersion < 12) repairLegacyPostAuthors(database)
         if (oldVersion < 13) migrateMediaQueue(database)
         if (oldVersion < 14) migrateMediaDescriptions(database)
+        if (oldVersion < 15) migrateChatTimeline(database)
     }
 
     private fun createSocialTables(database: SQLiteDatabase) {
@@ -627,8 +650,53 @@ internal class WorldStore(context: Context) :
                 label TEXT NOT NULL,
                 summary TEXT NOT NULL,
                 source_message_id INTEGER REFERENCES messages(id) ON DELETE SET NULL,
+                created_at INTEGER NOT NULL,
+                active INTEGER NOT NULL DEFAULT 1
+            )
+            """.trimIndent(),
+        )
+    }
+
+    private fun createMessageVersionsTable(database: SQLiteDatabase) {
+        database.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS message_versions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                message_id INTEGER NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+                body TEXT NOT NULL,
+                provider_name TEXT NOT NULL DEFAULT '',
+                model_name TEXT NOT NULL DEFAULT '',
                 created_at INTEGER NOT NULL
             )
+            """.trimIndent(),
+        )
+    }
+
+    private fun migrateChatTimeline(database: SQLiteDatabase) {
+        addColumnIfMissing(database, "messages", "status", "TEXT NOT NULL DEFAULT 'complete'")
+        addColumnIfMissing(database, "messages", "active", "INTEGER NOT NULL DEFAULT 1")
+        addColumnIfMissing(database, "messages", "draft_body", "TEXT NOT NULL DEFAULT ''")
+        addColumnIfMissing(database, "messages", "provider_name", "TEXT NOT NULL DEFAULT ''")
+        addColumnIfMissing(database, "messages", "model_name", "TEXT NOT NULL DEFAULT ''")
+        addColumnIfMissing(database, "messages", "error", "TEXT NOT NULL DEFAULT ''")
+        addColumnIfMissing(
+            database,
+            "relationship_events",
+            "active",
+            "INTEGER NOT NULL DEFAULT 1",
+        )
+        createMessageVersionsTable(database)
+        database.execSQL(
+            """
+            INSERT INTO message_versions (
+                message_id, body, provider_name, model_name, created_at
+            )
+            SELECT id, body, provider_name, model_name, created_at
+            FROM messages
+            WHERE sender = 'assistant' AND body != ''
+              AND NOT EXISTS (
+                  SELECT 1 FROM message_versions WHERE message_id = messages.id
+              )
             """.trimIndent(),
         )
     }
@@ -834,7 +902,7 @@ internal class WorldStore(context: Context) :
             """
             SELECT label, summary, source_message_id, created_at
             FROM relationship_events
-            WHERE character_id = ?
+            WHERE character_id = ? AND active = 1
             ORDER BY created_at DESC, id DESC
             LIMIT 1
             """.trimIndent(),
@@ -959,11 +1027,15 @@ internal class WorldStore(context: Context) :
         }
     }
 
-    fun messages(characterId: Long): List<ChatMessage> = readableDatabase.rawQuery(
+    fun messages(
+        characterId: Long,
+        includeRetired: Boolean = false,
+    ): List<ChatMessage> = readableDatabase.rawQuery(
         """
-        SELECT id, character_id, sender, body, created_at
+        SELECT id, character_id, sender, body, created_at, status, active, draft_body,
+               provider_name, model_name, error
         FROM messages
-        WHERE character_id = ?
+        WHERE character_id = ? ${if (includeRetired) "" else "AND active = 1"}
         ORDER BY id
         """.trimIndent(),
         arrayOf(characterId.toString()),
@@ -977,11 +1049,20 @@ internal class WorldStore(context: Context) :
                         sender = cursor.getString(2),
                         body = cursor.getString(3),
                         createdAt = cursor.getLong(4),
+                        status = cursor.getString(5),
+                        active = cursor.getInt(6) == 1,
+                        draftBody = cursor.getString(7),
+                        providerName = cursor.getString(8),
+                        modelName = cursor.getString(9),
+                        error = cursor.getString(10),
                     ),
                 )
             }
         }
     }
+
+    fun retiredMessages(characterId: Long): List<ChatMessage> =
+        messages(characterId, includeRetired = true).filterNot(ChatMessage::active)
 
     fun addMessage(characterId: Long, sender: String, body: String): ChatMessage {
         val createdAt = System.currentTimeMillis()
@@ -993,6 +1074,253 @@ internal class WorldStore(context: Context) :
         }
         val id = writableDatabase.insertOrThrow("messages", null, values)
         return ChatMessage(id, characterId, sender, body.trim(), createdAt)
+    }
+
+    fun beginAssistantReply(
+        characterId: Long,
+        providerName: String,
+        modelName: String,
+        existingMessageId: Long? = null,
+    ): ChatMessage {
+        val now = System.currentTimeMillis()
+        val id = if (existingMessageId == null) {
+            writableDatabase.insertOrThrow(
+                "messages",
+                null,
+                ContentValues().apply {
+                    put("character_id", characterId)
+                    put("sender", "assistant")
+                    put("body", "")
+                    put("created_at", now)
+                    put("status", "streaming")
+                    put("provider_name", providerName)
+                    put("model_name", modelName)
+                },
+            )
+        } else {
+            val updated = writableDatabase.update(
+                "messages",
+                ContentValues().apply {
+                    put("status", "streaming")
+                    put("draft_body", "")
+                    put("provider_name", providerName)
+                    put("model_name", modelName)
+                    put("error", "")
+                },
+                "id = ? AND character_id = ? AND sender = 'assistant' AND active = 1",
+                arrayOf(existingMessageId.toString(), characterId.toString()),
+            )
+            require(updated == 1) { "Reply is no longer in the current timeline" }
+            existingMessageId
+        }
+        return messages(characterId).first { it.id == id }
+    }
+
+    fun updateAssistantDraft(messageId: Long, body: String) {
+        writableDatabase.update(
+            "messages",
+            ContentValues().apply { put("draft_body", body) },
+            "id = ? AND sender = 'assistant' AND status = 'streaming' AND active = 1",
+            arrayOf(messageId.toString()),
+        )
+    }
+
+    fun completeAssistantReply(
+        messageId: Long,
+        body: String,
+        providerName: String,
+        modelName: String,
+    ) {
+        val finalBody = body.trim()
+        require(finalBody.isNotEmpty()) { "Provider returned an empty reply" }
+        writableDatabase.run {
+            beginTransaction()
+            try {
+                val updated = update(
+                    "messages",
+                    ContentValues().apply {
+                        put("body", finalBody)
+                        put("draft_body", "")
+                        put("status", "complete")
+                        put("provider_name", providerName)
+                        put("model_name", modelName)
+                        put("error", "")
+                    },
+                    "id = ? AND sender = 'assistant' AND active = 1",
+                    arrayOf(messageId.toString()),
+                )
+                require(updated == 1) { "Reply is no longer in the current timeline" }
+                insertOrThrow(
+                    "message_versions",
+                    null,
+                    ContentValues().apply {
+                        put("message_id", messageId)
+                        put("body", finalBody)
+                        put("provider_name", providerName)
+                        put("model_name", modelName)
+                        put("created_at", System.currentTimeMillis())
+                    },
+                )
+                setTransactionSuccessful()
+            } finally {
+                endTransaction()
+            }
+        }
+    }
+
+    fun failAssistantReply(messageId: Long, error: String) {
+        writableDatabase.update(
+            "messages",
+            ContentValues().apply {
+                put("status", "failed")
+                put("error", error.take(240))
+            },
+            "id = ? AND sender = 'assistant' AND active = 1",
+            arrayOf(messageId.toString()),
+        )
+    }
+
+    fun recoverInterruptedReplies(characterId: Long? = null): Int =
+        writableDatabase.update(
+            "messages",
+            ContentValues().apply {
+                put("status", "interrupted")
+                put("error", "")
+            },
+            buildString {
+                append("sender = 'assistant' AND status = 'streaming' AND active = 1")
+                if (characterId != null) append(" AND character_id = ?")
+            },
+            characterId?.let { arrayOf(it.toString()) },
+        )
+
+    fun messageVersions(messageId: Long): List<MessageVersion> = readableDatabase.rawQuery(
+        """
+        SELECT id, message_id, body, provider_name, model_name, created_at
+        FROM message_versions
+        WHERE message_id = ?
+        ORDER BY created_at DESC, id DESC
+        """.trimIndent(),
+        arrayOf(messageId.toString()),
+    ).use { cursor ->
+        buildList {
+            while (cursor.moveToNext()) {
+                add(
+                    MessageVersion(
+                        cursor.getLong(0),
+                        cursor.getLong(1),
+                        cursor.getString(2),
+                        cursor.getString(3),
+                        cursor.getString(4),
+                        cursor.getLong(5),
+                    ),
+                )
+            }
+        }
+    }
+
+    fun restoreMessageVersion(messageId: Long, versionId: Long) {
+        readableDatabase.rawQuery(
+            """
+            SELECT body, provider_name, model_name
+            FROM message_versions
+            WHERE id = ? AND message_id = ?
+            """.trimIndent(),
+            arrayOf(versionId.toString(), messageId.toString()),
+        ).use { cursor ->
+            if (!cursor.moveToFirst()) return
+            writableDatabase.update(
+                "messages",
+                ContentValues().apply {
+                    put("body", cursor.getString(0))
+                    put("provider_name", cursor.getString(1))
+                    put("model_name", cursor.getString(2))
+                    put("status", "complete")
+                    put("draft_body", "")
+                    put("error", "")
+                },
+                "id = ? AND sender = 'assistant' AND active = 1",
+                arrayOf(messageId.toString()),
+            )
+        }
+    }
+
+    fun pinnedMemoriesFrom(characterId: Long, messageId: Long): Int =
+        readableDatabase.rawQuery(
+            """
+            SELECT COUNT(*)
+            FROM memories
+            WHERE character_id = ? AND source_message_id >= ? AND pinned = 1
+            """.trimIndent(),
+            arrayOf(characterId.toString(), messageId.toString()),
+        ).use { cursor -> cursor.moveToFirst(); cursor.getInt(0) }
+
+    fun rewriteFromMessage(
+        characterId: Long,
+        messageId: Long,
+        body: String,
+    ): ChatMessage = writableDatabase.run {
+        beginTransaction()
+        try {
+            val valid = rawQuery(
+                """
+                SELECT EXISTS(
+                    SELECT 1 FROM messages
+                    WHERE id = ? AND character_id = ? AND sender = 'user' AND active = 1
+                )
+                """.trimIndent(),
+                arrayOf(messageId.toString(), characterId.toString()),
+            ).use { cursor -> cursor.moveToFirst() && cursor.getInt(0) == 1 }
+            require(valid) { "Message is no longer in the current timeline" }
+
+            update(
+                "relationship_events",
+                ContentValues().apply { put("active", 0) },
+                """
+                character_id = ? AND source_message_id IN (
+                    SELECT id FROM messages
+                    WHERE character_id = ? AND id >= ? AND active = 1
+                )
+                """.trimIndent(),
+                arrayOf(characterId.toString(), characterId.toString(), messageId.toString()),
+            )
+            delete(
+                "memories",
+                """
+                character_id = ? AND pinned = 0 AND source_message_id IN (
+                    SELECT id FROM messages
+                    WHERE character_id = ? AND id >= ? AND active = 1
+                )
+                """.trimIndent(),
+                arrayOf(characterId.toString(), characterId.toString(), messageId.toString()),
+            )
+            delete(
+                "conversation_recaps",
+                "character_id = ? AND through_message_id >= ?",
+                arrayOf(characterId.toString(), messageId.toString()),
+            )
+            update(
+                "messages",
+                ContentValues().apply { put("active", 0) },
+                "character_id = ? AND id >= ? AND active = 1",
+                arrayOf(characterId.toString(), messageId.toString()),
+            )
+            val createdAt = System.currentTimeMillis()
+            val newId = insertOrThrow(
+                "messages",
+                null,
+                ContentValues().apply {
+                    put("character_id", characterId)
+                    put("sender", "user")
+                    put("body", body.trim())
+                    put("created_at", createdAt)
+                },
+            )
+            setTransactionSuccessful()
+            ChatMessage(newId, characterId, "user", body.trim(), createdAt)
+        } finally {
+            endTransaction()
+        }
     }
 
     fun remember(characterId: Long, sourceMessageId: Long, body: String) {

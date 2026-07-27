@@ -15,6 +15,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -39,6 +40,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import java.text.DateFormat
 import java.util.Date
+
+private object ActiveChatReplies {
+    private val characterIds = mutableSetOf<Long>()
+
+    fun contains(characterId: Long) = characterId in characterIds
+    fun add(characterId: Long) = characterIds.add(characterId)
+    fun remove(characterId: Long) = characterIds.remove(characterId)
+}
 
 @Composable
 internal fun ChatsScreen(
@@ -186,20 +195,47 @@ private fun ConversationScreen(
     val context = LocalContext.current
     val provider = remember { ProviderStore(context) }
     val messages = remember(revision) { store.messages(character.id) }
+    val retiredMessages = remember(revision) { store.retiredMessages(character.id) }
     val memories = remember(revision) { store.memories(character.id) }
     val recap = remember(revision) { store.conversationRecap(character.id) }
     val relationship = remember(revision) { store.relationship(character.id) }
     val listState = rememberLazyListState()
     var input by rememberSaveable { mutableStateOf("") }
-    var sending by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var showContext by rememberSaveable { mutableStateOf(false) }
+    var streamingMessageId by remember { mutableStateOf<Long?>(null) }
+    var streamingText by remember { mutableStateOf("") }
+    var rewritingMessageId by rememberSaveable { mutableStateOf<Long?>(null) }
+    var rewriteText by rememberSaveable { mutableStateOf("") }
+    var expandedVersionsId by rememberSaveable { mutableStateOf<Long?>(null) }
+    val formatter = remember {
+        DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT)
+    }
+    val sending = messages.any { it.status == "streaming" } ||
+        ActiveChatReplies.contains(character.id)
 
-    fun requestReply() {
-        sending = true
+    fun requestReply(existingMessageId: Long? = null) {
+        if (ActiveChatReplies.contains(character.id)) return
+        val config = provider.load()
         error = null
-        ProviderChatClient.complete(
-            config = provider.load(),
+        streamingText = ""
+        val reply = runCatching {
+            store.beginAssistantReply(
+                character.id,
+                config.preset.displayName,
+                config.model,
+                existingMessageId,
+            )
+        }.getOrElse {
+            error = it.message.orEmpty()
+            return
+        }
+        ActiveChatReplies.add(character.id)
+        streamingMessageId = reply.id
+        onChanged()
+        var lastPersistedAt = 0L
+        ProviderChatClient.stream(
+            config = config,
             character = character,
             messages = store.messages(character.id),
             memories = store.memories(character.id),
@@ -208,14 +244,115 @@ private fun ConversationScreen(
             cognition = store.characterCognition(character.id),
             userContext = store.memberWorldContext("user"),
             characterContext = store.memberWorldContext("character:${character.id}"),
+            onDelta = { body ->
+                streamingText = body
+                val now = System.currentTimeMillis()
+                if (now - lastPersistedAt >= 500) {
+                    store.updateAssistantDraft(reply.id, body)
+                    lastPersistedAt = now
+                }
+            },
         ) { result ->
-            sending = false
-            result.onSuccess {
-                store.addMessage(character.id, "assistant", it)
+            try {
+                result.fold(
+                    onSuccess = { body ->
+                        runCatching {
+                            store.completeAssistantReply(
+                                reply.id,
+                                body,
+                                config.preset.displayName,
+                                config.model,
+                            )
+                        }.onFailure {
+                            store.failAssistantReply(reply.id, it.message.orEmpty())
+                            error = it.message.orEmpty()
+                        }
+                    },
+                    onFailure = {
+                        store.failAssistantReply(reply.id, it.message.orEmpty())
+                        error = it.message.orEmpty()
+                    },
+                )
+            } finally {
+                ActiveChatReplies.remove(character.id)
+                streamingMessageId = null
+                streamingText = ""
                 onChanged()
-            }.onFailure {
-                error = it.message.orEmpty()
             }
+        }
+    }
+
+    LaunchedEffect(character.id) {
+        if (
+            !ActiveChatReplies.contains(character.id) &&
+            store.recoverInterruptedReplies(character.id) > 0
+        ) {
+            onChanged()
+        }
+    }
+
+    rewritingMessageId?.let { messageId ->
+        val source = messages.firstOrNull { it.id == messageId && it.sender == "user" }
+        if (source == null) {
+            rewritingMessageId = null
+        } else {
+            val pinnedCount = store.pinnedMemoriesFrom(character.id, messageId)
+            AlertDialog(
+                onDismissRequest = { rewritingMessageId = null },
+                title = { Text(stringResource(R.string.rewrite_from_here)) },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text(stringResource(R.string.rewrite_timeline_warning))
+                        if (pinnedCount > 0) {
+                            Text(
+                                stringResource(R.string.rewrite_pinned_memories, pinnedCount),
+                                color = MaterialTheme.colorScheme.error,
+                            )
+                        }
+                        OutlinedTextField(
+                            value = rewriteText,
+                            onValueChange = { rewriteText = it },
+                            minLines = 3,
+                            maxLines = 8,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            val body = rewriteText.trim()
+                            if (body.isEmpty()) return@TextButton
+                            val newMessage = store.rewriteFromMessage(
+                                character.id,
+                                messageId,
+                                body,
+                            )
+                            val extractedMemory = MemoryExtractor.fromUserMessage(body)
+                            extractedMemory?.let {
+                                store.remember(character.id, newMessage.id, it)
+                            }
+                            store.recordConversationRelationship(
+                                character.id,
+                                newMessage.id,
+                                extractedMemory != null,
+                            )
+                            rewritingMessageId = null
+                            expandedVersionsId = null
+                            onChanged()
+                            requestReply()
+                        },
+                        enabled = rewriteText.isNotBlank() && !sending,
+                    ) {
+                        Text(stringResource(R.string.confirm_rewrite))
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { rewritingMessageId = null }) {
+                        Text(stringResource(R.string.cancel))
+                    }
+                },
+            )
         }
     }
 
@@ -228,7 +365,8 @@ private fun ConversationScreen(
         ConversationContextScreen(
             contentPadding = contentPadding,
             character = character,
-            messages = messages,
+            messages = messages.filter { it.status == "complete" },
+            retiredMessages = retiredMessages,
             recap = recap,
             memories = memories,
             onBack = { showContext = false },
@@ -315,6 +453,15 @@ private fun ConversationScreen(
             }
         }
         items(messages, key = ChatMessage::id) { message ->
+            val versions = remember(revision, message.id) {
+                if (message.sender == "assistant") store.messageVersions(message.id)
+                else emptyList()
+            }
+            val visibleBody = when {
+                message.id == streamingMessageId && streamingText.isNotEmpty() -> streamingText
+                message.status != "complete" && message.body.isEmpty() -> message.draftBody
+                else -> message.body
+            }
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = if (message.sender == "user") {
@@ -333,7 +480,127 @@ private fun ConversationScreen(
                         },
                     ),
                 ) {
-                    Text(message.body, modifier = Modifier.padding(14.dp))
+                    Column(
+                        modifier = Modifier.padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        Text(
+                            visibleBody.ifBlank {
+                                stringResource(R.string.character_thinking)
+                            },
+                        )
+                        if (message.sender == "assistant") {
+                            when (message.status) {
+                                "streaming" -> Text(
+                                    stringResource(R.string.streaming_reply),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.primary,
+                                )
+                                "failed" -> Text(
+                                    stringResource(R.string.chat_failed, message.error),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.error,
+                                )
+                                "interrupted" -> Text(
+                                    stringResource(R.string.reply_interrupted),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.error,
+                                )
+                            }
+                            if (
+                                message == messages.lastOrNull() &&
+                                message.status in setOf("failed", "interrupted") &&
+                                !sending
+                            ) {
+                                TextButton(onClick = { requestReply(message.id) }) {
+                                    Text(stringResource(R.string.retry_reply))
+                                }
+                            }
+                            if (
+                                message == messages.lastOrNull() &&
+                                message.status == "complete" &&
+                                !sending
+                            ) {
+                                TextButton(onClick = { requestReply(message.id) }) {
+                                    Text(stringResource(R.string.regenerate_reply))
+                                }
+                            }
+                            if (versions.isNotEmpty() && message.status != "streaming") {
+                                TextButton(
+                                    onClick = {
+                                        expandedVersionsId =
+                                            message.id.takeUnless { expandedVersionsId == it }
+                                    },
+                                ) {
+                                    Text(
+                                        stringResource(
+                                            R.string.reply_versions,
+                                            versions.size,
+                                        ),
+                                    )
+                                }
+                            }
+                            if (expandedVersionsId == message.id) {
+                                versions.forEach { version ->
+                                    Card(
+                                        colors = CardDefaults.cardColors(
+                                            containerColor =
+                                                MaterialTheme.colorScheme.surface,
+                                        ),
+                                    ) {
+                                        Column(
+                                            Modifier.padding(10.dp),
+                                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                                        ) {
+                                            Text(version.body, maxLines = 5)
+                                            Text(
+                                                stringResource(
+                                                    R.string.generation_provenance,
+                                                    version.providerName.ifBlank { "—" },
+                                                    version.modelName.ifBlank { "—" },
+                                                    formatter.format(Date(version.createdAt)),
+                                                ),
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color =
+                                                    MaterialTheme.colorScheme.onSurfaceVariant,
+                                            )
+                                            if (
+                                                version.body != message.body ||
+                                                version.providerName != message.providerName ||
+                                                version.modelName != message.modelName
+                                            ) {
+                                                TextButton(
+                                                    onClick = {
+                                                        store.restoreMessageVersion(
+                                                            message.id,
+                                                            version.id,
+                                                        )
+                                                        expandedVersionsId = null
+                                                        onChanged()
+                                                    },
+                                                ) {
+                                                    Text(
+                                                        stringResource(
+                                                            R.string.restore_version,
+                                                        ),
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        } else if (!sending) {
+                            TextButton(
+                                onClick = {
+                                    rewritingMessageId = message.id
+                                    rewriteText = message.body
+                                },
+                            ) {
+                                Text(stringResource(R.string.rewrite_from_here))
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -343,7 +610,7 @@ private fun ConversationScreen(
         if (messages.lastOrNull()?.sender == "user" && !sending) {
             item {
                 StatusCard(stringResource(R.string.reply_waiting_for_network))
-                TextButton(onClick = ::requestReply) {
+                TextButton(onClick = { requestReply() }) {
                     Text(stringResource(R.string.continue_pending_reply))
                 }
             }
@@ -374,7 +641,6 @@ private fun ConversationScreen(
                         userMessage.id,
                         extractedMemory != null,
                     )
-                    sending = true
                     onChanged()
                     requestReply()
                 },
@@ -398,6 +664,7 @@ private fun ConversationContextScreen(
     contentPadding: PaddingValues,
     character: ResidentCharacter,
     messages: List<ChatMessage>,
+    retiredMessages: List<ChatMessage>,
     recap: ConversationRecap?,
     memories: List<LongTermMemory>,
     onBack: () -> Unit,
@@ -618,6 +885,48 @@ private fun ConversationContextScreen(
                         TextButton(onClick = { onDelete(memory.id) }) {
                             Text(stringResource(R.string.delete))
                         }
+                    }
+                }
+            }
+        }
+        if (retiredMessages.isNotEmpty()) {
+            item {
+                Text(
+                    stringResource(R.string.retired_timeline),
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    stringResource(R.string.retired_timeline_summary),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            items(retiredMessages, key = { "retired-${it.id}" }) { message ->
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    ),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Column(
+                        Modifier.padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Text(
+                            if (message.sender == "user") {
+                                stringResource(R.string.you)
+                            } else {
+                                character.name
+                            },
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        Text(message.body.ifBlank { message.draftBody })
+                        Text(
+                            formatter.format(Date(message.createdAt)),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                     }
                 }
             }

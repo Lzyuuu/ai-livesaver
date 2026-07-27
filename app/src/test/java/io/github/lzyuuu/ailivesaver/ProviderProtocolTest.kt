@@ -28,6 +28,28 @@ class ProviderProtocolTest {
                 """{"choices":[{"message":{"content":" hello "}}]}""",
             ),
         )
+        assertEquals(
+            "你",
+            ProviderProtocol.parseStreamDelta(
+                """{"choices":[{"delta":{"content":"你"}}]}""",
+            ),
+        )
+        assertEquals(
+            "",
+            ProviderProtocol.parseStreamDelta(
+                """{"choices":[{"delta":{"role":"assistant"}}]}""",
+            ),
+        )
+        assertFalse(
+            ProviderProtocol.streamFinished(
+                """{"choices":[{"delta":{"content":"你"},"finish_reason":null}]}""",
+            ),
+        )
+        assertTrue(
+            ProviderProtocol.streamFinished(
+                """{"choices":[{"delta":{},"finish_reason":"stop"}]}""",
+            ),
+        )
         val vision = ProviderProtocol.visionRequest("vision-model", "data:image/jpeg;base64,abc")
         val visionMessages = vision.getJSONArray("messages")
         val visionContent = visionMessages.getJSONObject(0).getJSONArray("content")
@@ -62,7 +84,10 @@ class ProviderProtocolTest {
 
         val messages = (1L..15L).map { ChatMessage(it, 1, "user", "m$it", it) }
         val recent = recentMessagesForContext(
-            messages,
+            messages + listOf(
+                ChatMessage(16, 1, "assistant", "partial", 16, status = "failed"),
+                ChatMessage(17, 1, "user", "retired", 17, active = false),
+            ),
             ConversationRecap("Earlier events", 12, 13, false),
         )
         assertEquals(listOf(13L, 14L, 15L), recent.map(ChatMessage::id))

@@ -63,6 +63,17 @@
     <string name="recap_failed">生成回顾失败：%1$s</string>
     <string name="start_conversation">还没有消息。说点什么，让这段关系真正开始。</string>
     <string name="chat_failed">回复失败：%1$s</string>
+    <string name="streaming_reply">正在实时回应…</string>
+    <string name="reply_interrupted">上次回应被应用退出或系统中断，尚未进入当前时间线。</string>
+    <string name="retry_reply">重新请求回应</string>
+    <string name="regenerate_reply">重新生成回复</string>
+    <string name="reply_versions">回复版本（%1$d）</string>
+    <string name="rewrite_from_here">从这里重写</string>
+    <string name="rewrite_timeline_warning">这条消息及之后的当前对话会退出当前时间线，但仍保留在历史中；未固定的后续记忆和对话回顾会失效。</string>
+    <string name="rewrite_pinned_memories">之后还有 %1$d 条固定记忆。确认后它们仍会保留，请稍后自行检查。</string>
+    <string name="confirm_rewrite">确认并重新回应</string>
+    <string name="retired_timeline">已退出当前时间线</string>
+    <string name="retired_timeline_summary">从旧消息重写后，被替换的原始消息仍在本机留作追溯，但不会再参与模型上下文或世界推进。</string>
     <string name="message_character">发给 %1$s</string>
     <string name="character_thinking">正在回应…</string>
     <string name="send">发送</string>
