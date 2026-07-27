@@ -932,6 +932,7 @@ internal class WorldStore(context: Context) :
         val nextAddressPreference = addressPreference.trim()
         val nextBio = bio.trim()
         val nextAvatarPath = avatarPath ?: current.avatarPath
+        val previousAvatarPath = current.avatarPath
         val changed = current.name != nextName ||
             current.addressPreference != nextAddressPreference ||
             current.bio != nextBio ||
@@ -966,6 +967,17 @@ internal class WorldStore(context: Context) :
             writableDatabase.setTransactionSuccessful()
         } finally {
             writableDatabase.endTransaction()
+        }
+        if (previousAvatarPath != nextAvatarPath) {
+            runCatching {
+                val previous = File(previousAvatarPath).canonicalFile
+                if (
+                    previous.parentFile == mediaDirectory &&
+                    previous.name.startsWith("user-avatar-")
+                ) {
+                    previous.delete()
+                }
+            }
         }
     }
 
