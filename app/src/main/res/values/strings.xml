@@ -48,6 +48,16 @@
     <string name="create_world">创建第一段关系</string>
     <string name="private_conversation">当前时间线 · 私密对话</string>
     <string name="memories_count">记忆 %1$d</string>
+    <string name="conversation_context">上下文</string>
+    <string name="conversation_recap">对话回顾</string>
+    <string name="conversation_recap_summary">回顾压缩较早的对话供模型理解；完整原始消息仍保留在当前时间线。</string>
+    <string name="no_conversation_recap">尚未生成对话回顾。</string>
+    <string name="recap_source">截至消息 #%1$d · %2$s · 所属角色：%3$s</string>
+    <string name="regenerate_recap">重新生成</string>
+    <string name="generate_recap">生成回顾</string>
+    <string name="generating_recap">正在回顾…</string>
+    <string name="recap_requires_messages">至少需要两条消息才能生成回顾。</string>
+    <string name="recap_failed">生成回顾失败：%1$s</string>
     <string name="start_conversation">还没有消息。说点什么，让这段关系真正开始。</string>
     <string name="chat_failed">回复失败：%1$s</string>
     <string name="message_character">发给 %1$s</string>

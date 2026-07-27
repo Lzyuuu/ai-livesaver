@@ -182,23 +182,16 @@ internal object ProviderChatClient {
         character: ResidentCharacter,
         messages: List<ChatMessage>,
         memories: List<LongTermMemory>,
+        recap: ConversationRecap?,
         callback: (Result<String>) -> Unit,
     ) {
         Thread {
             val result = runCatching {
-                val system = buildString {
-                    append("You are ${character.name}. ")
-                    append(character.persona)
-                    append("\nStay in character. The user is the center of this relationship.")
-                    if (memories.isNotEmpty()) {
-                        append("\nLong-term memories:\n")
-                        memories.take(20).forEach { append("- ${it.body}\n") }
-                    }
-                }
+                val system = buildChatSystemPrompt(character, memories, recap)
                 val requestMessages = JSONArray().put(
                     JSONObject().put("role", "system").put("content", system),
                 )
-                messages.takeLast(40).forEach { message ->
+                recentMessagesForContext(messages, recap).forEach { message ->
                     requestMessages.put(
                         JSONObject()
                             .put("role", if (message.sender == "user") "user" else "assistant")
@@ -213,6 +206,32 @@ internal object ProviderChatClient {
             }
             Handler(Looper.getMainLooper()).post { callback(result) }
         }.start()
+    }
+}
+
+internal fun recentMessagesForContext(
+    messages: List<ChatMessage>,
+    recap: ConversationRecap?,
+): List<ChatMessage> = if (recap == null) {
+    messages.takeLast(40)
+} else {
+    messages.filter { it.id > recap.throughMessageId }.takeLast(20)
+}
+
+internal fun buildChatSystemPrompt(
+    character: ResidentCharacter,
+    memories: List<LongTermMemory>,
+    recap: ConversationRecap?,
+): String = buildString {
+    append("You are ${character.name}. ")
+    append(character.persona)
+    append("\nStay in character. The user is the center of this relationship.")
+    recap?.let {
+        append("\nConversation recap through message #${it.throughMessageId}:\n${it.body}")
+    }
+    if (memories.isNotEmpty()) {
+        append("\nLong-term memories:\n")
+        memories.take(20).forEach { append("- ${it.body}\n") }
     }
 }
 

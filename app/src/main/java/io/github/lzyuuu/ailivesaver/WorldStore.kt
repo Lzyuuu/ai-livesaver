@@ -67,6 +67,13 @@ internal data class LongTermMemory(
     val pinned: Boolean,
 )
 
+internal data class ConversationRecap(
+    val body: String,
+    val throughMessageId: Long,
+    val createdAt: Long,
+    val pinned: Boolean,
+)
+
 internal data class SocialPost(
     val id: Long,
     val kind: String,
@@ -89,7 +96,7 @@ internal data class SocialComment(
 )
 
 internal class WorldStore(context: Context) :
-    SQLiteOpenHelper(context, "world.db", null, 8) {
+    SQLiteOpenHelper(context, "world.db", null, 9) {
 
     override fun onCreate(database: SQLiteDatabase) {
         database.execSQL(
@@ -146,6 +153,7 @@ internal class WorldStore(context: Context) :
         )
         createTurningPointsTable(database)
         createRelationshipEventsTable(database)
+        createConversationRecapsTable(database)
         createSocialTables(database)
         createMediaVersionsTable(database)
     }
@@ -203,6 +211,7 @@ internal class WorldStore(context: Context) :
         }
         if (oldVersion < 7) createTurningPointsTable(database)
         if (oldVersion < 8) createRelationshipEventsTable(database)
+        if (oldVersion < 9) createConversationRecapsTable(database)
     }
 
     private fun createSocialTables(database: SQLiteDatabase) {
@@ -274,6 +283,20 @@ internal class WorldStore(context: Context) :
                 summary TEXT NOT NULL,
                 source_message_id INTEGER REFERENCES messages(id) ON DELETE SET NULL,
                 created_at INTEGER NOT NULL
+            )
+            """.trimIndent(),
+        )
+    }
+
+    private fun createConversationRecapsTable(database: SQLiteDatabase) {
+        database.execSQL(
+            """
+            CREATE TABLE conversation_recaps (
+                character_id INTEGER PRIMARY KEY REFERENCES characters(id) ON DELETE CASCADE,
+                body TEXT NOT NULL,
+                through_message_id INTEGER NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+                created_at INTEGER NOT NULL,
+                pinned INTEGER NOT NULL DEFAULT 0
             )
             """.trimIndent(),
         )
@@ -501,6 +524,64 @@ internal class WorldStore(context: Context) :
                 put("source_message_id", sourceMessageId)
                 put("created_at", System.currentTimeMillis())
             },
+        )
+    }
+
+    fun conversationRecap(characterId: Long): ConversationRecap? =
+        readableDatabase.rawQuery(
+            """
+            SELECT body, through_message_id, created_at, pinned
+            FROM conversation_recaps
+            WHERE character_id = ?
+            """.trimIndent(),
+            arrayOf(characterId.toString()),
+        ).use { cursor ->
+            if (cursor.moveToFirst()) {
+                ConversationRecap(
+                    cursor.getString(0),
+                    cursor.getLong(1),
+                    cursor.getLong(2),
+                    cursor.getInt(3) == 1,
+                )
+            } else {
+                null
+            }
+        }
+
+    fun saveConversationRecap(characterId: Long, body: String, throughMessageId: Long) {
+        val pinned = conversationRecap(characterId)?.pinned == true
+        writableDatabase.insertWithOnConflict(
+            "conversation_recaps",
+            null,
+            ContentValues().apply {
+                put("character_id", characterId)
+                put("body", body.trim())
+                put("through_message_id", throughMessageId)
+                put("created_at", System.currentTimeMillis())
+                put("pinned", if (pinned) 1 else 0)
+            },
+            SQLiteDatabase.CONFLICT_REPLACE,
+        )
+    }
+
+    fun updateConversationRecap(characterId: Long, body: String) {
+        writableDatabase.update(
+            "conversation_recaps",
+            ContentValues().apply {
+                put("body", body.trim())
+                put("created_at", System.currentTimeMillis())
+            },
+            "character_id = ?",
+            arrayOf(characterId.toString()),
+        )
+    }
+
+    fun setConversationRecapPinned(characterId: Long, pinned: Boolean) {
+        writableDatabase.update(
+            "conversation_recaps",
+            ContentValues().apply { put("pinned", if (pinned) 1 else 0) },
+            "character_id = ?",
+            arrayOf(characterId.toString()),
         )
     }
 

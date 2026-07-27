@@ -186,23 +186,39 @@ private fun ConversationScreen(
     val provider = remember { ProviderStore(context) }
     val messages = remember(revision) { store.messages(character.id) }
     val memories = remember(revision) { store.memories(character.id) }
+    val recap = remember(revision) { store.conversationRecap(character.id) }
     val relationship = remember(revision) { store.relationship(character.id) }
     val listState = rememberLazyListState()
     var input by rememberSaveable { mutableStateOf("") }
     var sending by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
-    var showMemories by rememberSaveable { mutableStateOf(false) }
+    var showContext by rememberSaveable { mutableStateOf(false) }
 
-    BackHandler(showMemories) { showMemories = false }
+    BackHandler(showContext) { showContext = false }
     LaunchedEffect(messages.size) {
         if (messages.isNotEmpty()) listState.animateScrollToItem(messages.lastIndex + 1)
     }
 
-    if (showMemories) {
-        MemoriesScreen(
+    if (showContext) {
+        ConversationContextScreen(
             contentPadding = contentPadding,
+            character = character,
+            messages = messages,
+            recap = recap,
             memories = memories,
-            onBack = { showMemories = false },
+            onBack = { showContext = false },
+            onSaveRecap = { body, throughMessageId ->
+                store.saveConversationRecap(character.id, body, throughMessageId)
+                onChanged()
+            },
+            onUpdateRecap = { body ->
+                store.updateConversationRecap(character.id, body)
+                onChanged()
+            },
+            onPinRecap = { pinned ->
+                store.setConversationRecapPinned(character.id, pinned)
+                onChanged()
+            },
             onUpdate = { id, body ->
                 store.updateMemory(id, body)
                 onChanged()
@@ -263,8 +279,8 @@ private fun ConversationScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                TextButton(onClick = { showMemories = true }) {
-                    Text(stringResource(R.string.memories_count, memories.size))
+                TextButton(onClick = { showContext = true }) {
+                    Text(stringResource(R.string.conversation_context))
                 }
             }
         }
@@ -332,6 +348,7 @@ private fun ConversationScreen(
                         character = character,
                         messages = store.messages(character.id),
                         memories = store.memories(character.id),
+                        recap = store.conversationRecap(character.id),
                     ) { result ->
                         sending = false
                         result.onSuccess {
@@ -358,14 +375,28 @@ private fun ConversationScreen(
 }
 
 @Composable
-private fun MemoriesScreen(
+private fun ConversationContextScreen(
     contentPadding: PaddingValues,
+    character: ResidentCharacter,
+    messages: List<ChatMessage>,
+    recap: ConversationRecap?,
     memories: List<LongTermMemory>,
     onBack: () -> Unit,
+    onSaveRecap: (String, Long) -> Unit,
+    onUpdateRecap: (String) -> Unit,
+    onPinRecap: (Boolean) -> Unit,
     onUpdate: (Long, String) -> Unit,
     onPin: (Long, Boolean) -> Unit,
     onDelete: (Long) -> Unit,
 ) {
+    val context = LocalContext.current
+    val provider = remember { ProviderStore(context) }
+    val recapRequiresMessages = stringResource(R.string.recap_requires_messages)
+    val recapFailedPrefix = stringResource(R.string.recap_failed, "")
+    var generating by remember { mutableStateOf(false) }
+    var recapError by remember { mutableStateOf<String?>(null) }
+    var editingRecap by rememberSaveable { mutableStateOf(false) }
+    var recapText by rememberSaveable(recap?.createdAt) { mutableStateOf(recap?.body.orEmpty()) }
     var editingId by rememberSaveable { mutableStateOf<Long?>(null) }
     var editText by rememberSaveable { mutableStateOf("") }
     val formatter = remember { DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT) }
@@ -383,8 +414,125 @@ private fun MemoriesScreen(
         item {
             TextButton(onClick = onBack) { Text("‹  ${stringResource(R.string.back)}") }
             Text(
-                stringResource(R.string.long_term_memories),
+                stringResource(R.string.conversation_context),
                 style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(
+                stringResource(R.string.conversation_recap_summary),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        item {
+            Card(Modifier.fillMaxWidth()) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text(
+                        stringResource(R.string.conversation_recap),
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    if (editingRecap) {
+                        OutlinedTextField(
+                            value = recapText,
+                            onValueChange = { recapText = it },
+                            minLines = 5,
+                            maxLines = 10,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    } else {
+                        Text(
+                            recap?.body ?: stringResource(R.string.no_conversation_recap),
+                            color = if (recap == null) {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            } else {
+                                MaterialTheme.colorScheme.onSurface
+                            },
+                        )
+                    }
+                    recap?.let {
+                        Text(
+                            stringResource(
+                                R.string.recap_source,
+                                it.throughMessageId,
+                                formatter.format(Date(it.createdAt)),
+                                character.name,
+                            ),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    recapError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Button(
+                            onClick = {
+                                if (messages.size < 2) {
+                                    recapError = recapRequiresMessages
+                                    return@Button
+                                }
+                                generating = true
+                                recapError = null
+                                ProviderTextClient.complete(
+                                    provider.load(),
+                                    "Summarize a private conversation for future context. " +
+                                        "Preserve concrete events, promises, feelings and unresolved topics. " +
+                                        "Do not invent facts. Write concise natural-language Chinese.",
+                                    messages.takeLast(100).joinToString("\n") {
+                                        "${if (it.sender == "user") "User" else character.name}: ${it.body}"
+                                    },
+                                ) { result ->
+                                    generating = false
+                                    result.onSuccess {
+                                        onSaveRecap(it, messages.last().id)
+                                    }.onFailure {
+                                        recapError = "$recapFailedPrefix ${it.message.orEmpty()}"
+                                    }
+                                }
+                            },
+                            enabled = !generating,
+                        ) {
+                            Text(
+                                stringResource(
+                                    when {
+                                        generating -> R.string.generating_recap
+                                        recap == null -> R.string.generate_recap
+                                        else -> R.string.regenerate_recap
+                                    },
+                                ),
+                            )
+                        }
+                        recap?.let {
+                            TextButton(onClick = { onPinRecap(!it.pinned) }) {
+                                Text(stringResource(if (it.pinned) R.string.unpin else R.string.pin))
+                            }
+                            TextButton(
+                                onClick = {
+                                    if (editingRecap) {
+                                        if (recapText.isNotBlank()) onUpdateRecap(recapText)
+                                        editingRecap = false
+                                    } else {
+                                        recapText = it.body
+                                        editingRecap = true
+                                    }
+                                },
+                            ) {
+                                Text(
+                                    stringResource(
+                                        if (editingRecap) R.string.save else R.string.edit,
+                                    ),
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        item {
+            Text(
+                stringResource(R.string.long_term_memories),
+                style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
             )
             Text(
