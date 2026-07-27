@@ -338,6 +338,8 @@
     <string name="local_dream_probe_ok">连接成功（上下文上限 %1$d）</string>
     <string name="local_dream_probe_failed">当前不可用或尚未加载模型</string>
     <string name="share_diagnostics">分享脱敏诊断</string>
+    <string name="preview_diagnostics">预览并分享诊断</string>
+    <string name="diagnostics_preview_title">诊断内容预览</string>
     <string name="diagnostics_privacy">诊断只包含版本、能力状态、任务开关、队列数量、存储余量和错误摘要。</string>
     <string name="world_engine_summary">优先通过 Android 定时任务推进世界；任务未运行时，会根据离开时长补演至多一条合理事件。</string>
     <string name="auto_world_events">自动世界事件</string>

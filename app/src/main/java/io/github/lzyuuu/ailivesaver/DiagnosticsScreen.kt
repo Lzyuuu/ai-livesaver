@@ -17,6 +17,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -28,6 +31,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -91,7 +95,7 @@ internal object RuntimeDiagnostics {
         context.startActivity(Intent.createChooser(intent, context.getString(R.string.share_diagnostics)))
     }
 
-    private fun text(snapshot: RuntimeSnapshot): String = buildString {
+    internal fun text(snapshot: RuntimeSnapshot): String = buildString {
         appendLine("AI Livesaver diagnostics")
         appendLine("version=${snapshot.appVersion}")
         appendLine("sdk=${snapshot.sdk}")
@@ -125,6 +129,38 @@ internal fun DiagnosticsScreen(
     var probing by remember { mutableStateOf(false) }
     val localDreamProbeOk = stringResource(R.string.local_dream_probe_ok)
     val localDreamProbeFailed = stringResource(R.string.local_dream_probe_failed)
+    var previewOpen by rememberSaveable { mutableStateOf(false) }
+
+    if (previewOpen) {
+        AlertDialog(
+            onDismissRequest = { previewOpen = false },
+            title = { Text(stringResource(R.string.diagnostics_preview_title)) },
+            text = {
+                Text(
+                    RuntimeDiagnostics.text(snapshot),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState()),
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        previewOpen = false
+                        RuntimeDiagnostics.share(context, snapshot)
+                    },
+                ) {
+                    Text(stringResource(R.string.share_diagnostics))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { previewOpen = false }) {
+                    Text(stringResource(R.string.cancel))
+                }
+            },
+        )
+    }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -271,10 +307,10 @@ internal fun DiagnosticsScreen(
         }
         item {
             Button(
-                onClick = { RuntimeDiagnostics.share(context, snapshot) },
+                onClick = { previewOpen = true },
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Text(stringResource(R.string.share_diagnostics))
+                Text(stringResource(R.string.preview_diagnostics))
             }
             Spacer(Modifier.height(4.dp))
             Text(
