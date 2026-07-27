@@ -2427,6 +2427,7 @@ internal class WorldStore(context: Context) :
         var actorName = ""
         var providerName = ""
         var modelName = ""
+        var shouldCreateEvent = false
         writableDatabase.run {
             beginTransaction()
             try {
@@ -2446,6 +2447,10 @@ internal class WorldStore(context: Context) :
                     }
                 }
                 val prompt = post
+                shouldCreateEvent = eventSummary.isNotBlank() && rawQuery(
+                    "SELECT COUNT(*) FROM world_events WHERE source_post_id = ?",
+                    arrayOf(postId.toString()),
+                ).use { cursor -> cursor.moveToFirst() && cursor.getInt(0) == 0 }
                 update(
                     "social_posts",
                     ContentValues().apply {
@@ -2475,7 +2480,7 @@ internal class WorldStore(context: Context) :
                 endTransaction()
             }
         }
-        if (eventSummary.isNotBlank()) {
+        if (shouldCreateEvent) {
             addWorldEvent(
                 "moment",
                 eventSummary.take(120),

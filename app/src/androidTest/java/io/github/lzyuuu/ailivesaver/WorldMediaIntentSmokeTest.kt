@@ -49,6 +49,30 @@ class WorldMediaIntentSmokeTest {
             }
             assertEquals("DeepSeek", event.providerName)
             assertEquals("test-model", event.modelName)
+            val secondPath = File(context.filesDir, "media/generated-intent-smoke-redraw.png").apply {
+                writeBytes(byteArrayOf(4, 5, 6))
+            }
+            try {
+                val eventCount = WorldStore(context).use { store ->
+                    store.worldEvents(limit = 100).count { it.sourcePostId == postId }
+                }
+                WorldStore(context).use { store ->
+                    store.prepareRedraw(postId, "Mira, red coat, rainy street")
+                    store.markMediaReady(postId, secondPath.absolutePath, 456L)
+                }
+                assertEquals(
+                    eventCount,
+                    WorldStore(context).use { store ->
+                        store.worldEvents(limit = 100).count { it.sourcePostId == postId }
+                    },
+                )
+                assertEquals(
+                    2,
+                    WorldStore(context).use { store -> store.mediaVersions(postId).size },
+                )
+            } finally {
+                secondPath.delete()
+            }
         } finally {
             WorldStore(context).use { it.deleteAiPost(postId) }
             path.delete()
