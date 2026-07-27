@@ -214,9 +214,11 @@ internal object WorldBackup {
         store.close()
         context.deleteDatabase("world.db")
         File(context.filesDir, "media").deleteRecursively()
-        context.cacheDir.listFiles()
-            ?.filter { it.name.startsWith("import-") || it.name.startsWith("local-dream-") }
-            ?.forEach(File::deleteRecursively)
+        clearTemporaryCache(context)
+        context.getSharedPreferences(APP_PREFERENCES, Context.MODE_PRIVATE)
+            .edit()
+            .clear()
+            .commit()
         ProviderStore(context).clearAll()
     }
 

@@ -83,7 +83,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-private const val APP_PREFERENCES = "app_settings"
+internal const val APP_PREFERENCES = "app_settings"
 private const val THEME_MODE_KEY = "theme_mode"
 
 private enum class ThemeMode {

@@ -44,6 +44,12 @@ internal fun cleanupTemporaryCache(context: Context, now: Long = System.currentT
         ?.count { it.deleteRecursively() }
         ?: 0
 
+internal fun clearTemporaryCache(context: Context): Int =
+    context.cacheDir.listFiles()
+        ?.filter { it.name.startsWithAny(TEMP_CACHE_PREFIXES) }
+        ?.count { it.deleteRecursively() }
+        ?: 0
+
 private fun String.startsWithAny(prefixes: Set<String>): Boolean = prefixes.any(::startsWith)
 
 internal data class LocalDreamImage(
