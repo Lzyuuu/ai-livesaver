@@ -31,6 +31,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
 import java.text.DateFormat
 import java.util.Date
 
@@ -115,12 +116,38 @@ internal fun CharacterManagerScreen(
     var editingId by rememberSaveable { mutableStateOf<Long?>(null) }
     var adding by rememberSaveable { mutableStateOf(false) }
     var status by remember { mutableStateOf<String?>(null) }
+    var pendingCard by remember { mutableStateOf<ImportedCharacterCard?>(null) }
     val editing = characters.firstOrNull { it.id == editingId }
     val turningPoints = remember(revision, editingId) {
         editingId?.let(store::turningPoints).orEmpty()
     }
     val imported = stringResource(R.string.character_card_imported)
     val importFailed = stringResource(R.string.character_card_import_failed)
+    fun importAsNew(card: ImportedCharacterCard) {
+        val id = store.addCharacter(
+            card.name,
+            card.persona,
+            "resident",
+            "",
+            "",
+            "",
+            card.rawJson,
+        )
+        if (card.firstMessage.isNotBlank()) store.addMessage(id, "assistant", card.firstMessage)
+        card.lore.forEach { store.addCharacterCognition(id, it) }
+        status = "$imported：${card.name}"
+        onChanged()
+    }
+
+    fun mergeAsTurningPoint(card: ImportedCharacterCard) {
+        val existing = characters.firstOrNull { it.name.equals(card.name, ignoreCase = true) }
+            ?: return importAsNew(card)
+        store.updateCharacter(existing.copy(persona = card.persona, cardJson = card.rawJson))
+        card.lore.forEach { store.addCharacterCognition(existing.id, it) }
+        status = "$imported：${card.name}"
+        onChanged()
+    }
+
     val importLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument(),
     ) { uri ->
@@ -130,24 +157,49 @@ internal fun CharacterManagerScreen(
                 CharacterCardV2.read(it)
             } ?: error("无法读取文件")
             val card = CharacterCardV2.parse(bytes)
-            val id = store.addCharacter(
-                card.name,
-                card.persona,
-                "resident",
-                "",
-                "",
-                "",
-                card.rawJson,
-            )
-            if (card.firstMessage.isNotBlank()) {
-                store.addMessage(id, "assistant", card.firstMessage)
+            if (characters.any { it.name.equals(card.name, ignoreCase = true) }) {
+                pendingCard = card
+            } else {
+                importAsNew(card)
             }
-            card.name
-        }.onSuccess {
-            status = "$imported：$it"
-            onChanged()
         }.onFailure {
             status = "$importFailed：${it.message.orEmpty()}"
+        }
+    }
+
+    pendingCard?.let { card ->
+        Dialog(onDismissRequest = { pendingCard = null }) {
+            Card(Modifier.fillMaxWidth()) {
+                Column(
+                    modifier = Modifier.padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    Text(
+                        stringResource(R.string.same_name_character_found, card.name),
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(stringResource(R.string.same_name_character_choice))
+                    Button(
+                        onClick = {
+                            importAsNew(card)
+                            pendingCard = null
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(stringResource(R.string.import_as_new_character))
+                    }
+                    TextButton(
+                        onClick = {
+                            mergeAsTurningPoint(card)
+                            pendingCard = null
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(stringResource(R.string.merge_as_turning_point))
+                    }
+                }
+            }
         }
     }
 
@@ -187,6 +239,13 @@ internal fun CharacterManagerScreen(
             onActiveChange = editing?.let { character ->
                 {
                     store.setCharacterActive(character.id, !character.active)
+                    onChanged()
+                    editingId = null
+                }
+            },
+            onDelete = editing?.takeUnless(ResidentCharacter::active)?.let { character ->
+                {
+                    store.deleteCharacter(character.id)
                     onChanged()
                     editingId = null
                 }
@@ -262,6 +321,7 @@ private fun CharacterEditor(
     onBack: () -> Unit,
     onSave: (String, String, String, String, String, String) -> Unit,
     onActiveChange: (() -> Unit)?,
+    onDelete: (() -> Unit)?,
 ) {
     val context = LocalContext.current
     var name by rememberSaveable(character?.id) { mutableStateOf(character?.name.orEmpty()) }
@@ -279,6 +339,8 @@ private fun CharacterEditor(
         mutableStateOf(character?.negativePrompt.orEmpty())
     }
     var transferStatus by remember { mutableStateOf<String?>(null) }
+    var deleteConfirmation by rememberSaveable(character?.id) { mutableStateOf("") }
+    var showDeleteConfirmation by rememberSaveable(character?.id) { mutableStateOf(false) }
     val exported = stringResource(R.string.character_card_exported)
     val exportFailed = stringResource(R.string.character_card_export_failed)
     val jsonExporter = rememberLauncherForActivityResult(
@@ -457,6 +519,57 @@ private fun CharacterEditor(
                         stringResource(R.string.last_active_character),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                }
+            }
+            if (onDelete != null) {
+                item {
+                    TextButton(
+                        onClick = { showDeleteConfirmation = true },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(
+                            stringResource(R.string.delete_character_permanently),
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    if (showDeleteConfirmation && onDelete != null) {
+        Dialog(onDismissRequest = { showDeleteConfirmation = false }) {
+            Card(Modifier.fillMaxWidth()) {
+                Column(
+                    modifier = Modifier.padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Text(
+                        stringResource(R.string.delete_character_permanently),
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(stringResource(R.string.delete_character_warning))
+                    OutlinedTextField(
+                        value = deleteConfirmation,
+                        onValueChange = { deleteConfirmation = it },
+                        label = { Text(stringResource(R.string.type_app_name_to_confirm)) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Button(
+                        onClick = onDelete,
+                        enabled = deleteConfirmation == stringResource(R.string.app_name),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(stringResource(R.string.confirm_permanent_delete))
+                    }
+                    TextButton(
+                        onClick = { showDeleteConfirmation = false },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(stringResource(android.R.string.cancel))
+                    }
                 }
             }
         }

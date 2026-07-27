@@ -18,6 +18,7 @@ internal data class ImportedCharacterCard(
     val persona: String,
     val firstMessage: String,
     val rawJson: String,
+    val lore: List<String>,
 )
 
 internal object CharacterCardV2 {
@@ -49,6 +50,18 @@ internal object CharacterCardV2 {
         val description = data.optString("description").trim()
         val personality = data.optString("personality").trim()
         val scenario = data.optString("scenario").trim()
+        val lore = data.optJSONObject("character_book")
+            ?.optJSONArray("entries")
+            ?.let { entries ->
+                buildList {
+                    for (index in 0 until entries.length()) {
+                        val entry = entries.optJSONObject(index) ?: continue
+                        if (!entry.optBoolean("enabled", true)) continue
+                        entry.optString("content").trim().takeIf(String::isNotEmpty)?.let(::add)
+                    }
+                }
+            }
+            .orEmpty()
         return ImportedCharacterCard(
             name = name,
             persona = listOf(description, personality, scenario)
@@ -57,6 +70,7 @@ internal object CharacterCardV2 {
                 .ifBlank { name },
             firstMessage = data.optString("first_mes").trim(),
             rawJson = root.toString(),
+            lore = lore,
         )
     }
 

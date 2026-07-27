@@ -160,6 +160,7 @@ private fun FirstRelationshipScreen(
                         } else {
                             store.createWorld(userName, characterName, persona)
                             onChanged()
+                            WorldEngine.generate(context) { if (it) onChanged() }
                         }
                     },
                     modifier = Modifier.fillMaxWidth(),
@@ -349,6 +350,10 @@ private fun ConversationScreen(
                         messages = store.messages(character.id),
                         memories = store.memories(character.id),
                         recap = store.conversationRecap(character.id),
+                        worldFacts = store.worldFacts(),
+                        cognition = store.characterCognition(character.id),
+                        userContext = store.memberWorldContext("user"),
+                        characterContext = store.memberWorldContext("character:${character.id}"),
                     ) { result ->
                         sending = false
                         result.onSuccess {

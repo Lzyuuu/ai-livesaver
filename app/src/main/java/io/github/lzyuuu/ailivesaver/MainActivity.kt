@@ -1,7 +1,9 @@
 package io.github.lzyuuu.ailivesaver
 
+import android.Manifest
 import android.content.ActivityNotFoundException
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.widget.Toast
@@ -128,6 +130,7 @@ private fun AiLivesaverApp() {
     var showUpdates by rememberSaveable { mutableStateOf(false) }
     var showProviders by rememberSaveable { mutableStateOf(false) }
     var showWorldSettings by rememberSaveable { mutableStateOf(false) }
+    var showWorldKnowledge by rememberSaveable { mutableStateOf(false) }
     var showLocalDream by rememberSaveable { mutableStateOf(false) }
     var showBackups by rememberSaveable { mutableStateOf(false) }
     var showIdentity by rememberSaveable { mutableStateOf(false) }
@@ -140,19 +143,26 @@ private fun AiLivesaverApp() {
     val characters = remember(worldRevision) { worldStore.characters(includeDeparted = false) }
     val latestMoment = remember(worldRevision) { worldStore.posts("moment").firstOrNull() }
     val latestForum = remember(worldRevision) { worldStore.posts("forum").firstOrNull() }
+    val latestForumReplyCount = remember(worldRevision, latestForum?.id) {
+        latestForum?.let { worldStore.comments(it.id).size } ?: 0
+    }
+    val responseEvents = remember(worldRevision) { worldStore.worldEvents(needsResponseOnly = true) }
     val queueCount = remember(worldRevision) { worldStore.queueCount() }
+    val budgetExhausted = remember(worldRevision) { WorldEngine.budgetExhausted(context) }
 
     LaunchedEffect(Unit) {
         WorldEngine.onAppOpened(context) { worldRevision++ }
     }
 
     BackHandler(
-        enabled = showUpdates || showProviders || showWorldSettings || showLocalDream ||
+        enabled = showUpdates || showProviders || showWorldSettings || showWorldKnowledge ||
+            showLocalDream ||
             showBackups || showIdentity || showCharacters,
     ) {
         showUpdates = false
         showProviders = false
         showWorldSettings = false
+        showWorldKnowledge = false
         showLocalDream = false
         showBackups = false
         showIdentity = false
@@ -162,7 +172,7 @@ private fun AiLivesaverApp() {
     Scaffold(
         bottomBar = {
             if (
-                !showUpdates && !showProviders && !showWorldSettings &&
+                !showUpdates && !showProviders && !showWorldSettings && !showWorldKnowledge &&
                 !showLocalDream && !showBackups && !showIdentity && !showCharacters
             ) {
                 NavigationBar {
@@ -200,6 +210,14 @@ private fun AiLivesaverApp() {
                 onBack = { showWorldSettings = false },
                 onWorldChanged = { worldRevision++ },
             )
+        } else if (showWorldKnowledge) {
+            WorldKnowledgeScreen(
+                contentPadding = padding,
+                store = worldStore,
+                revision = worldRevision,
+                onBack = { showWorldKnowledge = false },
+                onChanged = { worldRevision++ },
+            )
         } else if (showLocalDream) {
             LocalDreamSettingsScreen(
                 contentPadding = padding,
@@ -235,8 +253,28 @@ private fun AiLivesaverApp() {
                     characters = characters,
                     latestMoment = latestMoment,
                     latestForum = latestForum,
+                    latestForumReplyCount = latestForumReplyCount,
+                    responseEvents = responseEvents,
                     queueCount = queueCount,
-                    onOpenChat = { destinationName = Destination.Chats.name },
+                    budgetExhausted = budgetExhausted,
+                    onOpenChat = {
+                        responseEvents.forEach { worldStore.markWorldEventSeen(it.id) }
+                        worldRevision++
+                        destinationName = Destination.Chats.name
+                    },
+                    onOpenMoments = { destinationName = Destination.Moments.name },
+                    onOpenCommons = { destinationName = Destination.Commons.name },
+                    onManageCircle = { showCharacters = true },
+                    onOpenEvent = { event ->
+                        worldStore.markWorldEventSeen(event.id)
+                        worldRevision++
+                        destinationName = when {
+                            "message" in event.kind -> Destination.Chats.name
+                            "forum" in event.kind || "commons" in event.kind ->
+                                Destination.Commons.name
+                            else -> Destination.Moments.name
+                        }
+                    },
                 )
                 Destination.Chats -> ChatsScreen(
                     contentPadding = padding,
@@ -269,6 +307,7 @@ private fun AiLivesaverApp() {
                     onOpenUpdates = { showUpdates = true },
                     onOpenProviders = { showProviders = true },
                     onOpenWorldSettings = { showWorldSettings = true },
+                    onOpenWorldKnowledge = { showWorldKnowledge = true },
                     onOpenLocalDream = { showLocalDream = true },
                     onOpenBackups = { showBackups = true },
                 )
@@ -285,8 +324,15 @@ private fun WorldScreen(
     characters: List<ResidentCharacter>,
     latestMoment: SocialPost?,
     latestForum: SocialPost?,
+    latestForumReplyCount: Int,
+    responseEvents: List<WorldEvent>,
     queueCount: Int,
+    budgetExhausted: Boolean,
     onOpenChat: () -> Unit,
+    onOpenMoments: () -> Unit,
+    onOpenCommons: () -> Unit,
+    onManageCircle: () -> Unit,
+    onOpenEvent: (WorldEvent) -> Unit,
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -352,6 +398,7 @@ private fun WorldScreen(
             SectionHeader(
                 title = stringResource(R.string.your_circle),
                 action = stringResource(R.string.manage),
+                onAction = onManageCircle,
             )
             Spacer(Modifier.height(12.dp))
             CircleStrip(characters)
@@ -359,19 +406,42 @@ private fun WorldScreen(
         item {
             WorldSection(
                 title = stringResource(R.string.respond_first),
-                action = stringResource(R.string.open_chats),
+                action = stringResource(
+                    if (responseEvents.any { "message" in it.kind }) {
+                        R.string.open_chats
+                    } else {
+                        R.string.enter
+                    },
+                ),
+                onAction = { responseEvents.firstOrNull()?.let(onOpenEvent) ?: onOpenChat() },
             ) {
-                if (character == null) {
+                if (responseEvents.isEmpty()) {
                     Text(
-                        stringResource(R.string.no_world_events),
+                        if (character == null) {
+                            stringResource(R.string.no_world_events)
+                        } else if (budgetExhausted) {
+                            stringResource(R.string.world_quiet_today)
+                        } else {
+                            stringResource(R.string.waiting_for_first_message)
+                        },
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 } else {
-                    PersonMessage(
-                        character.name.take(1).uppercase(),
-                        character.name,
-                        stringResource(R.string.waiting_for_first_message),
-                    )
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        responseEvents.take(3).forEach { event ->
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { onOpenEvent(event) },
+                            ) {
+                                PersonMessage(
+                                    event.actorName.take(1).uppercase(),
+                                    event.actorName,
+                                    event.summary,
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -379,6 +449,7 @@ private fun WorldScreen(
             WorldSection(
                 title = stringResource(R.string.moments_title),
                 action = stringResource(R.string.enter),
+                onAction = onOpenMoments,
             ) {
                 if (latestMoment == null) {
                     Text(
@@ -397,7 +468,8 @@ private fun WorldScreen(
         item {
             WorldSection(
                 title = stringResource(R.string.commons_title),
-                action = stringResource(R.string.commons_replies),
+                action = stringResource(R.string.replies_count, latestForumReplyCount),
+                onAction = onOpenCommons,
             ) {
                 if (latestForum == null) {
                     Text(
@@ -530,6 +602,7 @@ private fun CircleStrip(characters: List<ResidentCharacter>) {
 private fun WorldSection(
     title: String,
     action: String,
+    onAction: () -> Unit = {},
     content: @Composable () -> Unit,
 ) {
     Card(
@@ -539,7 +612,7 @@ private fun WorldSection(
         shape = RoundedCornerShape(24.dp),
     ) {
         Column(Modifier.padding(18.dp)) {
-            SectionHeader(title, action)
+            SectionHeader(title, action, onAction)
             Spacer(Modifier.height(14.dp))
             content()
         }
@@ -547,7 +620,11 @@ private fun WorldSection(
 }
 
 @Composable
-private fun SectionHeader(title: String, action: String) {
+private fun SectionHeader(
+    title: String,
+    action: String,
+    onAction: () -> Unit = {},
+) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -558,11 +635,13 @@ private fun SectionHeader(title: String, action: String) {
             style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.Bold,
         )
-        Text(
-            action,
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.primary,
-        )
+        TextButton(onClick = onAction) {
+            Text(
+                action,
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+            )
+        }
     }
 }
 
@@ -613,6 +692,7 @@ private fun MeScreen(
     onOpenUpdates: () -> Unit,
     onOpenProviders: () -> Unit,
     onOpenWorldSettings: () -> Unit,
+    onOpenWorldKnowledge: () -> Unit,
     onOpenLocalDream: () -> Unit,
     onOpenBackups: () -> Unit,
 ) {
@@ -622,6 +702,7 @@ private fun MeScreen(
         SettingRow(R.string.provider_settings, R.string.provider_settings_summary, "providers"),
         SettingRow(R.string.local_dream_settings, R.string.local_dream_settings_summary, "dream"),
         SettingRow(R.string.world_settings, R.string.world_settings_summary, "world"),
+        SettingRow(R.string.world_knowledge, R.string.world_knowledge_summary, "knowledge"),
         SettingRow(R.string.backup_settings, R.string.backup_settings_summary, "backups"),
         SettingRow(R.string.about_updates, R.string.about_updates_summary, "updates"),
     )
@@ -665,6 +746,7 @@ private fun MeScreen(
                             "providers" -> onOpenProviders()
                             "dream" -> onOpenLocalDream()
                             "world" -> onOpenWorldSettings()
+                            "knowledge" -> onOpenWorldKnowledge()
                             "backups" -> onOpenBackups()
                             "updates" -> onOpenUpdates()
                         }
@@ -894,6 +976,249 @@ private fun LocalDreamSettingsScreen(
 }
 
 @Composable
+private fun WorldKnowledgeScreen(
+    contentPadding: PaddingValues,
+    store: WorldStore,
+    revision: Int,
+    onBack: () -> Unit,
+    onChanged: () -> Unit,
+) {
+    val facts = remember(revision) { store.worldFacts() }
+    val characters = remember(revision) { store.characters(includeDeparted = false) }
+    var selectedCharacterId by rememberSaveable { mutableStateOf<Long?>(null) }
+    val selectedCharacter = characters.firstOrNull { it.id == selectedCharacterId }
+        ?: characters.firstOrNull()
+    val cognition = remember(revision, selectedCharacter?.id) {
+        selectedCharacter?.let { store.characterCognition(it.id) }.orEmpty()
+    }
+    var factText by rememberSaveable { mutableStateOf("") }
+    var cognitionText by rememberSaveable { mutableStateOf("") }
+    var contextMemberKey by rememberSaveable { mutableStateOf("user") }
+    val memberContext = remember(revision, contextMemberKey) {
+        store.memberWorldContext(contextMemberKey)
+    }
+    var memberLocation by rememberSaveable(contextMemberKey, memberContext.location) {
+        mutableStateOf(memberContext.location)
+    }
+    var memberTimeZone by rememberSaveable(contextMemberKey, memberContext.timeZone) {
+        mutableStateOf(memberContext.timeZone)
+    }
+
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(
+            start = 20.dp,
+            top = contentPadding.calculateTopPadding() + 12.dp,
+            end = 20.dp,
+            bottom = contentPadding.calculateBottomPadding() + 24.dp,
+        ),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        item {
+            TextButton(onClick = onBack) { Text("‹  ${stringResource(R.string.back)}") }
+            Text(
+                stringResource(R.string.world_knowledge),
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(
+                stringResource(R.string.world_knowledge_summary),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        item {
+            Text(
+                stringResource(R.string.member_place_and_time),
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(
+                stringResource(R.string.member_place_and_time_summary),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Row(
+                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                FilterChip(
+                    selected = contextMemberKey == "user",
+                    onClick = { contextMemberKey = "user" },
+                    label = { Text(stringResource(R.string.you)) },
+                )
+                characters.forEach { character ->
+                    FilterChip(
+                        selected = contextMemberKey == "character:${character.id}",
+                        onClick = { contextMemberKey = "character:${character.id}" },
+                        label = { Text(character.name) },
+                    )
+                }
+            }
+            OutlinedTextField(
+                value = memberLocation,
+                onValueChange = { memberLocation = it },
+                label = { Text(stringResource(R.string.member_location)) },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            OutlinedTextField(
+                value = memberTimeZone,
+                onValueChange = { memberTimeZone = it },
+                label = { Text(stringResource(R.string.member_time_zone)) },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Button(
+                onClick = {
+                    store.saveMemberWorldContext(
+                        contextMemberKey,
+                        memberLocation,
+                        memberTimeZone,
+                    )
+                    onChanged()
+                },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(stringResource(R.string.save_member_context))
+            }
+        }
+        item {
+            Text(
+                stringResource(R.string.shared_world_facts),
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(
+                stringResource(R.string.shared_world_facts_summary),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            OutlinedTextField(
+                value = factText,
+                onValueChange = { factText = it },
+                label = { Text(stringResource(R.string.fact_or_rule)) },
+                minLines = 2,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Button(
+                onClick = {
+                    store.addWorldFact(factText)
+                    factText = ""
+                    onChanged()
+                },
+                enabled = factText.isNotBlank(),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(stringResource(R.string.add_world_fact))
+            }
+        }
+        items(facts, key = WorldFact::id) { fact ->
+            Card(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp)) {
+                    Text(fact.body)
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        TextButton(
+                            onClick = {
+                                store.setWorldFactPinned(fact.id, !fact.pinned)
+                                onChanged()
+                            },
+                        ) {
+                            Text(stringResource(if (fact.pinned) R.string.unpin else R.string.pin))
+                        }
+                        TextButton(
+                            onClick = {
+                                store.deleteWorldFact(fact.id)
+                                onChanged()
+                            },
+                        ) {
+                            Text(stringResource(R.string.delete))
+                        }
+                    }
+                }
+            }
+        }
+        if (characters.isNotEmpty()) {
+            item {
+                Text(
+                    stringResource(R.string.character_cognition_title),
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    stringResource(R.string.character_cognition_summary),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Row(
+                    modifier = Modifier.horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    characters.forEach { character ->
+                        FilterChip(
+                            selected = selectedCharacter?.id == character.id,
+                            onClick = { selectedCharacterId = character.id },
+                            label = { Text(character.name) },
+                        )
+                    }
+                }
+                OutlinedTextField(
+                    value = cognitionText,
+                    onValueChange = { cognitionText = it },
+                    label = { Text(stringResource(R.string.character_cognition_title)) },
+                    minLines = 2,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Button(
+                    onClick = {
+                        selectedCharacter?.let {
+                            store.addCharacterCognition(it.id, cognitionText)
+                            cognitionText = ""
+                            onChanged()
+                        }
+                    },
+                    enabled = cognitionText.isNotBlank(),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(stringResource(R.string.add_cognition))
+                }
+            }
+            items(cognition, key = CharacterCognition::id) { item ->
+                Card(Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(16.dp)) {
+                        Text(item.body)
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            TextButton(
+                                onClick = {
+                                    store.setCharacterCognitionPinned(item.id, !item.pinned)
+                                    onChanged()
+                                },
+                            ) {
+                                Text(
+                                    stringResource(if (item.pinned) R.string.unpin else R.string.pin),
+                                )
+                            }
+                            TextButton(
+                                onClick = {
+                                    store.promoteCognitionToWorldFact(item.id)
+                                    onChanged()
+                                },
+                            ) {
+                                Text(stringResource(R.string.promote_to_world_fact))
+                            }
+                            TextButton(
+                                onClick = {
+                                    store.deleteCharacterCognition(item.id)
+                                    onChanged()
+                                },
+                            ) {
+                                Text(stringResource(R.string.delete))
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun WorldSettingsScreen(
     contentPadding: PaddingValues,
     onBack: () -> Unit,
@@ -901,11 +1226,26 @@ private fun WorldSettingsScreen(
 ) {
     val context = LocalContext.current
     var enabled by remember { mutableStateOf(WorldEngine.isEnabled(context)) }
+    var activity by remember { mutableStateOf(WorldEngine.activity(context)) }
     var budget by remember { mutableIntStateOf(WorldEngine.dailyBudget(context)) }
+    var continuous by remember { mutableStateOf(WorldEngine.continuous(context)) }
+    var notifications by remember { mutableStateOf(WorldEngine.notificationsEnabled(context)) }
+    var preview by remember { mutableStateOf(WorldEngine.notificationPreview(context)) }
+    var doNotDisturb by remember { mutableStateOf(WorldEngine.doNotDisturb(context)) }
+    var taskPaused by remember { mutableStateOf(WorldEngine.taskPaused(context)) }
+    val characters = remember { WorldStore(context).use { it.characters(includeDeparted = false) } }
+    var characterControlRevision by remember { mutableIntStateOf(0) }
     var generating by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf<String?>(null) }
     val generated = stringResource(R.string.world_advanced_once)
     val notReady = stringResource(R.string.world_advance_not_ready)
+    val unlimited = stringResource(R.string.unlimited)
+    val notificationPermission = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        notifications = granted
+        WorldEngine.setNotificationsEnabled(context, granted)
+    }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -957,26 +1297,265 @@ private fun WorldSettingsScreen(
         }
         item {
             Text(
+                stringResource(R.string.world_activity),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+            )
+            Row(
+                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                listOf(
+                    "quiet" to R.string.activity_quiet,
+                    "natural" to R.string.activity_natural,
+                    "active" to R.string.activity_active,
+                ).forEach { (value, label) ->
+                    FilterChip(
+                        selected = activity == value,
+                        onClick = {
+                            activity = value
+                            WorldEngine.setActivity(context, value)
+                        },
+                        label = { Text(stringResource(label)) },
+                    )
+                }
+            }
+            Text(
+                stringResource(R.string.activity_summary),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        item {
+            Text(
                 stringResource(R.string.daily_auto_budget),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
             )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf(6, 12, 24).forEach { choice ->
+            Row(
+                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                val choices = listOf(10, 20, 40, 0)
+                (if (budget in choices) choices else listOf(budget) + choices).forEach { choice ->
                     FilterChip(
                         selected = budget == choice,
                         onClick = {
                             budget = choice
                             WorldEngine.setDailyBudget(context, choice)
                         },
-                        label = { Text(stringResource(R.string.requests_per_day, choice)) },
+                        label = {
+                            Text(
+                                if (choice == 0) {
+                                    unlimited
+                                } else {
+                                    stringResource(R.string.requests_per_day, choice)
+                                },
+                            )
+                        },
                     )
                 }
             }
             Text(
+                stringResource(
+                    R.string.budget_status,
+                    WorldEngine.budgetUsed(context),
+                    if (budget == 0) unlimited else budget.toString(),
+                ),
+                fontWeight = FontWeight.Bold,
+            )
+            Text(
                 stringResource(R.string.auto_budget_summary),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+        }
+        item {
+            Card(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(18.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                stringResource(R.string.continuous_world),
+                                fontWeight = FontWeight.Bold,
+                            )
+                            Text(
+                                stringResource(R.string.continuous_world_summary),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        Switch(
+                            checked = continuous,
+                            onCheckedChange = {
+                                continuous = it
+                                WorldEngine.setContinuous(context, it)
+                            },
+                        )
+                    }
+                }
+            }
+        }
+        item {
+            Card(Modifier.fillMaxWidth()) {
+                Column(
+                    modifier = Modifier.padding(18.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                stringResource(R.string.relationship_notifications),
+                                fontWeight = FontWeight.Bold,
+                            )
+                            Text(
+                                stringResource(R.string.relationship_notifications_summary),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        Switch(
+                            checked = notifications,
+                            onCheckedChange = { checked ->
+                                if (
+                                    checked &&
+                                    Build.VERSION.SDK_INT >= 33 &&
+                                    context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) !=
+                                    PackageManager.PERMISSION_GRANTED
+                                ) {
+                                    notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                } else {
+                                    notifications = checked
+                                    WorldEngine.setNotificationsEnabled(context, checked)
+                                }
+                            },
+                        )
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(stringResource(R.string.notification_preview))
+                            Text(
+                                stringResource(R.string.notification_preview_summary),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        Switch(
+                            checked = preview,
+                            onCheckedChange = {
+                                preview = it
+                                WorldEngine.setNotificationPreview(context, it)
+                            },
+                            enabled = notifications,
+                        )
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(stringResource(R.string.do_not_disturb))
+                            Text(
+                                stringResource(R.string.do_not_disturb_summary),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        Switch(
+                            checked = doNotDisturb,
+                            onCheckedChange = {
+                                doNotDisturb = it
+                                WorldEngine.setDoNotDisturb(context, it)
+                            },
+                        )
+                    }
+                }
+            }
+        }
+        if (characters.isNotEmpty()) {
+            item {
+                Text(
+                    stringResource(R.string.character_activity_controls),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                )
+            }
+            items(characters, key = ResidentCharacter::id) { character ->
+                val messages = remember(character.id, characterControlRevision) {
+                    WorldEngine.proactiveMessages(context, character.id)
+                }
+                val posts = remember(character.id, characterControlRevision) {
+                    WorldEngine.proactivePosts(context, character.id)
+                }
+                val characterNotifications = remember(character.id, characterControlRevision) {
+                    WorldEngine.characterNotifications(context, character)
+                }
+                Card(Modifier.fillMaxWidth()) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Text(character.name, fontWeight = FontWeight.Bold)
+                        Row(
+                            modifier = Modifier.horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            FilterChip(
+                                selected = messages,
+                                onClick = {
+                                    WorldEngine.setProactiveMessages(
+                                        context,
+                                        character.id,
+                                        !messages,
+                                    )
+                                    characterControlRevision++
+                                },
+                                label = {
+                                    Text(stringResource(R.string.allow_proactive_messages))
+                                },
+                            )
+                            FilterChip(
+                                selected = posts,
+                                onClick = {
+                                    WorldEngine.setProactivePosts(context, character.id, !posts)
+                                    characterControlRevision++
+                                },
+                                label = {
+                                    Text(stringResource(R.string.allow_proactive_posts))
+                                },
+                            )
+                            FilterChip(
+                                selected = characterNotifications,
+                                onClick = {
+                                    WorldEngine.setCharacterNotifications(
+                                        context,
+                                        character.id,
+                                        !characterNotifications,
+                                    )
+                                    characterControlRevision++
+                                },
+                                label = {
+                                    Text(
+                                        stringResource(
+                                            R.string.allow_character_notifications,
+                                        ),
+                                    )
+                                },
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        if (taskPaused) {
+            item {
+                StatusCard(
+                    stringResource(
+                        R.string.world_task_paused,
+                        WorldEngine.lastFailure(context),
+                    ),
+                )
+                Button(
+                    onClick = {
+                        WorldEngine.resumeTasks(context)
+                        taskPaused = false
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(stringResource(R.string.resume_world_tasks))
+                }
+            }
         }
         item {
             Button(

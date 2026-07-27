@@ -15,7 +15,13 @@ class CharacterCardV2Test {
             "personality":"Honest",
             "scenario":"",
             "first_mes":"Welcome back",
-            "mes_example":""
+            "mes_example":"",
+            "character_book":{
+              "entries":[
+                {"content":"Mira knows the north gate is locked.","enabled":true},
+                {"content":"Disabled lore","enabled":false}
+              ]
+            }
           }
         }
     """.trimIndent()
@@ -26,6 +32,7 @@ class CharacterCardV2Test {
         assertEquals("Mira", parsed.name)
         assertEquals("An old friend\n\nHonest", parsed.persona)
         assertEquals("Welcome back", parsed.firstMessage)
+        assertEquals(listOf("Mira knows the north gate is locked."), parsed.lore)
 
         val transparentPng = java.util.Base64.getDecoder().decode(
             "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M/wHwAF/gL+" +

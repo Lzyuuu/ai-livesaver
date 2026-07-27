@@ -183,11 +183,23 @@ internal object ProviderChatClient {
         messages: List<ChatMessage>,
         memories: List<LongTermMemory>,
         recap: ConversationRecap?,
+        worldFacts: List<WorldFact>,
+        cognition: List<CharacterCognition>,
+        userContext: MemberWorldContext,
+        characterContext: MemberWorldContext,
         callback: (Result<String>) -> Unit,
     ) {
         Thread {
             val result = runCatching {
-                val system = buildChatSystemPrompt(character, memories, recap)
+                val system = buildChatSystemPrompt(
+                    character,
+                    memories,
+                    recap,
+                    worldFacts,
+                    cognition,
+                    userContext,
+                    characterContext,
+                )
                 val requestMessages = JSONArray().put(
                     JSONObject().put("role", "system").put("content", system),
                 )
@@ -222,12 +234,32 @@ internal fun buildChatSystemPrompt(
     character: ResidentCharacter,
     memories: List<LongTermMemory>,
     recap: ConversationRecap?,
+    worldFacts: List<WorldFact> = emptyList(),
+    cognition: List<CharacterCognition> = emptyList(),
+    userContext: MemberWorldContext? = null,
+    characterContext: MemberWorldContext? = null,
 ): String = buildString {
     append("You are ${character.name}. ")
     append(character.persona)
     append("\nStay in character. The user is the center of this relationship.")
     recap?.let {
         append("\nConversation recap through message #${it.throughMessageId}:\n${it.body}")
+    }
+    if (worldFacts.isNotEmpty()) {
+        append("\nShared world facts (pinned facts take priority):\n")
+        worldFacts.take(20).forEach { append("- ${it.body}\n") }
+    }
+    if (cognition.isNotEmpty()) {
+        append("\nWhat this character knows or believes; it may differ from shared facts:\n")
+        cognition.take(20).forEach { append("- ${it.body}\n") }
+    }
+    userContext?.let {
+        if (it.location.isNotBlank()) append("\nUser-disclosed location: ${it.location}")
+        if (it.timeZone.isNotBlank()) append("\nUser-disclosed time zone: ${it.timeZone}")
+    }
+    characterContext?.let {
+        if (it.location.isNotBlank()) append("\nCharacter location: ${it.location}")
+        if (it.timeZone.isNotBlank()) append("\nCharacter time zone: ${it.timeZone}")
     }
     if (memories.isNotEmpty()) {
         append("\nLong-term memories:\n")
@@ -261,6 +293,22 @@ internal object ProviderTextClient {
 
 private object ProviderHttp {
     fun post(config: ProviderConfig, body: JSONObject): String {
+        var lastFailure: IOException? = null
+        repeat(3) { attempt ->
+            try {
+                return postOnce(config, body)
+            } catch (failure: IOException) {
+                lastFailure = failure
+                if (!isTransientProviderFailure(failure.message.orEmpty()) || attempt == 2) {
+                    throw failure
+                }
+                Thread.sleep(500L shl attempt)
+            }
+        }
+        throw lastFailure ?: IOException("Provider request failed")
+    }
+
+    private fun postOnce(config: ProviderConfig, body: JSONObject): String {
         val connection = URL(
             ProviderProtocol.chatCompletionsUrl(config.baseUrl),
         ).openConnection() as HttpURLConnection
@@ -285,4 +333,9 @@ private object ProviderHttp {
             connection.disconnect()
         }
     }
+}
+
+internal fun isTransientProviderFailure(message: String): Boolean {
+    val code = Regex("""HTTP (\d{3})""").find(message)?.groupValues?.get(1)?.toIntOrNull()
+    return code == null || code == 408 || code == 429 || code >= 500
 }
