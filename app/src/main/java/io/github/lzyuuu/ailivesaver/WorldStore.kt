@@ -1444,13 +1444,36 @@ internal class WorldStore(context: Context) :
     }
 
     fun remember(characterId: Long, sourceMessageId: Long, body: String) {
-        val values = ContentValues().apply {
-            put("character_id", characterId)
-            put("body", body.trim())
-            put("source_message_id", sourceMessageId)
-            put("created_at", System.currentTimeMillis())
+        rememberIfCurrent(characterId, sourceMessageId, body)
+    }
+
+    fun rememberIfCurrent(characterId: Long, sourceMessageId: Long, body: String): Boolean {
+        val cleanBody = body.trim()
+        if (cleanBody.isBlank()) return false
+        writableDatabase.beginTransaction()
+        try {
+            val current = readableDatabase.rawQuery(
+                """
+                SELECT EXISTS(
+                    SELECT 1 FROM messages
+                    WHERE id = ? AND character_id = ? AND sender = 'user' AND active = 1
+                )
+                """.trimIndent(),
+                arrayOf(sourceMessageId.toString(), characterId.toString()),
+            ).use { cursor -> cursor.moveToFirst() && cursor.getInt(0) == 1 }
+            if (!current) return false
+            val values = ContentValues().apply {
+                put("character_id", characterId)
+                put("body", cleanBody)
+                put("source_message_id", sourceMessageId)
+                put("created_at", System.currentTimeMillis())
+            }
+            writableDatabase.insertOrThrow("memories", null, values)
+            writableDatabase.setTransactionSuccessful()
+            return true
+        } finally {
+            writableDatabase.endTransaction()
         }
-        writableDatabase.insertOrThrow("memories", null, values)
     }
 
     fun memories(characterId: Long): List<LongTermMemory> = readableDatabase.rawQuery(
@@ -2469,7 +2492,35 @@ internal class WorldStore(context: Context) :
 }
 
 internal object MemoryExtractor {
-    // ponytail: deterministic first pass; replace with structured model extraction after capability checks.
+    // ponytail: lexical gate keeps routine chat off the extra Memory Provider request.
+    private val candidateHints = listOf(
+        "我叫",
+        "我的",
+        "我喜欢",
+        "我不喜欢",
+        "我住",
+        "我在",
+        "我从事",
+        "我的工作",
+        "工作",
+        "我的生日",
+        "我计划",
+        "remember",
+        "my name",
+        "i like",
+        "i dislike",
+        "i live",
+        "my job",
+        "work",
+        "my birthday",
+    )
+
+    fun shouldInspect(message: String): Boolean {
+        val normalized = message.trim()
+        return normalized.length in 8..400 &&
+            candidateHints.any(normalized.lowercase()::contains)
+    }
+
     fun fromUserMessage(message: String): String? {
         val normalized = message.trim()
         val lowered = normalized.lowercase()
@@ -2478,9 +2529,13 @@ internal object MemoryExtractor {
                 (
                     listOf("记住", "我叫", "我喜欢", "我不喜欢", "我的").any(normalized::contains) ||
                         listOf("remember", "my name", "i like", "i dislike").any(lowered::contains)
-                    )
+            )
         }
     }
+
+    fun fromProvider(body: String): String? = body.trim().takeUnless {
+        it.isBlank() || it.equals("none", ignoreCase = true) || it == "无"
+    }?.takeIf { it.length <= 240 }
 }
 
 private fun Cursor.residentCharacter() = ResidentCharacter(

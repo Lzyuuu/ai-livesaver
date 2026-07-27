@@ -49,6 +49,35 @@ private object ActiveChatReplies {
     fun remove(characterId: Long) = characterIds.remove(characterId)
 }
 
+private fun captureLongTermMemory(
+    context: android.content.Context,
+    store: WorldStore,
+    character: ResidentCharacter,
+    message: ChatMessage,
+    onChanged: () -> Unit,
+) {
+    MemoryExtractor.fromUserMessage(message.body)?.let { explicit ->
+        store.rememberIfCurrent(character.id, message.id, explicit)
+        return
+    }
+    if (!MemoryExtractor.shouldInspect(message.body)) return
+    val config = ProviderStore(context).loadFor(ProviderTask.Memory)
+    if (!config.isValid() || !config.capabilities.supports(ProviderCapability.Structured)) return
+    ProviderTextClient.completeStructured(
+        config,
+        "Extract only durable facts the user explicitly shares for future conversation context. " +
+            "Do not infer preferences, identity or plans that are not clearly stated. " +
+            "Return NONE when this message contains no durable fact.",
+        "User message:\n${message.body}\nReturn one concise fact in body, or NONE.",
+    ) { result ->
+        val memory = result.getOrNull()?.let(MemoryExtractor::fromProvider) ?: return@completeStructured
+        if (store.rememberIfCurrent(character.id, message.id, memory)) {
+            store.recordConversationRelationship(character.id, message.id, sharedPersonalFact = true)
+            onChanged()
+        }
+    }
+}
+
 @Composable
 internal fun ChatsScreen(
     contentPadding: PaddingValues,
@@ -331,13 +360,14 @@ private fun ConversationScreen(
                             )
                             val extractedMemory = MemoryExtractor.fromUserMessage(body)
                             extractedMemory?.let {
-                                store.remember(character.id, newMessage.id, it)
+                                store.rememberIfCurrent(character.id, newMessage.id, it)
                             }
                             store.recordConversationRelationship(
                                 character.id,
                                 newMessage.id,
                                 extractedMemory != null,
                             )
+                            captureLongTermMemory(context, store, character, newMessage, onChanged)
                             rewritingMessageId = null
                             expandedVersionsId = null
                             onChanged()
@@ -645,13 +675,14 @@ private fun ConversationScreen(
                     val userMessage = store.addMessage(character.id, "user", body)
                     val extractedMemory = MemoryExtractor.fromUserMessage(body)
                     extractedMemory?.let {
-                        store.remember(character.id, userMessage.id, it)
+                        store.rememberIfCurrent(character.id, userMessage.id, it)
                     }
                     store.recordConversationRelationship(
                         character.id,
                         userMessage.id,
                         extractedMemory != null,
                     )
+                    captureLongTermMemory(context, store, character, userMessage, onChanged)
                     onChanged()
                     requestReply()
                 },
