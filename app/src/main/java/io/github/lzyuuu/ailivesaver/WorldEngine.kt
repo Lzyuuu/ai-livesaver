@@ -85,6 +85,7 @@ internal object WorldEngine {
     private const val CONTINUOUS_CHANNEL = "continuous_world"
     private const val RELATIONSHIP_CHANNEL = "relationship_messages"
     private val generationRunning = AtomicBoolean(false)
+    private val socialResponseRunning = AtomicBoolean(false)
 
     fun eventIntervalMs(context: Context): Long = when (activity(context)) {
         "quiet" -> TimeUnit.HOURS.toMillis(12)
@@ -609,18 +610,29 @@ internal object WorldEngine {
 
     private fun resumeSocialResponses(context: Context, onChanged: () -> Unit) {
         if (!isOnline(context)) return
-        val job = WorldStore(context).use { it.socialResponseJobs(1).firstOrNull() } ?: return
-        respondToPost(
-            context = context,
-            postId = job.postId,
-            kind = job.kind,
-            body = job.body,
-            audience = job.audience,
-            audienceCharacterIds = job.audienceCharacterIds,
-            queuedJobId = job.id,
-        ) { success ->
-            if (success) onChanged()
+        if (!socialResponseRunning.compareAndSet(false, true)) return
+        val job = WorldStore(context).use { it.socialResponseJobs(1).firstOrNull() } ?: run {
+            socialResponseRunning.set(false)
+            return
         }
+        val started = runCatching {
+            respondToPost(
+                context = context,
+                postId = job.postId,
+                kind = job.kind,
+                body = job.body,
+                audience = job.audience,
+                audienceCharacterIds = job.audienceCharacterIds,
+                queuedJobId = job.id,
+            ) { success ->
+                socialResponseRunning.set(false)
+                if (success) onChanged()
+            }
+        }.getOrElse {
+            socialResponseRunning.set(false)
+            false
+        }
+        if (!started) socialResponseRunning.set(false)
     }
 
     private fun isOnline(context: Context): Boolean {
