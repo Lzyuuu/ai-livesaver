@@ -1819,6 +1819,7 @@ internal class WorldStore(context: Context) :
     fun createMediaPost(
         body: String,
         prompt: String,
+        negativePrompt: String = "",
         audience: String = "world",
         audienceCharacterIds: String = "",
         aiResponsesEnabled: Boolean = true,
@@ -1831,6 +1832,7 @@ internal class WorldStore(context: Context) :
                 put("author_name", userName())
                 put("body", body.trim())
                 put("media_prompt", prompt.trim())
+                put("media_negative_prompt", negativePrompt.trim())
                 put("media_status", "pending")
                 put("media_description", prompt.trim())
                 put("media_source", "local_dream")

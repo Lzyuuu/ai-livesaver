@@ -187,6 +187,8 @@
     <string name="character_history_preserved">资料变化只影响未来；历史聊天、记忆与共同经历会保留。</string>
     <string name="attention_tier">关注层级</string>
     <string name="visual_identity">视觉身份</string>
+    <string name="visual_identity_prompt_summary">选择角色后，外观与服装会自动加入 Local Dream 提示词。</string>
+    <string name="no_character_identity">不绑定角色</string>
     <string name="visual_identity_summary">用于与场景组合生成稳定配图，不绑定具体模型。</string>
     <string name="fixed_appearance">固定外观特征</string>
     <string name="usual_clothing">常用服装</string>

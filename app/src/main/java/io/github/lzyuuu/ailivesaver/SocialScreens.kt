@@ -65,6 +65,13 @@ private data class SocialReplyDraft(
     val replyToName: String,
 )
 
+internal fun composeVisualPrompt(character: ResidentCharacter?, scene: String): String =
+    listOf(
+        character?.appearance,
+        character?.clothing,
+        scene,
+    ).map { it.orEmpty().trim() }.filter(String::isNotBlank).joinToString(", ")
+
 internal fun threadedComments(
     comments: List<SocialComment>,
 ): List<Pair<SocialComment, Int>> {
@@ -284,6 +291,7 @@ internal fun SocialScreen(
                         cachedImagePath,
                         suppliedDescription,
                         analyzeImage,
+                        negativePrompt,
                     ->
                     if (cachedImagePath != null) {
                         runCatching {
@@ -359,9 +367,10 @@ internal fun SocialScreen(
                         val postId = store.createMediaPost(
                             body,
                             prompt,
-                            audience,
-                            audienceCharacterIds,
-                            aiResponsesEnabled,
+                            negativePrompt = negativePrompt,
+                            audience = audience,
+                            audienceCharacterIds = audienceCharacterIds,
+                            aiResponsesEnabled = aiResponsesEnabled,
                         )
                         generationStatus = connecting
                         LocalDreamQueue.resume(
@@ -454,12 +463,14 @@ private fun PostComposer(
         String?,
         String,
         Boolean,
+        String,
     ) -> Unit,
 ) {
     val context = LocalContext.current
     var title by rememberSaveable { mutableStateOf("") }
     var body by rememberSaveable { mutableStateOf("") }
     var prompt by rememberSaveable { mutableStateOf("") }
+    var visualCharacterId by rememberSaveable { mutableStateOf<Long?>(null) }
     var cachedImagePath by rememberSaveable { mutableStateOf<String?>(null) }
     var mediaDescription by rememberSaveable { mutableStateOf("") }
     var analyzeImage by rememberSaveable { mutableStateOf(false) }
@@ -600,6 +611,34 @@ private fun PostComposer(
                     label = { Text(stringResource(R.string.allow_ai_responses)) },
                 )
                 if (cachedImagePath == null) {
+                    if (characters.isNotEmpty()) {
+                        Text(
+                            stringResource(R.string.visual_identity),
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        Text(
+                            stringResource(R.string.visual_identity_prompt_summary),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Row(
+                            modifier = Modifier.horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            FilterChip(
+                                selected = visualCharacterId == null,
+                                onClick = { visualCharacterId = null },
+                                label = { Text(stringResource(R.string.no_character_identity)) },
+                            )
+                            characters.forEach { character ->
+                                FilterChip(
+                                    selected = visualCharacterId == character.id,
+                                    onClick = { visualCharacterId = character.id },
+                                    label = { Text(character.name) },
+                                )
+                            }
+                        }
+                    }
                     OutlinedTextField(
                         value = prompt,
                         onValueChange = { prompt = it },
@@ -618,17 +657,22 @@ private fun PostComposer(
                     onPost(
                         title.trim(),
                         body.trim(),
-                        prompt.trim().ifBlank { null },
+                        composeVisualPrompt(
+                            characters.firstOrNull { it.id == visualCharacterId },
+                            prompt,
+                        ).ifBlank { null },
                         if (kind == "moment") audience else "world",
                         selectedCharacterIds.joinToString(","),
                         kind != "moment" || aiResponsesEnabled,
                         cachedImagePath,
                         mediaDescription.trim(),
                         analyzeImage,
+                        characters.firstOrNull { it.id == visualCharacterId }?.negativePrompt.orEmpty(),
                     )
                     title = ""
                     body = ""
                     prompt = ""
+                    visualCharacterId = null
                     cachedImagePath = null
                     mediaDescription = ""
                     analyzeImage = false
