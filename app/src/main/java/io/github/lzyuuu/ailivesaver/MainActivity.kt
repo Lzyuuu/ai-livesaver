@@ -236,6 +236,7 @@ private fun AiLivesaverApp(
         latestForum?.let { worldStore.comments(it.id).size } ?: 0
     }
     val worldEvents = remember(worldRevision) { worldStore.worldEvents() }
+    val allWorldEvents = remember(worldRevision) { worldStore.worldEvents(limit = null) }
     val chronicleEvents = remember(worldEvents) {
         worldEvents.filterNot { it.needsResponse && !it.seen }
     }
@@ -337,14 +338,14 @@ private fun AiLivesaverApp(
         } else if (showWorldChronicle) {
             WorldChronicleScreen(
                 contentPadding = padding,
-                events = worldEvents,
+                events = allWorldEvents,
                 onBack = { showWorldChronicle = false },
                 onMarkSeen = { event ->
                     worldStore.markWorldEventSeen(event.id)
                     worldRevision++
                 },
                 onMarkAllSeen = {
-                    worldEvents.filter { !it.seen }
+                    allWorldEvents.filter { !it.seen }
                         .forEach { worldStore.markWorldEventSeen(it.id) }
                     worldRevision++
                 },

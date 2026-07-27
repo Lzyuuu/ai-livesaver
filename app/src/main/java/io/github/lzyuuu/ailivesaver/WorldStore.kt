@@ -271,6 +271,9 @@ internal data class WorldEvent(
     val modelName: String = "",
 )
 
+internal fun worldEventLimitClause(limit: Int?): String =
+    limit?.let { "LIMIT ${it.coerceAtLeast(1)}" }.orEmpty()
+
 internal data class MemberWorldContext(
     val memberKey: String,
     val location: String,
@@ -2140,7 +2143,10 @@ internal class WorldStore(context: Context) :
         )
     }
 
-    fun worldEvents(needsResponseOnly: Boolean = false): List<WorldEvent> =
+    fun worldEvents(
+        needsResponseOnly: Boolean = false,
+        limit: Int? = 20,
+    ): List<WorldEvent> =
         readableDatabase.rawQuery(
             """
             SELECT world_events.id, world_events.kind, world_events.summary, world_events.actor_name,
@@ -2151,7 +2157,7 @@ internal class WorldStore(context: Context) :
             LEFT JOIN social_posts ON social_posts.id = world_events.source_post_id
             ${if (needsResponseOnly) "WHERE world_events.needs_response = 1 AND world_events.seen = 0" else ""}
             ORDER BY world_events.created_at DESC
-            LIMIT 20
+            ${worldEventLimitClause(limit)}
             """.trimIndent(),
             null,
         ).use { cursor ->
