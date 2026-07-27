@@ -48,6 +48,7 @@
     <string name="character_name">角色名字</string>
     <string name="character_persona">角色身份与个性</string>
     <string name="character_persona_hint">描述相识背景、性格、表达方式和与你的关系；至少写清楚角色是谁。</string>
+    <string name="first_relationship_card_loaded">已载入角色卡：%1$s；创建后会保留首条示例消息和 lore。</string>
     <string name="complete_world_fields">请完整填写你的名字、角色名字和角色设定</string>
     <string name="create_world">创建第一段关系</string>
     <string name="private_conversation">当前时间线 · 私密对话</string>

@@ -886,7 +886,12 @@ internal class WorldStore(context: Context) :
 
     fun userName(): String = identity().name
 
-    fun createWorld(userName: String, characterName: String, persona: String): ResidentCharacter {
+    fun createWorld(
+        userName: String,
+        characterName: String,
+        persona: String,
+        cardJson: String = "",
+    ): ResidentCharacter {
         return writableDatabase.run {
             beginTransaction()
             try {
@@ -902,6 +907,7 @@ internal class WorldStore(context: Context) :
                 val values = ContentValues().apply {
                     put("name", characterName.trim())
                     put("persona", persona.trim())
+                    put("card_json", cardJson)
                     put("is_primary", 1)
                     put("attention_tier", "special_focus")
                     put("created_at", System.currentTimeMillis())
@@ -914,6 +920,7 @@ internal class WorldStore(context: Context) :
                     characterName.trim(),
                     persona.trim(),
                     attentionTier = "special_focus",
+                    cardJson = cardJson,
                 )
             } finally {
                 endTransaction()

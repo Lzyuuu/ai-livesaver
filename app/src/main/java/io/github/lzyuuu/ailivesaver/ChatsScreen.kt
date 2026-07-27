@@ -1,6 +1,8 @@
 package io.github.lzyuuu.ailivesaver
 
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -120,8 +122,27 @@ private fun FirstRelationshipScreen(
     var userName by rememberSaveable { mutableStateOf("") }
     var characterName by rememberSaveable { mutableStateOf("") }
     var persona by rememberSaveable { mutableStateOf("") }
+    var importedCard by remember { mutableStateOf<ImportedCharacterCard?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     val completeFields = stringResource(R.string.complete_world_fields)
+    val importFailed = stringResource(R.string.character_card_import_failed)
+    val importLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        runCatching {
+            val bytes = context.contentResolver.openInputStream(uri)?.use(CharacterCardV2::read)
+                ?: kotlin.error("无法读取文件")
+            CharacterCardV2.parse(bytes)
+        }.onSuccess { card ->
+            importedCard = card
+            characterName = card.name
+            persona = card.persona
+            error = null
+        }.onFailure {
+            error = "$importFailed：${it.message.orEmpty()}"
+        }
+    }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -193,12 +214,39 @@ private fun FirstRelationshipScreen(
                 )
             }
             item {
+                TextButton(
+                    onClick = { importLauncher.launch(arrayOf("application/json", "image/png")) },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(stringResource(R.string.import_character_card))
+                }
+                importedCard?.let { card ->
+                    Text(
+                        stringResource(R.string.first_relationship_card_loaded, card.name),
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
+            }
+            item {
                 Button(
                     onClick = {
                         if (userName.isBlank() || characterName.isBlank() || persona.isBlank()) {
                             error = completeFields
                         } else {
-                            store.createWorld(userName, characterName, persona)
+                            val character = store.createWorld(
+                                userName,
+                                characterName,
+                                persona,
+                                importedCard?.rawJson.orEmpty(),
+                            )
+                            importedCard?.let { card ->
+                                if (card.firstMessage.isNotBlank()) {
+                                    store.addMessage(character.id, "assistant", card.firstMessage)
+                                }
+                                card.lore.forEach { lore ->
+                                    store.addCharacterCognition(character.id, lore)
+                                }
+                            }
                             onChanged()
                             WorldEngine.generate(context) { if (it) onChanged() }
                         }
