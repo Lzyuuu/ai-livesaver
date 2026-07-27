@@ -1703,7 +1703,15 @@ internal class WorldStore(context: Context) :
         modelName: String = "",
         worldEventKind: String? = null,
         eventNeedsResponse: Boolean = authorKind == "resident",
+        mediaPrompt: String? = null,
+        mediaNegativePrompt: String = "",
+        mediaSteps: Int = 20,
+        mediaCfg: Double = 7.5,
+        mediaScheduler: String = "dpm",
+        mediaWidth: Int = 512,
+        mediaHeight: Int = 512,
     ): Long {
+        val cleanMediaPrompt = mediaPrompt.orEmpty().trim()
         val postId = writableDatabase.insertOrThrow(
             "social_posts",
             null,
@@ -1720,17 +1728,35 @@ internal class WorldStore(context: Context) :
                 put("ai_responses_enabled", if (aiResponsesEnabled) 1 else 0)
                 put("provider_name", providerName)
                 put("model_name", modelName)
+                put("media_status", if (cleanMediaPrompt.isBlank()) "none" else "pending")
+                put("media_negative_prompt", mediaNegativePrompt.trim())
+                put("media_steps", mediaSteps.coerceIn(1, 100))
+                put("media_cfg", mediaCfg.coerceIn(0.1, 30.0))
+                put("media_scheduler", mediaScheduler.trim().ifBlank { "dpm" })
+                put("media_width", mediaWidth.coerceIn(8, 2048))
+                put("media_height", mediaHeight.coerceIn(8, 2048))
+                if (cleanMediaPrompt.isBlank()) {
+                    putNull("media_prompt")
+                    put("media_description", "")
+                    put("media_source", "")
+                } else {
+                    put("media_prompt", cleanMediaPrompt)
+                    put("media_description", cleanMediaPrompt)
+                    put("media_source", "local_dream")
+                }
             },
         )
-        addWorldEvent(
-            kind = worldEventKind ?: if (kind == "moment") "moment" else "commons",
-            summary = title.ifBlank { body }.take(120),
-            actorName = authorName,
-            needsResponse = eventNeedsResponse,
-            sourcePostId = postId,
-            providerName = providerName,
-            modelName = modelName,
-        )
+        if (cleanMediaPrompt.isBlank()) {
+            addWorldEvent(
+                kind = worldEventKind ?: if (kind == "moment") "moment" else "commons",
+                summary = title.ifBlank { body }.take(120),
+                actorName = authorName,
+                needsResponse = eventNeedsResponse,
+                sourcePostId = postId,
+                providerName = providerName,
+                modelName = modelName,
+            )
+        }
         return postId
     }
 
@@ -2399,22 +2425,27 @@ internal class WorldStore(context: Context) :
     fun markMediaReady(postId: Long, path: String, seed: Long) {
         var eventSummary = ""
         var actorName = ""
+        var providerName = ""
+        var modelName = ""
         writableDatabase.run {
             beginTransaction()
             try {
                 val post = rawQuery(
-                    "SELECT media_prompt, body, author_name FROM social_posts WHERE id = ?",
+                    "SELECT media_prompt, body, author_name, provider_name, model_name " +
+                        "FROM social_posts WHERE id = ?",
                     arrayOf(postId.toString()),
                 ).use { cursor ->
                     if (cursor.moveToFirst()) {
-                        Triple(cursor.getString(0), cursor.getString(1), cursor.getString(2))
+                        eventSummary = cursor.getString(1)
+                        actorName = cursor.getString(2)
+                        providerName = cursor.getString(3)
+                        modelName = cursor.getString(4)
+                        cursor.getString(0)
                     } else {
-                        Triple("", "", "")
+                        ""
                     }
                 }
-                val prompt = post.first
-                eventSummary = post.second
-                actorName = post.third
+                val prompt = post
                 update(
                     "social_posts",
                     ContentValues().apply {
@@ -2451,6 +2482,8 @@ internal class WorldStore(context: Context) :
                 actorName,
                 needsResponse = false,
                 sourcePostId = postId,
+                providerName = providerName,
+                modelName = modelName,
             )
         }
     }

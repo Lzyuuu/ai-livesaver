@@ -85,4 +85,13 @@ class WorldTurnTest {
         assertEquals(false, isBackedUpWorldSetting("budget_used"))
         assertEquals(false, isBackedUpWorldSetting("character_bad_notifications"))
     }
+
+    @Test
+    fun attachesImagesOnlyToVisualResidentPosts() {
+        assertTrue(shouldAttachWorldImage(2, "post", hasVisualIdentity = true))
+        assertTrue(shouldAttachWorldImage(6, "interaction", hasVisualIdentity = true))
+        assertFalse(shouldAttachWorldImage(1, "post", hasVisualIdentity = true))
+        assertFalse(shouldAttachWorldImage(2, "message", hasVisualIdentity = true))
+        assertFalse(shouldAttachWorldImage(2, "post", hasVisualIdentity = false))
+    }
 }

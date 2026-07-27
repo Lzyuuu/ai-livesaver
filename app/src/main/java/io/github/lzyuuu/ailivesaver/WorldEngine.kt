@@ -42,6 +42,15 @@ internal fun chooseWorldTurn(
     else -> "none"
 }
 
+internal fun shouldAttachWorldImage(
+    eventCount: Int,
+    turn: String,
+    hasVisualIdentity: Boolean,
+): Boolean = eventCount >= 0 &&
+    eventCount % 4 == 2 &&
+    turn in setOf("post", "interaction") &&
+    hasVisualIdentity
+
 internal fun budgetUsedForDay(storedDay: String?, currentDay: String, used: Int): Int =
     if (storedDay == currentDay) used else 0
 
@@ -437,7 +446,13 @@ internal object WorldEngine {
                 "Write one natural short social post for ${store.userName()} to discover later. " +
                     "Keep the relationship central without sounding needy. Stay under 80 Chinese characters."
         }
+        val attachWorldImage = shouldAttachWorldImage(
+            eventCount,
+            turn,
+            actor.appearance.isNotBlank() || actor.clothing.isNotBlank(),
+        )
         ProviderTextClient.completeStructured(config, system, prompt) { result ->
+            var mediaQueued = false
             val created = runCatching {
                 result.fold(
                     onSuccess = { response ->
@@ -491,7 +506,13 @@ internal object WorldEngine {
                                     "character_interaction"
                                 },
                                 eventNeedsResponse = false,
-                            )
+                                mediaPrompt = if (attachWorldImage) {
+                                    worldImagePrompt(context, actor, body)
+                                } else {
+                                    null
+                                },
+                                mediaNegativePrompt = actor.negativePrompt,
+                            ).also { mediaQueued = attachWorldImage }
                             messageTurn -> {
                                 store.addMessage(actor.id, "assistant", body)
                                 store.addWorldEvent(
@@ -514,7 +535,13 @@ internal object WorldEngine {
                                 providerName = usedConfig.preset.displayName,
                                 modelName = usedConfig.model,
                                 worldEventKind = if (reconstructed) "reconstructed_moment" else "moment",
-                            )
+                                mediaPrompt = if (attachWorldImage) {
+                                    worldImagePrompt(context, actor, body)
+                                } else {
+                                    null
+                                },
+                                mediaNegativePrompt = actor.negativePrompt,
+                            ).also { mediaQueued = attachWorldImage }
                         }
                         consumeBudget(context)
                         recordSuccess(context)
@@ -535,10 +562,17 @@ internal object WorldEngine {
             }
             store.close()
             generationRunning.set(false)
+            if (created && mediaQueued) LocalDreamQueue.resume(context)
             callback(created)
         }
         return true
     }
+
+    private fun worldImagePrompt(context: Context, actor: ResidentCharacter, scene: String): String =
+        listOf(actor.appearance, actor.clothing, globalStyle(context), scene)
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+            .joinToString(", ")
 
     fun respondToPost(
         context: Context,
