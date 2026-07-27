@@ -412,6 +412,8 @@ internal object LocalDreamClient {
 internal object LocalDreamQueue {
     private val running = AtomicBoolean(false)
 
+    fun isRunning(): Boolean = running.get()
+
     fun resume(
         context: Context,
         onProgress: (Long, Int, Int) -> Unit = { _, _, _ -> },

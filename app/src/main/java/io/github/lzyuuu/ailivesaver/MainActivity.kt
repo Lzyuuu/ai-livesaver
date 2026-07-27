@@ -170,7 +170,9 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         cleanupTemporaryCache(this)
-        runCatching { WorldStore(this).use { it.pruneOrphanMedia() } }
+        if (!LocalDreamQueue.isRunning()) {
+            runCatching { WorldStore(this).use { it.pruneOrphanMedia() } }
+        }
     }
 }
 
