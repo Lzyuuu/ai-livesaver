@@ -31,6 +31,24 @@ internal data class CharacterTurningPoint(
     val createdAt: Long,
 )
 
+internal data class RelationshipState(
+    val label: String,
+    val summary: String,
+    val sourceMessageId: Long?,
+    val createdAt: Long,
+)
+
+internal fun nextRelationship(
+    current: RelationshipState,
+    sharedPersonalFact: Boolean,
+): Pair<String, String>? = when {
+    current.createdAt == 0L ->
+        "开始交谈" to "你主动开启了一段只属于你们的对话。"
+    sharedPersonalFact && current.label != "更了解彼此" ->
+        "更了解彼此" to "你分享了一件值得长期记住的事。"
+    else -> null
+}
+
 internal data class ChatMessage(
     val id: Long,
     val characterId: Long,
@@ -71,7 +89,7 @@ internal data class SocialComment(
 )
 
 internal class WorldStore(context: Context) :
-    SQLiteOpenHelper(context, "world.db", null, 7) {
+    SQLiteOpenHelper(context, "world.db", null, 8) {
 
     override fun onCreate(database: SQLiteDatabase) {
         database.execSQL(
@@ -85,9 +103,6 @@ internal class WorldStore(context: Context) :
             )
             """.trimIndent(),
         )
-        createTurningPointsTable(database)
-        createSocialTables(database)
-        createMediaVersionsTable(database)
         database.execSQL(
             """
             CREATE TABLE characters (
@@ -129,6 +144,10 @@ internal class WorldStore(context: Context) :
             )
             """.trimIndent(),
         )
+        createTurningPointsTable(database)
+        createRelationshipEventsTable(database)
+        createSocialTables(database)
+        createMediaVersionsTable(database)
     }
 
     override fun onConfigure(database: SQLiteDatabase) {
@@ -183,6 +202,7 @@ internal class WorldStore(context: Context) :
             )
         }
         if (oldVersion < 7) createTurningPointsTable(database)
+        if (oldVersion < 8) createRelationshipEventsTable(database)
     }
 
     private fun createSocialTables(database: SQLiteDatabase) {
@@ -238,6 +258,21 @@ internal class WorldStore(context: Context) :
                 character_id INTEGER NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
                 previous_persona TEXT NOT NULL,
                 new_persona TEXT NOT NULL,
+                created_at INTEGER NOT NULL
+            )
+            """.trimIndent(),
+        )
+    }
+
+    private fun createRelationshipEventsTable(database: SQLiteDatabase) {
+        database.execSQL(
+            """
+            CREATE TABLE relationship_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                character_id INTEGER NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+                label TEXT NOT NULL,
+                summary TEXT NOT NULL,
+                source_message_id INTEGER REFERENCES messages(id) ON DELETE SET NULL,
                 created_at INTEGER NOT NULL
             )
             """.trimIndent(),
@@ -425,6 +460,49 @@ internal class WorldStore(context: Context) :
                 }
             }
         }
+
+    fun relationship(characterId: Long): RelationshipState =
+        readableDatabase.rawQuery(
+            """
+            SELECT label, summary, source_message_id, created_at
+            FROM relationship_events
+            WHERE character_id = ?
+            ORDER BY created_at DESC, id DESC
+            LIMIT 1
+            """.trimIndent(),
+            arrayOf(characterId.toString()),
+        ).use { cursor ->
+            if (cursor.moveToFirst()) {
+                RelationshipState(
+                    cursor.getString(0),
+                    cursor.getString(1),
+                    cursor.getLong(2).takeUnless { cursor.isNull(2) },
+                    cursor.getLong(3),
+                )
+            } else {
+                RelationshipState("刚认识", "你们的共同经历才刚刚开始。", null, 0)
+            }
+        }
+
+    fun recordConversationRelationship(
+        characterId: Long,
+        sourceMessageId: Long,
+        sharedPersonalFact: Boolean,
+    ) {
+        val current = relationship(characterId)
+        val next = nextRelationship(current, sharedPersonalFact) ?: return
+        writableDatabase.insertOrThrow(
+            "relationship_events",
+            null,
+            ContentValues().apply {
+                put("character_id", characterId)
+                put("label", next.first)
+                put("summary", next.second)
+                put("source_message_id", sourceMessageId)
+                put("created_at", System.currentTimeMillis())
+            },
+        )
+    }
 
     fun setCharacterActive(id: Long, active: Boolean) {
         writableDatabase.update(

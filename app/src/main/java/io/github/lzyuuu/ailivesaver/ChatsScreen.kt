@@ -186,6 +186,7 @@ private fun ConversationScreen(
     val provider = remember { ProviderStore(context) }
     val messages = remember(revision) { store.messages(character.id) }
     val memories = remember(revision) { store.memories(character.id) }
+    val relationship = remember(revision) { store.relationship(character.id) }
     val listState = rememberLazyListState()
     var input by rememberSaveable { mutableStateOf("") }
     var sending by remember { mutableStateOf(false) }
@@ -258,7 +259,7 @@ private fun ConversationScreen(
                         fontWeight = FontWeight.Bold,
                     )
                     Text(
-                        stringResource(R.string.private_conversation),
+                        "${relationship.label} · ${stringResource(R.string.private_conversation)}",
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
@@ -315,9 +316,15 @@ private fun ConversationScreen(
                     input = ""
                     error = null
                     val userMessage = store.addMessage(character.id, "user", body)
-                    MemoryExtractor.fromUserMessage(body)?.let {
+                    val extractedMemory = MemoryExtractor.fromUserMessage(body)
+                    extractedMemory?.let {
                         store.remember(character.id, userMessage.id, it)
                     }
+                    store.recordConversationRelationship(
+                        character.id,
+                        userMessage.id,
+                        extractedMemory != null,
+                    )
                     sending = true
                     onChanged()
                     ProviderChatClient.complete(

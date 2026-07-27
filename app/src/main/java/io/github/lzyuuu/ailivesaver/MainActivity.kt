@@ -134,6 +134,9 @@ private fun AiLivesaverApp() {
     var showCharacters by rememberSaveable { mutableStateOf(false) }
     val destination = Destination.valueOf(destinationName)
     val primaryCharacter = remember(worldRevision) { worldStore.primaryCharacter() }
+    val primaryRelationship = remember(worldRevision, primaryCharacter?.id) {
+        primaryCharacter?.let { worldStore.relationship(it.id) }
+    }
     val characters = remember(worldRevision) { worldStore.characters(includeDeparted = false) }
     val latestMoment = remember(worldRevision) { worldStore.posts("moment").firstOrNull() }
     val latestForum = remember(worldRevision) { worldStore.posts("forum").firstOrNull() }
@@ -228,6 +231,7 @@ private fun AiLivesaverApp() {
                 Destination.World -> WorldScreen(
                     contentPadding = padding,
                     character = primaryCharacter,
+                    relationship = primaryRelationship,
                     characters = characters,
                     latestMoment = latestMoment,
                     latestForum = latestForum,
@@ -277,6 +281,7 @@ private fun AiLivesaverApp() {
 private fun WorldScreen(
     contentPadding: PaddingValues,
     character: ResidentCharacter?,
+    relationship: RelationshipState?,
     characters: List<ResidentCharacter>,
     latestMoment: SocialPost?,
     latestForum: SocialPost?,
@@ -341,7 +346,7 @@ private fun WorldScreen(
                 }
             }
         } else {
-            item { RelationshipHero(character, onOpenChat) }
+            item { RelationshipHero(character, relationship, onOpenChat) }
         }
         item {
             SectionHeader(
@@ -434,6 +439,7 @@ private fun WorldScreen(
 @Composable
 private fun RelationshipHero(
     character: ResidentCharacter,
+    relationship: RelationshipState?,
     onOpenChat: () -> Unit,
 ) {
     Card(
@@ -465,12 +471,19 @@ private fun RelationshipHero(
                 shape = RoundedCornerShape(99.dp),
             ) {
                 Text(
-                    text = "♥  ${stringResource(R.string.root_relationship)}",
+                    text = "♥  ${relationship?.label ?: stringResource(R.string.root_relationship)}",
                     modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
                     style = MaterialTheme.typography.labelLarge,
                 )
             }
             Spacer(Modifier.height(18.dp))
+            relationship?.let {
+                Text(
+                    it.summary,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.72f),
+                )
+                Spacer(Modifier.height(12.dp))
+            }
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
