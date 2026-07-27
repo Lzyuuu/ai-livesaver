@@ -284,6 +284,7 @@ private fun AiLivesaverApp() {
                     },
                     onOpenMoments = { destinationName = Destination.Moments.name },
                     onOpenCommons = { destinationName = Destination.Commons.name },
+                    onOpenQueue = { showLocalDream = true },
                     onManageCircle = { showCharacters = true },
                     onOpenEvent = { event ->
                         worldStore.markWorldEventSeen(event.id)
@@ -352,6 +353,7 @@ private fun WorldScreen(
     onOpenChat: () -> Unit,
     onOpenMoments: () -> Unit,
     onOpenCommons: () -> Unit,
+    onOpenQueue: () -> Unit,
     onManageCircle: () -> Unit,
     onOpenEvent: (WorldEvent) -> Unit,
 ) {
@@ -413,7 +415,7 @@ private fun WorldScreen(
                 }
             }
         } else {
-            item { RelationshipHero(character, relationship, onOpenChat) }
+            item { RelationshipHero(character, relationship, onOpenChat, onOpenMoments) }
         }
         item {
             SectionHeader(
@@ -422,7 +424,7 @@ private fun WorldScreen(
                 onAction = onManageCircle,
             )
             Spacer(Modifier.height(12.dp))
-            CircleStrip(characters)
+            CircleStrip(characters, onAdd = onManageCircle)
         }
         item {
             WorldSection(
@@ -515,6 +517,7 @@ private fun WorldScreen(
             WorldSection(
                 title = stringResource(R.string.creation_queue),
                 action = stringResource(R.string.queue_count, queueCount),
+                onAction = onOpenQueue,
             ) {
                 Text(
                     if (queueCount == 0) {
@@ -534,6 +537,7 @@ private fun RelationshipHero(
     character: ResidentCharacter,
     relationship: RelationshipState?,
     onOpenChat: () -> Unit,
+    onOpenUpdates: () -> Unit,
 ) {
     Card(
         colors = CardDefaults.cardColors(
@@ -588,7 +592,7 @@ private fun RelationshipHero(
                     Text(stringResource(R.string.continue_chat))
                 }
                 TextButton(
-                    onClick = {},
+                    onClick = onOpenUpdates,
                     modifier = Modifier.weight(1f),
                 ) {
                     Text(stringResource(R.string.view_updates))
@@ -599,7 +603,10 @@ private fun RelationshipHero(
 }
 
 @Composable
-private fun CircleStrip(characters: List<ResidentCharacter>) {
+private fun CircleStrip(
+    characters: List<ResidentCharacter>,
+    onAdd: () -> Unit,
+) {
     val addLabel = stringResource(R.string.add)
     val people = buildList {
         characters.forEach { add(it.name to it.name.take(1).uppercase()) }
@@ -609,8 +616,11 @@ private fun CircleStrip(characters: List<ResidentCharacter>) {
         modifier = Modifier.horizontalScroll(rememberScrollState()),
         horizontalArrangement = Arrangement.spacedBy(18.dp),
     ) {
-        people.forEach { (name, initial) ->
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        people.forEachIndexed { index, (name, initial) ->
+            Column(
+                modifier = Modifier.clickable(enabled = index == people.lastIndex, onClick = onAdd),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
                 Avatar(initial, 58.dp)
                 Spacer(Modifier.height(6.dp))
                 Text(name, style = MaterialTheme.typography.labelMedium)
