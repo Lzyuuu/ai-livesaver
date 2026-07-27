@@ -8,6 +8,7 @@ import android.os.Handler
 import android.os.Looper
 import android.os.StatFs
 import android.util.Base64
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.io.IOException
@@ -22,6 +23,65 @@ internal data class LocalDreamImage(
     val path: String,
     val seed: Long,
 )
+
+internal data class LocalDreamImportParameters(
+    val prompt: String = "",
+    val negativePrompt: String = "",
+    val seed: Long? = null,
+    val steps: Int? = null,
+    val cfg: Double? = null,
+    val scheduler: String = "",
+    val width: Int? = null,
+    val height: Int? = null,
+)
+
+internal fun parseLocalDreamParameters(raw: String): LocalDreamImportParameters {
+    val text = raw.trim().removePrefix("```json").removePrefix("```").removeSuffix("```").trim()
+    val json = runCatching { JSONObject(text) }.getOrNull()
+    fun value(vararg aliases: String): String {
+        val candidate = json?.let { findJsonValue(it, aliases.map(String::lowercase).toSet()) }
+        if (candidate != null) return candidate.toString().trim().trim('"')
+        return aliases.asSequence()
+            .map { key ->
+                Regex("(?im)^\\s*${key.replace("_", "[ _]")}\\s*[:=]\\s*(.+)$")
+                    .find(text)?.groupValues?.getOrNull(1)?.trim()?.trim('"', ',')
+            }
+            .filterNotNull()
+            .firstOrNull()
+            .orEmpty()
+    }
+    fun number(vararg aliases: String): String = value(*aliases).substringBefore(" ").trim()
+    return LocalDreamImportParameters(
+        prompt = value("prompt", "positive_prompt", "positive prompt", "text_prompt"),
+        negativePrompt = value("negative_prompt", "negative prompt", "negative"),
+        seed = number("seed").toLongOrNull(),
+        steps = number("steps", "step_count").toIntOrNull(),
+        cfg = number("cfg", "cfg_scale", "guidance_scale").toDoubleOrNull(),
+        scheduler = value("scheduler", "sampler"),
+        width = number("width").toIntOrNull(),
+        height = number("height").toIntOrNull(),
+    )
+}
+
+private fun findJsonValue(value: JSONObject, aliases: Set<String>, depth: Int = 0): Any? {
+    if (depth > 4) return null
+    val keys = value.keys()
+    while (keys.hasNext()) {
+        val key = keys.next()
+        val candidate = value.opt(key)
+        if (key.lowercase() in aliases && candidate != JSONObject.NULL) return candidate
+        when (candidate) {
+            is JSONObject -> findJsonValue(candidate, aliases, depth + 1)?.let { return it }
+            is JSONArray -> for (index in 0 until candidate.length()) {
+                val nested = candidate.opt(index)
+                if (nested is JSONObject) {
+                    findJsonValue(nested, aliases, depth + 1)?.let { return it }
+                }
+            }
+        }
+    }
+    return null
+}
 
 internal fun storageAllowsGeneration(availableBytes: Long): Boolean =
     availableBytes >= 256L * 1024 * 1024

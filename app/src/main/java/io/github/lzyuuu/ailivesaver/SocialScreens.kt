@@ -292,18 +292,29 @@ internal fun SocialScreen(
                         suppliedDescription,
                         analyzeImage,
                         negativePrompt,
+                        localDreamParameters,
                     ->
                     if (cachedImagePath != null) {
                         runCatching {
                             persistImportedImage(context, cachedImagePath)
                         }.onSuccess { path ->
+                            val imported = parseLocalDreamParameters(localDreamParameters)
+                            val description = suppliedDescription.ifBlank { imported.prompt }
                             val postId = store.createImportedMediaPost(
                                 body,
                                 path,
-                                suppliedDescription,
-                                audience,
-                                audienceCharacterIds,
-                                aiResponsesEnabled,
+                                description = description,
+                                audience = audience,
+                                audienceCharacterIds = audienceCharacterIds,
+                                aiResponsesEnabled = aiResponsesEnabled,
+                                prompt = imported.prompt,
+                                negativePrompt = imported.negativePrompt,
+                                seed = imported.seed ?: 0,
+                                steps = imported.steps ?: 20,
+                                cfg = imported.cfg ?: 7.5,
+                                scheduler = imported.scheduler.ifBlank { "dpm" },
+                                width = imported.width ?: 512,
+                                height = imported.height ?: 512,
                             )
                             fun respond(description: String) {
                                 if (aiResponsesEnabled && (body.isNotBlank() || description.isNotBlank())) {
@@ -322,7 +333,7 @@ internal fun SocialScreen(
                                     ) { onChanged() }
                                 }
                             }
-                            if (analyzeImage && suppliedDescription.isBlank()) {
+                            if (analyzeImage && description.isBlank()) {
                                 val configStore = ProviderStore(context)
                                 val vision = configStore.loadVision() ?: configStore.load()
                                 ProviderVisionClient.describe(vision, path) { result ->
@@ -337,7 +348,7 @@ internal fun SocialScreen(
                                     onChanged()
                                 }
                             } else {
-                                respond(suppliedDescription)
+                                respond(description)
                             }
                         }.onFailure {
                             generationStatus = "$generationFailed：${it.message.orEmpty()}"
@@ -464,6 +475,7 @@ private fun PostComposer(
         String,
         Boolean,
         String,
+        String,
     ) -> Unit,
 ) {
     val context = LocalContext.current
@@ -473,6 +485,7 @@ private fun PostComposer(
     var visualCharacterId by rememberSaveable { mutableStateOf<Long?>(null) }
     var cachedImagePath by rememberSaveable { mutableStateOf<String?>(null) }
     var mediaDescription by rememberSaveable { mutableStateOf("") }
+    var localDreamParameters by rememberSaveable { mutableStateOf("") }
     var analyzeImage by rememberSaveable { mutableStateOf(false) }
     var imageStatus by remember { mutableStateOf<String?>(null) }
     var audience by rememberSaveable { mutableStateOf("world") }
@@ -547,6 +560,17 @@ private fun PostComposer(
                 }
                 imageStatus?.let { StatusCard(it) }
                 if (cachedImagePath != null) {
+                    OutlinedTextField(
+                        value = localDreamParameters,
+                        onValueChange = { localDreamParameters = it },
+                        label = { Text(stringResource(R.string.local_dream_parameters_optional)) },
+                        supportingText = {
+                            Text(stringResource(R.string.local_dream_parameters_summary))
+                        },
+                        minLines = 3,
+                        maxLines = 8,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
                     OutlinedTextField(
                         value = mediaDescription,
                         onValueChange = { mediaDescription = it },
@@ -668,6 +692,7 @@ private fun PostComposer(
                         mediaDescription.trim(),
                         analyzeImage,
                         characters.firstOrNull { it.id == visualCharacterId }?.negativePrompt.orEmpty(),
+                        localDreamParameters,
                     )
                     title = ""
                     body = ""
@@ -675,6 +700,7 @@ private fun PostComposer(
                     visualCharacterId = null
                     cachedImagePath = null
                     mediaDescription = ""
+                    localDreamParameters = ""
                     analyzeImage = false
                     imageStatus = null
                 },

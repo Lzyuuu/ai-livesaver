@@ -1852,8 +1852,17 @@ internal class WorldStore(context: Context) :
         audience: String,
         audienceCharacterIds: String,
         aiResponsesEnabled: Boolean,
+        prompt: String? = null,
+        negativePrompt: String = "",
+        seed: Long = 0,
+        steps: Int = 20,
+        cfg: Double = 7.5,
+        scheduler: String = "dpm",
+        width: Int = 512,
+        height: Int = 512,
     ): Long {
         val createdAt = System.currentTimeMillis()
+        val mediaPrompt = prompt.orEmpty().trim().ifBlank { description.trim() }
         val postId = writableDatabase.insertOrThrow(
             "social_posts",
             null,
@@ -1864,8 +1873,15 @@ internal class WorldStore(context: Context) :
                 put("media_path", path)
                 put("media_status", "ready")
                 put("media_description", description.trim())
+                put("media_negative_prompt", negativePrompt.trim())
+                put("media_seed", seed)
+                put("media_steps", steps)
+                put("media_cfg", cfg)
+                put("media_scheduler", scheduler.trim())
+                put("media_width", width)
+                put("media_height", height)
                 put("media_source", "user")
-                if (description.isNotBlank()) put("media_prompt", description.trim())
+                if (mediaPrompt.isNotBlank()) put("media_prompt", mediaPrompt)
                 put("created_at", createdAt)
                 put("author_kind", "user")
                 put("audience", audience)
@@ -1879,8 +1895,8 @@ internal class WorldStore(context: Context) :
             ContentValues().apply {
                 put("post_id", postId)
                 put("path", path)
-                put("prompt", description.trim())
-                put("seed", 0)
+                put("prompt", mediaPrompt)
+                put("seed", seed)
                 put("created_at", createdAt)
             },
         )

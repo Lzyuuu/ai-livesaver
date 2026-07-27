@@ -152,6 +152,8 @@
     <string name="image_ready_to_post">图片已选择，只会保存在当前世界。</string>
     <string name="image_import_failed">无法导入图片</string>
     <string name="media_description_optional">图片描述或 Local Dream 提示词（可留空）</string>
+    <string name="local_dream_parameters_optional">Local Dream 参数（可选）</string>
+    <string name="local_dream_parameters_summary">可粘贴 JSON 或 key: value 参数；会恢复提示词、负面提示词、种子和尺寸。</string>
     <string name="media_description_privacy">只供角色理解，不公开展示。已有描述时不会调用视觉模型；留空且主动授权后才会发送这一张图片。</string>
     <string name="allow_vision_analysis">允许视觉模型理解这一张图片</string>
     <string name="vision_analysis_failed">视觉理解失败，图片仍已保存在本地</string>
