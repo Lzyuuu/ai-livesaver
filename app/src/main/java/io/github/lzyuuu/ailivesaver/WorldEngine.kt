@@ -74,6 +74,12 @@ internal fun shouldQueueSocialResponse(
     existingJobId: Long?,
 ): Boolean = hasTargetCharacter && !providerReady && existingJobId == null
 
+internal fun canRespondToPost(
+    providerReady: Boolean,
+    budgetAvailable: Boolean,
+    taskPaused: Boolean,
+): Boolean = providerReady && budgetAvailable && !taskPaused
+
 private val BASE_WORLD_SETTING_KEYS = setOf(
     "enabled",
     "activity",
@@ -533,7 +539,6 @@ internal object WorldEngine {
         queuedJobId: Long? = null,
         callback: (Boolean) -> Unit,
     ): Boolean {
-        if (!hasBudget(context) || taskPaused(context)) return false
         val store = WorldStore(context)
         val allowedIds = audienceCharacterIds
             .split(",")
@@ -544,8 +549,19 @@ internal object WorldEngine {
         }
         val config = ProviderStore(context).loadFor(ProviderTask.World)
         val providerReady = config.supports(ProviderCapability.Structured)
-        if (character == null || !providerReady) {
-            if (shouldQueueSocialResponse(character != null, providerReady, queuedJobId)) {
+        val responseReady = canRespondToPost(
+            providerReady,
+            budgetAvailable = hasBudget(context),
+            taskPaused = taskPaused(context),
+        )
+        if (character == null) {
+            queuedJobId?.let(store::removeSocialResponse)
+            store.close()
+            callback(false)
+            return true
+        }
+        if (!responseReady) {
+            if (shouldQueueSocialResponse(true, responseReady, queuedJobId)) {
                 store.enqueueSocialResponse(
                     postId,
                     kind,
