@@ -57,6 +57,7 @@ internal data class RuntimeSnapshot(
     val queuedMedia: Int,
     val availableStorage: Long,
     val notificationsEnabled: Boolean,
+    val localDreamStats: LocalDreamRunStats?,
 )
 
 internal object RuntimeDiagnostics {
@@ -84,6 +85,7 @@ internal object RuntimeDiagnostics {
             queuedMedia = queue,
             availableStorage = StatFs(context.filesDir.path).availableBytes,
             notificationsEnabled = notifications,
+            localDreamStats = LocalDreamStatsStore.load(context),
         )
     }
 
@@ -109,6 +111,11 @@ internal object RuntimeDiagnostics {
         appendLine("queued_media=${snapshot.queuedMedia}")
         appendLine("available_storage_bytes=${snapshot.availableStorage}")
         appendLine("notifications_enabled=${snapshot.notificationsEnabled}")
+        snapshot.localDreamStats?.let { stats ->
+            appendLine("local_dream_generation_ms=${stats.generationTimeMs}")
+            appendLine("local_dream_first_step_ms=${stats.firstStepTimeMs ?: "unknown"}")
+            appendLine("local_dream_image=${stats.width}x${stats.height}")
+        } ?: appendLine("local_dream_last_run=none")
         if (snapshot.lastFailure.isNotBlank()) appendLine("last_failure=${snapshot.lastFailure}")
     }
 
@@ -275,6 +282,26 @@ internal fun DiagnosticsScreen(
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     Text(stringResource(R.string.runtime_local_dream), fontWeight = FontWeight.Bold)
+                    val stats = snapshot.localDreamStats
+                    val firstStep = stats?.firstStepTimeMs?.let { "$it ms" }
+                        ?: stringResource(R.string.runtime_local_dream_first_step_unknown)
+                    DiagnosticRow(
+                        stringResource(R.string.runtime_local_dream_last_run),
+                        stats?.let {
+                            stringResource(
+                                R.string.runtime_local_dream_stats,
+                                it.generationTimeMs,
+                                firstStep,
+                                it.width,
+                                it.height,
+                            )
+                        } ?: stringResource(R.string.runtime_local_dream_no_run),
+                    )
+                    Text(
+                        stringResource(R.string.runtime_local_dream_stats_note),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
                     localDreamState?.let { Text(it) }
                     Button(
                         onClick = {

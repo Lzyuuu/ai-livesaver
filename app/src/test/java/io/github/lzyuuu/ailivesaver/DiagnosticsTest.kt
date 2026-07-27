@@ -36,11 +36,19 @@ class DiagnosticsTest {
                 queuedMedia = 1,
                 availableStorage = 1234,
                 notificationsEnabled = false,
+                localDreamStats = LocalDreamRunStats(
+                    generationTimeMs = 3210,
+                    firstStepTimeMs = 480,
+                    width = 512,
+                    height = 768,
+                    recordedAtMs = 1,
+                ),
             ),
         )
 
         assertTrue(text.contains("provider_host=api.example.test"))
         assertTrue(text.contains("provider_capabilities=Chat"))
+        assertTrue(text.contains("local_dream_generation_ms=3210"))
         assertTrue(!text.contains("api_key"))
         assertTrue(!text.contains("prompt"))
     }

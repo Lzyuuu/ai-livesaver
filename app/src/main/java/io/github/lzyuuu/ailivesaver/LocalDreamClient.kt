@@ -7,6 +7,7 @@ import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.os.StatFs
+import android.os.SystemClock
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -55,7 +56,49 @@ private fun String.startsWithAny(prefixes: Set<String>): Boolean = prefixes.any(
 internal data class LocalDreamImage(
     val path: String,
     val seed: Long,
+    val stats: LocalDreamRunStats,
 )
+
+internal data class LocalDreamRunStats(
+    val generationTimeMs: Long,
+    val firstStepTimeMs: Long?,
+    val width: Int,
+    val height: Int,
+    val recordedAtMs: Long,
+)
+
+private const val LOCAL_DREAM_STATS_PREFS = "local_dream_diagnostics"
+private const val LOCAL_DREAM_GENERATION_TIME_MS = "generation_time_ms"
+private const val LOCAL_DREAM_FIRST_STEP_TIME_MS = "first_step_time_ms"
+private const val LOCAL_DREAM_WIDTH = "width"
+private const val LOCAL_DREAM_HEIGHT = "height"
+private const val LOCAL_DREAM_RECORDED_AT_MS = "recorded_at_ms"
+
+internal object LocalDreamStatsStore {
+    fun save(context: Context, stats: LocalDreamRunStats) {
+        context.getSharedPreferences(LOCAL_DREAM_STATS_PREFS, Context.MODE_PRIVATE)
+            .edit()
+            .putLong(LOCAL_DREAM_GENERATION_TIME_MS, stats.generationTimeMs)
+            .putLong(LOCAL_DREAM_FIRST_STEP_TIME_MS, stats.firstStepTimeMs ?: -1L)
+            .putInt(LOCAL_DREAM_WIDTH, stats.width)
+            .putInt(LOCAL_DREAM_HEIGHT, stats.height)
+            .putLong(LOCAL_DREAM_RECORDED_AT_MS, stats.recordedAtMs)
+            .apply()
+    }
+
+    fun load(context: Context): LocalDreamRunStats? {
+        val preferences = context.getSharedPreferences(LOCAL_DREAM_STATS_PREFS, Context.MODE_PRIVATE)
+        if (!preferences.contains(LOCAL_DREAM_GENERATION_TIME_MS)) return null
+        return LocalDreamRunStats(
+            generationTimeMs = preferences.getLong(LOCAL_DREAM_GENERATION_TIME_MS, 0L),
+            firstStepTimeMs = preferences.getLong(LOCAL_DREAM_FIRST_STEP_TIME_MS, -1L)
+                .takeIf { it >= 0L },
+            width = preferences.getInt(LOCAL_DREAM_WIDTH, 0),
+            height = preferences.getInt(LOCAL_DREAM_HEIGHT, 0),
+            recordedAtMs = preferences.getLong(LOCAL_DREAM_RECORDED_AT_MS, 0L),
+        )
+    }
+}
 
 internal data class LocalDreamImportParameters(
     val prompt: String = "",
@@ -252,6 +295,7 @@ internal object LocalDreamClient {
     ) {
         Thread {
             val result = runCatching {
+                val startedAt = SystemClock.elapsedRealtime()
                 val connection = connection("/generate")
                 val request = JSONObject()
                     .put("prompt", job.prompt)
@@ -270,10 +314,12 @@ internal object LocalDreamClient {
                         throw localDreamHttpFailure(connection)
                     }
                     var completed: JSONObject? = null
+                    var firstStepAt: Long? = null
                     connection.inputStream.bufferedReader().useLines { lines ->
                         lines.forEach { line ->
                             when (val event = parseLocalDreamSseLine(line)) {
                                 is LocalDreamSseEvent.Progress -> {
+                                    if (firstStepAt == null) firstStepAt = SystemClock.elapsedRealtime()
                                     Handler(Looper.getMainLooper()).post {
                                         onProgress(event.step, event.total)
                                     }
@@ -284,7 +330,18 @@ internal object LocalDreamClient {
                             }
                         }
                     }
-                    saveImage(context, completed ?: throw IOException("Missing complete event"))
+                    val complete = completed ?: throw IOException("Missing complete event")
+                    saveImage(
+                        context,
+                        complete,
+                        LocalDreamRunStats(
+                            generationTimeMs = (SystemClock.elapsedRealtime() - startedAt).coerceAtLeast(0L),
+                            firstStepTimeMs = firstStepAt?.let { (it - startedAt).coerceAtLeast(0L) },
+                            width = complete.optInt("width", 0),
+                            height = complete.optInt("height", 0),
+                            recordedAtMs = System.currentTimeMillis(),
+                        ),
+                    )
                 } finally {
                     connection.disconnect()
                 }
@@ -330,7 +387,11 @@ internal object LocalDreamClient {
         )
     }
 
-    private fun saveImage(context: Context, event: JSONObject): LocalDreamImage {
+    private fun saveImage(
+        context: Context,
+        event: JSONObject,
+        stats: LocalDreamRunStats,
+    ): LocalDreamImage {
         val image = decodeLocalDreamRgb(event)
         val bitmap = Bitmap.createBitmap(image.width, image.height, Bitmap.Config.ARGB_8888)
         bitmap.setPixels(image.pixels, 0, image.width, 0, 0, image.width, image.height)
@@ -342,7 +403,9 @@ internal object LocalDreamClient {
             }
         }
         bitmap.recycle()
-        return LocalDreamImage(file.absolutePath, image.seed)
+        val recordedStats = stats.copy(width = image.width, height = image.height)
+        LocalDreamStatsStore.save(context, recordedStats)
+        return LocalDreamImage(file.absolutePath, image.seed, recordedStats)
     }
 }
 
