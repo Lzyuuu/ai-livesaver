@@ -47,6 +47,17 @@ internal fun allowsAutomaticInference(limit: Int, used: Int): Boolean =
 
 internal fun isDefaultQuietHour(hour: Int): Boolean = hour >= 23 || hour < 8
 
+internal fun shouldReconstructWorld(
+    previousOpen: Long,
+    now: Long,
+    lastEvent: Long,
+    interval: Long,
+): Boolean = interval > 0 &&
+    previousOpen > 0 &&
+    now >= previousOpen &&
+    now - previousOpen >= interval &&
+    (lastEvent <= 0 || (now >= lastEvent && now - lastEvent >= interval))
+
 private val BASE_WORLD_SETTING_KEYS = setOf(
     "enabled",
     "activity",
@@ -101,11 +112,8 @@ internal object WorldEngine {
         val now = System.currentTimeMillis()
         val previousOpen = preferences.getLong("last_open", 0)
         preferences.edit { putLong("last_open", now) }
-        if (
-            previousOpen > 0 &&
-            now - previousOpen >= eventIntervalMs(context) &&
-            now - preferences.getLong("last_event", 0) >= eventIntervalMs(context)
-        ) {
+        val interval = eventIntervalMs(context)
+        if (shouldReconstructWorld(previousOpen, now, preferences.getLong("last_event", 0), interval)) {
             generate(context, reconstructed = true) { if (it) onChanged() }
         }
     }

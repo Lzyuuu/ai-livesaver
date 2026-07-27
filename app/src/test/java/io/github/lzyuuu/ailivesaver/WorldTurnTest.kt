@@ -22,6 +22,33 @@ class WorldTurnTest {
         assertEquals(true, isDefaultQuietHour(23))
         assertEquals(true, isDefaultQuietHour(7))
         assertEquals(false, isDefaultQuietHour(12))
+        assertEquals(
+            true,
+            shouldReconstructWorld(
+                previousOpen = 1_000,
+                now = 10_000,
+                lastEvent = 1_000,
+                interval = 5_000,
+            ),
+        )
+        assertEquals(
+            false,
+            shouldReconstructWorld(
+                previousOpen = 1_000,
+                now = 10_000,
+                lastEvent = 6_000,
+                interval = 5_000,
+            ),
+        )
+        assertEquals(
+            false,
+            shouldReconstructWorld(
+                previousOpen = 10_000,
+                now = 1_000,
+                lastEvent = 0,
+                interval = 5_000,
+            ),
+        )
         assertEquals(true, storageAllowsGeneration(256L * 1024 * 1024))
         assertEquals(false, storageAllowsGeneration(256L * 1024 * 1024 - 1))
         assertEquals(true, isLocalDreamUnavailable(ConnectException("refused")))
