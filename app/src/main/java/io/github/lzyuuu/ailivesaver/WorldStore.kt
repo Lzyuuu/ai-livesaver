@@ -2,6 +2,7 @@ package io.github.lzyuuu.ailivesaver
 
 import android.content.ContentValues
 import android.content.Context
+import android.database.Cursor
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
 
@@ -9,6 +10,17 @@ internal data class ResidentCharacter(
     val id: Long,
     val name: String,
     val persona: String,
+    val attentionTier: String = "resident",
+    val active: Boolean = true,
+    val appearance: String = "",
+    val clothing: String = "",
+    val negativePrompt: String = "",
+)
+
+internal data class UserIdentity(
+    val name: String,
+    val addressPreference: String,
+    val bio: String,
 )
 
 internal data class ChatMessage(
@@ -51,14 +63,17 @@ internal data class SocialComment(
 )
 
 internal class WorldStore(context: Context) :
-    SQLiteOpenHelper(context, "world.db", null, 4) {
+    SQLiteOpenHelper(context, "world.db", null, 5) {
 
     override fun onCreate(database: SQLiteDatabase) {
         database.execSQL(
             """
             CREATE TABLE profile (
                 id INTEGER PRIMARY KEY CHECK (id = 1),
-                name TEXT NOT NULL
+                name TEXT NOT NULL,
+                address_preference TEXT NOT NULL DEFAULT '',
+                bio TEXT NOT NULL DEFAULT '',
+                updated_at INTEGER NOT NULL DEFAULT 0
             )
             """.trimIndent(),
         )
@@ -71,7 +86,13 @@ internal class WorldStore(context: Context) :
                 name TEXT NOT NULL,
                 persona TEXT NOT NULL,
                 is_primary INTEGER NOT NULL DEFAULT 0,
-                created_at INTEGER NOT NULL
+                created_at INTEGER NOT NULL,
+                attention_tier TEXT NOT NULL DEFAULT 'resident',
+                active INTEGER NOT NULL DEFAULT 1,
+                appearance TEXT NOT NULL DEFAULT '',
+                clothing TEXT NOT NULL DEFAULT '',
+                negative_prompt TEXT NOT NULL DEFAULT '',
+                updated_at INTEGER NOT NULL DEFAULT 0
             )
             """.trimIndent(),
         )
@@ -116,6 +137,36 @@ internal class WorldStore(context: Context) :
             )
         }
         if (oldVersion < 4) createMediaVersionsTable(database)
+        if (oldVersion < 5) {
+            database.execSQL(
+                "ALTER TABLE profile ADD COLUMN address_preference TEXT NOT NULL DEFAULT ''",
+            )
+            database.execSQL("ALTER TABLE profile ADD COLUMN bio TEXT NOT NULL DEFAULT ''")
+            database.execSQL(
+                "ALTER TABLE profile ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0",
+            )
+            database.execSQL(
+                "ALTER TABLE characters ADD COLUMN attention_tier TEXT NOT NULL DEFAULT 'resident'",
+            )
+            database.execSQL(
+                "ALTER TABLE characters ADD COLUMN active INTEGER NOT NULL DEFAULT 1",
+            )
+            database.execSQL(
+                "ALTER TABLE characters ADD COLUMN appearance TEXT NOT NULL DEFAULT ''",
+            )
+            database.execSQL(
+                "ALTER TABLE characters ADD COLUMN clothing TEXT NOT NULL DEFAULT ''",
+            )
+            database.execSQL(
+                "ALTER TABLE characters ADD COLUMN negative_prompt TEXT NOT NULL DEFAULT ''",
+            )
+            database.execSQL(
+                "ALTER TABLE characters ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0",
+            )
+            database.execSQL(
+                "UPDATE characters SET attention_tier = 'special_focus' WHERE is_primary = 1",
+            )
+        }
     }
 
     private fun createSocialTables(database: SQLiteDatabase) {
@@ -164,17 +215,46 @@ internal class WorldStore(context: Context) :
     }
 
     fun primaryCharacter(): ResidentCharacter? = readableDatabase.rawQuery(
-        "SELECT id, name, persona FROM characters ORDER BY is_primary DESC, id LIMIT 1",
+        """
+        SELECT id, name, persona, attention_tier, active, appearance, clothing, negative_prompt
+        FROM characters
+        WHERE active = 1
+        ORDER BY CASE attention_tier WHEN 'special_focus' THEN 0 ELSE 1 END, is_primary DESC, id
+        LIMIT 1
+        """.trimIndent(),
         null,
     ).use { cursor ->
         if (!cursor.moveToFirst()) null
-        else ResidentCharacter(cursor.getLong(0), cursor.getString(1), cursor.getString(2))
+        else cursor.residentCharacter()
     }
 
-    fun userName(): String = readableDatabase.rawQuery(
-        "SELECT name FROM profile WHERE id = 1",
+    fun characters(includeDeparted: Boolean = true): List<ResidentCharacter> =
+        readableDatabase.rawQuery(
+            """
+            SELECT id, name, persona, attention_tier, active, appearance, clothing, negative_prompt
+            FROM characters
+            ${if (includeDeparted) "" else "WHERE active = 1"}
+            ORDER BY active DESC,
+                     CASE attention_tier WHEN 'special_focus' THEN 0 ELSE 1 END,
+                     name COLLATE NOCASE
+            """.trimIndent(),
+            null,
+        ).use { cursor ->
+            buildList { while (cursor.moveToNext()) add(cursor.residentCharacter()) }
+        }
+
+    fun identity(): UserIdentity = readableDatabase.rawQuery(
+        "SELECT name, address_preference, bio FROM profile WHERE id = 1",
         null,
-    ).use { cursor -> if (cursor.moveToFirst()) cursor.getString(0) else "你" }
+    ).use { cursor ->
+        if (cursor.moveToFirst()) {
+            UserIdentity(cursor.getString(0), cursor.getString(1), cursor.getString(2))
+        } else {
+            UserIdentity("你", "", "")
+        }
+    }
+
+    fun userName(): String = identity().name
 
     fun createWorld(userName: String, characterName: String, persona: String): ResidentCharacter {
         return writableDatabase.run {
@@ -186,21 +266,94 @@ internal class WorldStore(context: Context) :
                     ContentValues().apply {
                         put("id", 1)
                         put("name", userName.trim())
+                        put("updated_at", System.currentTimeMillis())
                     },
                 )
                 val values = ContentValues().apply {
                     put("name", characterName.trim())
                     put("persona", persona.trim())
                     put("is_primary", 1)
+                    put("attention_tier", "special_focus")
                     put("created_at", System.currentTimeMillis())
+                    put("updated_at", System.currentTimeMillis())
                 }
                 val id = insertOrThrow("characters", null, values)
                 setTransactionSuccessful()
-                ResidentCharacter(id, characterName.trim(), persona.trim())
+                ResidentCharacter(
+                    id,
+                    characterName.trim(),
+                    persona.trim(),
+                    attentionTier = "special_focus",
+                )
             } finally {
                 endTransaction()
             }
         }
+    }
+
+    fun updateIdentity(name: String, addressPreference: String, bio: String) {
+        writableDatabase.update(
+            "profile",
+            ContentValues().apply {
+                put("name", name.trim())
+                put("address_preference", addressPreference.trim())
+                put("bio", bio.trim())
+                put("updated_at", System.currentTimeMillis())
+            },
+            "id = 1",
+            null,
+        )
+    }
+
+    fun addCharacter(
+        name: String,
+        persona: String,
+        attentionTier: String,
+        appearance: String,
+        clothing: String,
+        negativePrompt: String,
+    ): Long = writableDatabase.insertOrThrow(
+        "characters",
+        null,
+        ContentValues().apply {
+            put("name", name.trim())
+            put("persona", persona.trim())
+            put("attention_tier", attentionTier)
+            put("appearance", appearance.trim())
+            put("clothing", clothing.trim())
+            put("negative_prompt", negativePrompt.trim())
+            put("created_at", System.currentTimeMillis())
+            put("updated_at", System.currentTimeMillis())
+        },
+    )
+
+    fun updateCharacter(character: ResidentCharacter) {
+        writableDatabase.update(
+            "characters",
+            ContentValues().apply {
+                put("name", character.name.trim())
+                put("persona", character.persona.trim())
+                put("attention_tier", character.attentionTier)
+                put("appearance", character.appearance.trim())
+                put("clothing", character.clothing.trim())
+                put("negative_prompt", character.negativePrompt.trim())
+                put("updated_at", System.currentTimeMillis())
+            },
+            "id = ?",
+            arrayOf(character.id.toString()),
+        )
+    }
+
+    fun setCharacterActive(id: Long, active: Boolean) {
+        writableDatabase.update(
+            "characters",
+            ContentValues().apply {
+                put("active", if (active) 1 else 0)
+                put("updated_at", System.currentTimeMillis())
+            },
+            "id = ?",
+            arrayOf(id.toString()),
+        )
     }
 
     fun messages(characterId: Long): List<ChatMessage> = readableDatabase.rawQuery(
@@ -476,3 +629,14 @@ internal object MemoryExtractor {
         }
     }
 }
+
+private fun Cursor.residentCharacter() = ResidentCharacter(
+    id = getLong(0),
+    name = getString(1),
+    persona = getString(2),
+    attentionTier = getString(3),
+    active = getInt(4) == 1,
+    appearance = getString(5),
+    clothing = getString(6),
+    negativePrompt = getString(7),
+)

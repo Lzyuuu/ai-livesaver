@@ -130,8 +130,11 @@ private fun AiLivesaverApp() {
     var showWorldSettings by rememberSaveable { mutableStateOf(false) }
     var showLocalDream by rememberSaveable { mutableStateOf(false) }
     var showBackups by rememberSaveable { mutableStateOf(false) }
+    var showIdentity by rememberSaveable { mutableStateOf(false) }
+    var showCharacters by rememberSaveable { mutableStateOf(false) }
     val destination = Destination.valueOf(destinationName)
     val primaryCharacter = remember(worldRevision) { worldStore.primaryCharacter() }
+    val characters = remember(worldRevision) { worldStore.characters(includeDeparted = false) }
     val latestMoment = remember(worldRevision) { worldStore.posts("moment").firstOrNull() }
     val latestForum = remember(worldRevision) { worldStore.posts("forum").firstOrNull() }
     val queueCount = remember(worldRevision) { worldStore.queueCount() }
@@ -141,20 +144,23 @@ private fun AiLivesaverApp() {
     }
 
     BackHandler(
-        enabled = showUpdates || showProviders || showWorldSettings || showLocalDream || showBackups,
+        enabled = showUpdates || showProviders || showWorldSettings || showLocalDream ||
+            showBackups || showIdentity || showCharacters,
     ) {
         showUpdates = false
         showProviders = false
         showWorldSettings = false
         showLocalDream = false
         showBackups = false
+        showIdentity = false
+        showCharacters = false
     }
 
     Scaffold(
         bottomBar = {
             if (
                 !showUpdates && !showProviders && !showWorldSettings &&
-                !showLocalDream && !showBackups
+                !showLocalDream && !showBackups && !showIdentity && !showCharacters
             ) {
                 NavigationBar {
                     Destination.entries.forEach { item ->
@@ -202,11 +208,27 @@ private fun AiLivesaverApp() {
                 store = worldStore,
                 onBack = { showBackups = false },
             )
+        } else if (showIdentity) {
+            IdentityScreen(
+                contentPadding = padding,
+                store = worldStore,
+                onBack = { showIdentity = false },
+                onChanged = { worldRevision++ },
+            )
+        } else if (showCharacters) {
+            CharacterManagerScreen(
+                contentPadding = padding,
+                store = worldStore,
+                revision = worldRevision,
+                onBack = { showCharacters = false },
+                onChanged = { worldRevision++ },
+            )
         } else {
             when (destination) {
                 Destination.World -> WorldScreen(
                     contentPadding = padding,
                     character = primaryCharacter,
+                    characters = characters,
                     latestMoment = latestMoment,
                     latestForum = latestForum,
                     queueCount = queueCount,
@@ -237,6 +259,9 @@ private fun AiLivesaverApp() {
                 )
                 Destination.Me -> MeScreen(
                     contentPadding = padding,
+                    identity = worldStore.identity(),
+                    onOpenIdentity = { showIdentity = true },
+                    onOpenCharacters = { showCharacters = true },
                     onOpenUpdates = { showUpdates = true },
                     onOpenProviders = { showProviders = true },
                     onOpenWorldSettings = { showWorldSettings = true },
@@ -252,6 +277,7 @@ private fun AiLivesaverApp() {
 private fun WorldScreen(
     contentPadding: PaddingValues,
     character: ResidentCharacter?,
+    characters: List<ResidentCharacter>,
     latestMoment: SocialPost?,
     latestForum: SocialPost?,
     queueCount: Int,
@@ -323,7 +349,7 @@ private fun WorldScreen(
                 action = stringResource(R.string.manage),
             )
             Spacer(Modifier.height(12.dp))
-            CircleStrip(character)
+            CircleStrip(characters)
         }
         item {
             WorldSection(
@@ -467,10 +493,10 @@ private fun RelationshipHero(
 }
 
 @Composable
-private fun CircleStrip(character: ResidentCharacter?) {
+private fun CircleStrip(characters: List<ResidentCharacter>) {
     val addLabel = stringResource(R.string.add)
     val people = buildList {
-        character?.let { add(it.name to it.name.take(1).uppercase()) }
+        characters.forEach { add(it.name to it.name.take(1).uppercase()) }
         add(addLabel to "+")
     }
     Row(
@@ -568,6 +594,9 @@ private data class SettingRow(
 @Composable
 private fun MeScreen(
     contentPadding: PaddingValues,
+    identity: UserIdentity,
+    onOpenIdentity: () -> Unit,
+    onOpenCharacters: () -> Unit,
     onOpenUpdates: () -> Unit,
     onOpenProviders: () -> Unit,
     onOpenWorldSettings: () -> Unit,
@@ -575,6 +604,8 @@ private fun MeScreen(
     onOpenBackups: () -> Unit,
 ) {
     val settings = listOf(
+        SettingRow(R.string.user_identity, R.string.user_identity_summary, "identity"),
+        SettingRow(R.string.world_members, R.string.world_members_summary, "characters"),
         SettingRow(R.string.provider_settings, R.string.provider_settings_summary, "providers"),
         SettingRow(R.string.local_dream_settings, R.string.local_dream_settings_summary, "dream"),
         SettingRow(R.string.world_settings, R.string.world_settings_summary, "world"),
@@ -594,12 +625,12 @@ private fun MeScreen(
         item {
             Eyebrow(stringResource(R.string.me_eyebrow))
             Text(
-                stringResource(R.string.me_title),
+                identity.name,
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.Bold,
             )
             Text(
-                stringResource(R.string.me_description),
+                identity.bio.ifBlank { stringResource(R.string.me_description) },
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
@@ -616,6 +647,8 @@ private fun MeScreen(
                     .fillMaxWidth()
                     .clickable(enabled = setting.destination != null) {
                         when (setting.destination) {
+                            "identity" -> onOpenIdentity()
+                            "characters" -> onOpenCharacters()
                             "providers" -> onOpenProviders()
                             "dream" -> onOpenLocalDream()
                             "world" -> onOpenWorldSettings()

@@ -10,12 +10,15 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -23,6 +26,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -44,11 +48,23 @@ internal fun ChatsScreen(
     onChanged: () -> Unit,
     onConfigureProvider: () -> Unit,
 ) {
-    val character = remember(revision) { store.primaryCharacter() }
+    val characters = remember(revision) { store.characters(includeDeparted = false) }
+    var selectedId by rememberSaveable { mutableStateOf<Long?>(null) }
+    val character = characters.firstOrNull { it.id == selectedId } ?: characters.firstOrNull()
     if (character == null) {
         FirstRelationshipScreen(contentPadding, store, onChanged, onConfigureProvider)
     } else {
-        ConversationScreen(contentPadding, store, character, revision, onChanged)
+        key(character.id) {
+            ConversationScreen(
+                contentPadding,
+                store,
+                characters,
+                character,
+                revision,
+                onChanged,
+                onCharacterSelected = { selectedId = it },
+            )
+        }
     }
 }
 
@@ -160,9 +176,11 @@ private fun FirstRelationshipScreen(
 private fun ConversationScreen(
     contentPadding: PaddingValues,
     store: WorldStore,
+    characters: List<ResidentCharacter>,
     character: ResidentCharacter,
     revision: Int,
     onChanged: () -> Unit,
+    onCharacterSelected: (Long) -> Unit,
 ) {
     val context = LocalContext.current
     val provider = remember { ProviderStore(context) }
@@ -211,6 +229,22 @@ private fun ConversationScreen(
         ),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+        if (characters.size > 1) {
+            item {
+                Row(
+                    modifier = Modifier.horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    characters.forEach { resident ->
+                        FilterChip(
+                            selected = resident.id == character.id,
+                            onClick = { onCharacterSelected(resident.id) },
+                            label = { Text(resident.name) },
+                        )
+                    }
+                }
+            }
+        }
         item {
             Row(
                 modifier = Modifier.fillMaxWidth(),
