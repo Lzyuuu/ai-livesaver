@@ -47,7 +47,10 @@ class LocalDreamImportTest {
     fun treatsLocalDreamNotReadyStatusesAsWaiting() {
         assertTrue(isLocalDreamUnavailable(IOException("Local Dream HTTP 503: model is not loaded")))
         assertTrue(isLocalDreamUnavailable(IOException("Local Dream HTTP 504")))
+        assertTrue(isLocalDreamUnavailable(IOException("Local Dream HTTP 500: no model loaded")))
+        assertTrue(isLocalDreamUnavailable(IOException("Local Dream HTTP 400: model is loading")))
         assertFalse(isLocalDreamUnavailable(IOException("Local Dream HTTP 500: generation failed")))
+        assertFalse(isLocalDreamUnavailable(IOException("Local Dream HTTP 400: invalid prompt")))
     }
 
     @Test

@@ -176,14 +176,19 @@ private fun findJsonValue(value: JSONObject, aliases: Set<String>, depth: Int = 
 internal fun storageAllowsGeneration(availableBytes: Long): Boolean =
     availableBytes >= 256L * 1024 * 1024
 
-internal fun isLocalDreamUnavailable(error: Throwable): Boolean =
-    error is ConnectException ||
+internal fun isLocalDreamUnavailable(error: Throwable): Boolean {
+    val message = error.message.orEmpty()
+    val normalized = message.lowercase()
+    return error is ConnectException ||
         error is SocketTimeoutException ||
-        error.message.orEmpty().contains("failed to connect", ignoreCase = true) ||
-        error.message.orEmpty().contains("connection refused", ignoreCase = true) ||
-        error.message.orEmpty().contains("Local Dream HTTP 502") ||
-        error.message.orEmpty().contains("Local Dream HTTP 503") ||
-        error.message.orEmpty().contains("Local Dream HTTP 504")
+        normalized.contains("failed to connect") ||
+        normalized.contains("connection refused") ||
+        Regex("local dream http 50[234]").containsMatchIn(normalized) ||
+        normalized.contains("model not loaded") ||
+        normalized.contains("no model loaded") ||
+        normalized.contains("model is loading") ||
+        normalized.contains("model not ready")
+}
 
 internal fun importUserImageToCache(context: Context, uri: Uri): String {
     if (!storageAllowsGeneration(StatFs(context.cacheDir.path).availableBytes)) {
