@@ -899,6 +899,7 @@ internal class ContinuousWorldService : Service() {
     private val handler = Handler(Looper.getMainLooper())
     private val tick = object : Runnable {
         override fun run() {
+            LocalDreamQueue.resume(this@ContinuousWorldService)
             WorldEngine.generate(this@ContinuousWorldService) {}
             handler.postDelayed(this, WorldEngine.eventIntervalMs(this@ContinuousWorldService))
         }
@@ -920,6 +921,7 @@ internal class ContinuousWorldService : Service() {
             stopSelf(startId)
             return START_NOT_STICKY
         }
+        LocalDreamQueue.resume(this)
         return START_STICKY
     }
 
