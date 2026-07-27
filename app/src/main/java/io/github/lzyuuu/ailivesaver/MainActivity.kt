@@ -207,6 +207,9 @@ private fun AiLivesaverApp(
 ) {
     val context = LocalContext.current
     val worldStore = remember { WorldStore(context) }
+    DisposableEffect(worldStore) {
+        onDispose { worldStore.close() }
+    }
     var worldRevision by remember { mutableIntStateOf(0) }
     var destinationName by rememberSaveable { mutableStateOf(Destination.World.name) }
     var showUpdates by rememberSaveable { mutableStateOf(false) }
