@@ -401,6 +401,8 @@ internal object WorldEngine {
                                 npcName,
                                 needsResponse = false,
                                 sourcePostId = npcForumTarget.id,
+                                providerName = config.preset.displayName,
+                                modelName = config.model,
                             )
                         }
                         npc != null -> store.createPost(
@@ -440,6 +442,8 @@ internal object WorldEngine {
                                 summary = body.take(120),
                                 actorName = character.name,
                                 needsResponse = true,
+                                providerName = config.preset.displayName,
+                                modelName = config.model,
                             )
                             notifyRelationship(context, character, body)
                         }
@@ -528,6 +532,8 @@ internal object WorldEngine {
                         character.name,
                         needsResponse = true,
                         sourcePostId = postId,
+                        providerName = config.preset.displayName,
+                        modelName = config.model,
                     )
                     consumeBudget(context)
                     recordSuccess(context)

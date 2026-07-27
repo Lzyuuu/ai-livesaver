@@ -474,6 +474,13 @@ private fun WorldScreen(
                                     event.actorName.take(1).uppercase(),
                                     event.actorName,
                                     event.summary,
+                                    event.providerName.takeIf { it.isNotBlank() }?.let {
+                                        stringResource(
+                                            R.string.world_event_source,
+                                            it,
+                                            event.modelName,
+                                        )
+                                    }.orEmpty(),
                                 )
                             }
                         }
@@ -690,7 +697,7 @@ private fun SectionHeader(
 }
 
 @Composable
-private fun PersonMessage(initial: String, name: String, message: String) {
+private fun PersonMessage(initial: String, name: String, message: String, source: String = "") {
     Row(
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.Top,
@@ -700,6 +707,14 @@ private fun PersonMessage(initial: String, name: String, message: String) {
             Text(name, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(2.dp))
             Text(message, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (source.isNotBlank()) {
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    source,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.outline,
+                )
+            }
         }
     }
 }

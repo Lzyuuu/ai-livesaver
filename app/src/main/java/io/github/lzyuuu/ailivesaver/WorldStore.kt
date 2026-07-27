@@ -266,6 +266,8 @@ internal data class WorldEvent(
     val needsResponse: Boolean,
     val seen: Boolean,
     val createdAt: Long,
+    val providerName: String = "",
+    val modelName: String = "",
 )
 
 internal data class MemberWorldContext(
@@ -275,7 +277,7 @@ internal data class MemberWorldContext(
 )
 
 internal class WorldStore(context: Context) :
-    SQLiteOpenHelper(context, "world.db", null, 17),
+    SQLiteOpenHelper(context, "world.db", null, 18),
     java.io.Closeable {
     private val mediaDirectory = File(context.filesDir, "media").canonicalFile
 
@@ -410,6 +412,7 @@ internal class WorldStore(context: Context) :
         if (oldVersion < 15) migrateChatTimeline(database)
         if (oldVersion < 16) migrateRelationshipControls(database)
         if (oldVersion < 17) createSocialResponseQueueTable(database)
+        if (oldVersion < 18) migrateWorldEventProvenance(database)
     }
 
     private fun createSocialTables(database: SQLiteDatabase) {
@@ -666,6 +669,8 @@ internal class WorldStore(context: Context) :
                 needs_response INTEGER NOT NULL DEFAULT 0,
                 seen INTEGER NOT NULL DEFAULT 0,
                 source_post_id INTEGER REFERENCES social_posts(id) ON DELETE SET NULL,
+                provider_name TEXT NOT NULL DEFAULT '',
+                model_name TEXT NOT NULL DEFAULT '',
                 created_at INTEGER NOT NULL
             )
             """.trimIndent(),
@@ -691,6 +696,11 @@ internal class WorldStore(context: Context) :
             )
             """.trimIndent(),
         )
+    }
+
+    private fun migrateWorldEventProvenance(database: SQLiteDatabase) {
+        addColumnIfMissing(database, "world_events", "provider_name", "TEXT NOT NULL DEFAULT ''")
+        addColumnIfMissing(database, "world_events", "model_name", "TEXT NOT NULL DEFAULT ''")
     }
 
     private fun createSocialResponseQueueTable(database: SQLiteDatabase) {
@@ -1679,6 +1689,8 @@ internal class WorldStore(context: Context) :
             actorName = authorName,
             needsResponse = eventNeedsResponse,
             sourcePostId = postId,
+            providerName = providerName,
+            modelName = modelName,
         )
         return postId
     }
@@ -2056,6 +2068,8 @@ internal class WorldStore(context: Context) :
         actorName: String,
         needsResponse: Boolean,
         sourcePostId: Long? = null,
+        providerName: String = "",
+        modelName: String = "",
     ) {
         writableDatabase.insertOrThrow(
             "world_events",
@@ -2066,6 +2080,8 @@ internal class WorldStore(context: Context) :
                 put("actor_name", actorName)
                 put("needs_response", if (needsResponse) 1 else 0)
                 put("source_post_id", sourcePostId)
+                put("provider_name", providerName)
+                put("model_name", modelName)
                 put("created_at", System.currentTimeMillis())
             },
         )
@@ -2074,10 +2090,14 @@ internal class WorldStore(context: Context) :
     fun worldEvents(needsResponseOnly: Boolean = false): List<WorldEvent> =
         readableDatabase.rawQuery(
             """
-            SELECT id, kind, summary, actor_name, needs_response, seen, created_at
+            SELECT world_events.id, world_events.kind, world_events.summary, world_events.actor_name,
+                   world_events.needs_response, world_events.seen, world_events.created_at,
+                   COALESCE(NULLIF(world_events.provider_name, ''), social_posts.provider_name, ''),
+                   COALESCE(NULLIF(world_events.model_name, ''), social_posts.model_name, '')
             FROM world_events
-            ${if (needsResponseOnly) "WHERE needs_response = 1 AND seen = 0" else ""}
-            ORDER BY created_at DESC
+            LEFT JOIN social_posts ON social_posts.id = world_events.source_post_id
+            ${if (needsResponseOnly) "WHERE world_events.needs_response = 1 AND world_events.seen = 0" else ""}
+            ORDER BY world_events.created_at DESC
             LIMIT 20
             """.trimIndent(),
             null,
@@ -2093,6 +2113,8 @@ internal class WorldStore(context: Context) :
                             cursor.getInt(4) == 1,
                             cursor.getInt(5) == 1,
                             cursor.getLong(6),
+                            cursor.getString(7),
+                            cursor.getString(8),
                         ),
                     )
                 }

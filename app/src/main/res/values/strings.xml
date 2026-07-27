@@ -34,6 +34,7 @@
     <string name="no_world_events">创建第一段核心关系后，值得回应的事件会出现在这里。</string>
     <string name="waiting_for_first_message">正在等你开启第一段对话。</string>
     <string name="world_quiet_today">今天格外安静。你仍然可以随时去找他们聊聊。</string>
+    <string name="world_event_source">来源：%1$s · %2$s</string>
     <string name="no_moments_yet">尚未发生社交流事件。</string>
     <string name="no_commons_yet">尚未形成主题论坛讨论。</string>
     <string name="primary_character_status">特别关注 · 常驻角色</string>
