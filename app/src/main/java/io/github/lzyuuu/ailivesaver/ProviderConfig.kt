@@ -1,6 +1,8 @@
 package io.github.lzyuuu.ailivesaver
 
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.os.Handler
 import android.os.Looper
 import android.security.keystore.KeyGenParameterSpec
@@ -10,6 +12,8 @@ import androidx.core.content.edit
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.IOException
+import java.io.ByteArrayOutputStream
+import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 import java.security.KeyStore
@@ -61,6 +65,37 @@ internal object ProviderProtocol {
         .getJSONObject("message")
         .getString("content")
         .trim()
+
+    fun visionRequest(model: String, dataUrl: String): JSONObject = JSONObject()
+        .put("model", model)
+        .put("max_tokens", 180)
+        .put(
+            "messages",
+            JSONArray().put(
+                JSONObject()
+                    .put("role", "user")
+                    .put(
+                        "content",
+                        JSONArray()
+                            .put(
+                                JSONObject()
+                                    .put("type", "text")
+                                    .put(
+                                        "text",
+                                        "Describe only the visible content of this image in concise natural language. Do not infer unseen facts.",
+                                    ),
+                            )
+                            .put(
+                                JSONObject()
+                                    .put("type", "image_url")
+                                    .put(
+                                        "image_url",
+                                        JSONObject().put("url", dataUrl),
+                                    ),
+                            ),
+                    ),
+            ),
+        )
 }
 
 internal class ProviderStore(context: Context) {
@@ -101,6 +136,12 @@ internal class ProviderStore(context: Context) {
 
     fun clearVision() {
         preferences.edit { putBoolean("vision_enabled", false) }
+    }
+
+    fun clearAll() {
+        preferences.edit(commit = true) { clear() }
+        val keyStore = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+        if (keyStore.containsAlias(KEY_ALIAS)) keyStore.deleteEntry(KEY_ALIAS)
     }
 
     private fun save(config: ProviderConfig, prefix: String) {
@@ -288,6 +329,50 @@ internal object ProviderTextClient {
             }
             Handler(Looper.getMainLooper()).post { callback(result) }
         }.start()
+    }
+}
+
+internal object ProviderVisionClient {
+    fun describe(
+        config: ProviderConfig,
+        imagePath: String,
+        callback: (Result<String>) -> Unit,
+    ) {
+        Thread {
+            val result = runCatching {
+                val dataUrl = minimizedImageDataUrl(imagePath)
+                ProviderProtocol.parseReply(
+                    ProviderHttp.post(config, ProviderProtocol.visionRequest(config.model, dataUrl)),
+                ).ifBlank { throw IOException("Vision Provider returned an empty description") }
+            }
+            Handler(Looper.getMainLooper()).post { callback(result) }
+        }.start()
+    }
+
+    private fun minimizedImageDataUrl(path: String): String {
+        val file = File(path)
+        if (!file.isFile || file.length() > 25L * 1024 * 1024) {
+            throw IOException("Image is missing or too large")
+        }
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeFile(path, bounds)
+        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) throw IOException("Invalid image")
+        var sample = 1
+        while (maxOf(bounds.outWidth, bounds.outHeight) / sample > 1536) sample *= 2
+        val bitmap = BitmapFactory.decodeFile(
+            path,
+            BitmapFactory.Options().apply { inSampleSize = sample },
+        ) ?: throw IOException("Could not decode image")
+        return try {
+            val bytes = ByteArrayOutputStream()
+            if (!bitmap.compress(Bitmap.CompressFormat.JPEG, 88, bytes)) {
+                throw IOException("Could not prepare image")
+            }
+            "data:image/jpeg;base64," +
+                Base64.encodeToString(bytes.toByteArray(), Base64.NO_WRAP)
+        } finally {
+            bitmap.recycle()
+        }
     }
 }
 

@@ -6,6 +6,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.text.format.Formatter
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.ComponentActivity
@@ -39,6 +40,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -83,6 +85,11 @@ class MainActivity : ComponentActivity() {
                 AiLivesaverApp()
             }
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        LocalDreamQueue.resume(this)
     }
 }
 
@@ -221,7 +228,13 @@ private fun AiLivesaverApp() {
         } else if (showLocalDream) {
             LocalDreamSettingsScreen(
                 contentPadding = padding,
-                onBack = { showLocalDream = false },
+                store = worldStore,
+                revision = worldRevision,
+                onBack = {
+                    showLocalDream = false
+                    worldRevision++
+                },
+                onChanged = { worldRevision++ },
             )
         } else if (showBackups) {
             BackupSettingsScreen(
@@ -798,9 +811,87 @@ private fun BackupSettingsScreen(
     var includeMedia by remember { mutableStateOf(true) }
     var busy by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf<String?>(null) }
+    var destructiveAction by remember { mutableStateOf<String?>(null) }
+    var confirmation by remember { mutableStateOf("") }
     val exportSuccess = stringResource(R.string.backup_exported)
     val restoreSuccess = stringResource(R.string.backup_restored)
     val failed = stringResource(R.string.backup_failed)
+    val appName = stringResource(R.string.app_name)
+
+    destructiveAction?.let { action ->
+        val rebuild = action == "rebuild"
+        AlertDialog(
+            onDismissRequest = {
+                destructiveAction = null
+                confirmation = ""
+            },
+            title = {
+                Text(
+                    stringResource(
+                        if (rebuild) R.string.rebuild_world else R.string.erase_all_data,
+                    ),
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(
+                        stringResource(
+                            if (rebuild) {
+                                R.string.rebuild_world_confirmation
+                            } else {
+                                R.string.erase_all_data_confirmation
+                            },
+                            appName,
+                        ),
+                    )
+                    OutlinedTextField(
+                        value = confirmation,
+                        onValueChange = { confirmation = it },
+                        label = { Text(appName) },
+                        singleLine = true,
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        busy = true
+                        destructiveAction = null
+                        val callback: (Result<Unit>) -> Unit = { result ->
+                            busy = false
+                            result.onSuccess { (context as? MainActivity)?.recreate() }
+                            status = result.exceptionOrNull()?.let {
+                                "$failed：${it.message.orEmpty()}"
+                            }
+                        }
+                        if (rebuild) {
+                            WorldBackup.rebuildWorld(context, store, callback)
+                        } else {
+                            WorldBackup.eraseAll(context, store, callback)
+                        }
+                    },
+                    enabled = confirmation == appName,
+                ) {
+                    Text(
+                        stringResource(
+                            if (rebuild) R.string.rebuild_world else R.string.erase_all_data,
+                        ),
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        destructiveAction = null
+                        confirmation = ""
+                    },
+                ) {
+                    Text(stringResource(R.string.cancel))
+                }
+            },
+        )
+    }
     val createBackup = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/zip"),
     ) { uri ->
@@ -895,6 +986,52 @@ private fun BackupSettingsScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
+        item {
+            Text(
+                stringResource(R.string.destructive_data_actions),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(
+                stringResource(R.string.destructive_data_actions_summary),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        item {
+            Card(Modifier.fillMaxWidth()) {
+                Column(
+                    modifier = Modifier.padding(18.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    TextButton(
+                        onClick = {
+                            confirmation = ""
+                            destructiveAction = "rebuild"
+                        },
+                        enabled = !busy,
+                    ) {
+                        Text(stringResource(R.string.rebuild_world))
+                    }
+                    Text(stringResource(R.string.rebuild_world_summary))
+                    TextButton(
+                        onClick = {
+                            confirmation = ""
+                            destructiveAction = "erase"
+                        },
+                        enabled = !busy,
+                    ) {
+                        Text(
+                            stringResource(R.string.erase_all_data),
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                    Text(
+                        stringResource(R.string.erase_all_data_summary),
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+            }
+        }
         if (busy) item { StatusCard(stringResource(R.string.backup_working)) }
         status?.let { item { StatusCard(it) } }
     }
@@ -903,9 +1040,14 @@ private fun BackupSettingsScreen(
 @Composable
 private fun LocalDreamSettingsScreen(
     contentPadding: PaddingValues,
+    store: WorldStore,
+    revision: Int,
     onBack: () -> Unit,
+    onChanged: () -> Unit,
 ) {
     val context = LocalContext.current
+    val jobs = remember(revision) { store.mediaJobs() }
+    val storageBytes = remember(revision) { store.mediaStorageBytes() }
     var checking by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf<String?>(null) }
     val connected = stringResource(R.string.local_dream_connected)
@@ -954,7 +1096,26 @@ private fun LocalDreamSettingsScreen(
                     LocalDreamClient.probe { result ->
                         checking = false
                         status = result.fold(
-                            onSuccess = { "$connected · CLIP $it tokens" },
+                            onSuccess = {
+                                LocalDreamQueue.resume(
+                                    context,
+                                    onProgress = { _, step, total ->
+                                        status = "$step / $total"
+                                    },
+                                    onFinished = { _, generation ->
+                                        status = generation.fold(
+                                            onSuccess = { generationReady ->
+                                                "$connected · ${generationReady.seed}"
+                                            },
+                                            onFailure = {
+                                                "$unavailable：${it.message.orEmpty()}"
+                                            },
+                                        )
+                                        onChanged()
+                                    },
+                                )
+                                "$connected · CLIP $it tokens"
+                            },
                             onFailure = { "$unavailable：${it.message.orEmpty()}" },
                         )
                     }
@@ -969,6 +1130,68 @@ private fun LocalDreamSettingsScreen(
                         stringResource(R.string.check_local_dream)
                     },
                 )
+            }
+        }
+        item {
+            Text(
+                stringResource(R.string.creation_queue),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(
+                stringResource(
+                    R.string.media_storage_usage,
+                    Formatter.formatFileSize(context, storageBytes),
+                ),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        if (jobs.isEmpty()) {
+            item { StatusCard(stringResource(R.string.queue_empty)) }
+        }
+        items(jobs, key = MediaJob::postId) { job ->
+            Card(Modifier.fillMaxWidth()) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Text(job.prompt, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                    Text(
+                        stringResource(
+                            if (job.status == "failed") {
+                                R.string.local_dream_failed
+                            } else {
+                                R.string.local_dream_pending
+                            },
+                        ),
+                        color = if (job.status == "failed") {
+                            MaterialTheme.colorScheme.error
+                        } else {
+                            MaterialTheme.colorScheme.primary
+                        },
+                    )
+                    if (job.error.isNotBlank()) {
+                        Text(
+                            job.error,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 2,
+                        )
+                    }
+                    if (job.status == "failed") {
+                        TextButton(
+                            onClick = {
+                                store.retryMediaJob(job.postId)
+                                onChanged()
+                                LocalDreamQueue.resume(
+                                    context,
+                                    onFinished = { _, _ -> onChanged() },
+                                )
+                            },
+                        ) {
+                            Text(stringResource(R.string.retry_generation))
+                        }
+                    }
+                }
             }
         }
         status?.let { item { StatusCard(it) } }

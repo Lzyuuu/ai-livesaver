@@ -28,6 +28,16 @@ class ProviderProtocolTest {
                 """{"choices":[{"message":{"content":" hello "}}]}""",
             ),
         )
+        val vision = ProviderProtocol.visionRequest("vision-model", "data:image/jpeg;base64,abc")
+        val visionMessages = vision.getJSONArray("messages")
+        val visionContent = visionMessages.getJSONObject(0).getJSONArray("content")
+        assertEquals(1, visionMessages.length())
+        assertEquals(2, visionContent.length())
+        assertEquals(
+            "data:image/jpeg;base64,abc",
+            visionContent.getJSONObject(1).getJSONObject("image_url").getString("url"),
+        )
+        assertFalse(vision.toString().contains("memory", ignoreCase = true))
     }
 
     @Test

@@ -1,6 +1,11 @@
 package io.github.lzyuuu.ailivesaver
 
 import android.graphics.BitmapFactory
+import android.os.Handler
+import android.os.Looper
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
@@ -16,6 +21,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -51,6 +57,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import java.text.DateFormat
 import java.util.Date
+import java.io.File
 
 private data class SocialReplyDraft(
     val body: String,
@@ -96,10 +103,14 @@ internal fun SocialScreen(
     val generationFailed = stringResource(R.string.local_dream_generation_failed)
     val generationReady = stringResource(R.string.local_dream_generation_ready)
     val connecting = stringResource(R.string.local_dream_connecting)
+    val visionAnalysisFailed = stringResource(R.string.vision_analysis_failed)
     val rewriting = stringResource(R.string.rewriting_ai_post)
     val rewriteFailed = stringResource(R.string.rewrite_failed)
     val selectedPost = posts.firstOrNull { it.id == selectedPostId }
     val previewPost = posts.firstOrNull { it.id == previewPostId }
+    val previewVersions = remember(revision, previewPostId) {
+        previewPostId?.let(store::mediaVersions).orEmpty()
+    }
 
     npcProfile?.let { npc ->
         NpcProfileDialog(npc = npc, onDismiss = { npcProfile = null })
@@ -109,20 +120,21 @@ internal fun SocialScreen(
         store.prepareRedraw(post.id, prompt)
         onChanged()
         generationStatus = connecting
-        LocalDreamClient.generate(
+        LocalDreamQueue.resume(
             context = context,
-            prompt = prompt,
-            onProgress = { step, total -> generationStatus = "$step / $total" },
-        ) { result ->
-            result.onSuccess {
-                store.markMediaReady(post.id, it.path, it.seed)
-                generationStatus = generationReady
-            }.onFailure {
-                store.markMediaFailed(post.id)
-                generationStatus = "$generationFailed：${it.message.orEmpty()}"
+            onProgress = { postId, step, total ->
+                if (postId == post.id) generationStatus = "$step / $total"
+            },
+            onFinished = { postId, result ->
+                if (postId == post.id) {
+                    generationStatus = result.fold(
+                        onSuccess = { generationReady },
+                        onFailure = { "$generationFailed：${it.message.orEmpty()}" },
+                    )
+                }
+                onChanged()
             }
-            onChanged()
-        }
+        )
     }
 
     BackHandler(selectedPost != null) { selectedPostId = null }
@@ -130,12 +142,21 @@ internal fun SocialScreen(
     previewPost?.let { post ->
         FullScreenMediaPreview(
             post = post,
+            versions = previewVersions,
             menuInitiallyOpen = openPreviewMenu,
             onDismiss = {
                 previewPostId = null
                 openPreviewMenu = false
             },
             onRedraw = { redraw(post, it) },
+            onRestoreVersion = {
+                store.restoreMediaVersion(post.id, it)
+                onChanged()
+            },
+            onDeleteVersion = {
+                store.deleteMediaVersion(post.id, it)
+                onChanged()
+            },
         )
     }
 
@@ -244,8 +265,66 @@ internal fun SocialScreen(
         } else {
             item {
                 PostComposer(kind, characters) {
-                        title, body, prompt, audience, audienceCharacterIds, aiResponsesEnabled ->
-                    if (prompt == null) {
+                        title,
+                        body,
+                        prompt,
+                        audience,
+                        audienceCharacterIds,
+                        aiResponsesEnabled,
+                        cachedImagePath,
+                        suppliedDescription,
+                        analyzeImage,
+                    ->
+                    if (cachedImagePath != null) {
+                        runCatching {
+                            persistImportedImage(context, cachedImagePath)
+                        }.onSuccess { path ->
+                            val postId = store.createImportedMediaPost(
+                                body,
+                                path,
+                                suppliedDescription,
+                                audience,
+                                audienceCharacterIds,
+                                aiResponsesEnabled,
+                            )
+                            fun respond(description: String) {
+                                if (aiResponsesEnabled && (body.isNotBlank() || description.isNotBlank())) {
+                                    WorldEngine.respondToPost(
+                                        context,
+                                        postId,
+                                        kind,
+                                        buildString {
+                                            append(body)
+                                            if (description.isNotBlank()) {
+                                                append("\nImage description: $description")
+                                            }
+                                        },
+                                        audience,
+                                        audienceCharacterIds,
+                                    ) { if (it) onChanged() }
+                                }
+                            }
+                            if (analyzeImage && suppliedDescription.isBlank()) {
+                                val configStore = ProviderStore(context)
+                                val vision = configStore.loadVision() ?: configStore.load()
+                                ProviderVisionClient.describe(vision, path) { result ->
+                                    result.onSuccess {
+                                        store.updateMediaDescription(postId, it)
+                                        respond(it)
+                                    }.onFailure {
+                                        generationStatus =
+                                            "$visionAnalysisFailed：" +
+                                            it.message.orEmpty()
+                                    }
+                                    onChanged()
+                                }
+                            } else {
+                                respond(suppliedDescription)
+                            }
+                        }.onFailure {
+                            generationStatus = "$generationFailed：${it.message.orEmpty()}"
+                        }
+                    } else if (prompt == null) {
                         val postId = store.createPost(
                             kind,
                             store.userName(),
@@ -275,32 +354,25 @@ internal fun SocialScreen(
                             aiResponsesEnabled,
                         )
                         generationStatus = connecting
-                        LocalDreamClient.generate(
+                        LocalDreamQueue.resume(
                             context = context,
-                            prompt = prompt,
-                            onProgress = { step, total ->
-                                generationStatus = "$step / $total"
-                            },
-                        ) { result ->
-                            result.onSuccess {
-                                store.markMediaReady(postId, it.path, it.seed)
-                                generationStatus = generationReady
-                                if (aiResponsesEnabled) {
-                                    WorldEngine.respondToPost(
-                                        context,
-                                        postId,
-                                        kind,
-                                        body,
-                                        audience,
-                                        audienceCharacterIds,
-                                    ) { if (it) onChanged() }
+                            onProgress = { activePostId, step, total ->
+                                if (activePostId == postId) {
+                                    generationStatus = "$step / $total"
                                 }
-                            }.onFailure {
-                                store.markMediaFailed(postId)
-                                generationStatus = "$generationFailed：${it.message.orEmpty()}"
-                            }
-                            onChanged()
-                        }
+                            },
+                            onFinished = { activePostId, result ->
+                                if (activePostId == postId) {
+                                    generationStatus = result.fold(
+                                        onSuccess = { generationReady },
+                                        onFailure = {
+                                            "$generationFailed：${it.message.orEmpty()}"
+                                        },
+                                    )
+                                }
+                                onChanged()
+                            },
+                        )
                     }
                     onChanged()
                 }
@@ -359,14 +431,52 @@ internal fun SocialScreen(
 private fun PostComposer(
     kind: String,
     characters: List<ResidentCharacter>,
-    onPost: (String, String, String?, String, String, Boolean) -> Unit,
+    onPost: (
+        String,
+        String,
+        String?,
+        String,
+        String,
+        Boolean,
+        String?,
+        String,
+        Boolean,
+    ) -> Unit,
 ) {
+    val context = LocalContext.current
     var title by rememberSaveable { mutableStateOf("") }
     var body by rememberSaveable { mutableStateOf("") }
     var prompt by rememberSaveable { mutableStateOf("") }
+    var cachedImagePath by rememberSaveable { mutableStateOf<String?>(null) }
+    var mediaDescription by rememberSaveable { mutableStateOf("") }
+    var analyzeImage by rememberSaveable { mutableStateOf(false) }
+    var imageStatus by remember { mutableStateOf<String?>(null) }
     var audience by rememberSaveable { mutableStateOf("world") }
     var selectedCharacterIds by rememberSaveable { mutableStateOf(emptyList<Long>()) }
     var aiResponsesEnabled by rememberSaveable { mutableStateOf(true) }
+    val imageReady = stringResource(R.string.image_ready_to_post)
+    val imageImportFailed = stringResource(R.string.image_import_failed)
+    val picker = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickVisualMedia(),
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        imageStatus = null
+        Thread {
+            val imported = runCatching { importUserImageToCache(context, uri) }
+            Handler(Looper.getMainLooper()).post {
+                imported.onSuccess {
+                    cachedImagePath?.let(::File).let { previous ->
+                        if (previous?.parentFile == context.cacheDir) previous.delete()
+                    }
+                    cachedImagePath = it
+                    prompt = ""
+                    imageStatus = imageReady
+                }.onFailure {
+                    imageStatus = "$imageImportFailed：${it.message.orEmpty()}"
+                }
+            }
+        }.start()
+    }
     Card(
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.primaryContainer,
@@ -401,6 +511,35 @@ private fun PostComposer(
                 modifier = Modifier.fillMaxWidth(),
             )
             if (kind == "moment") {
+                TextButton(
+                    onClick = {
+                        picker.launch(
+                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+                        )
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(stringResource(R.string.choose_local_image))
+                }
+                imageStatus?.let { StatusCard(it) }
+                if (cachedImagePath != null) {
+                    OutlinedTextField(
+                        value = mediaDescription,
+                        onValueChange = { mediaDescription = it },
+                        label = { Text(stringResource(R.string.media_description_optional)) },
+                        supportingText = {
+                            Text(stringResource(R.string.media_description_privacy))
+                        },
+                        minLines = 3,
+                        maxLines = 6,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    FilterChip(
+                        selected = analyzeImage,
+                        onClick = { analyzeImage = !analyzeImage },
+                        label = { Text(stringResource(R.string.allow_vision_analysis)) },
+                    )
+                }
                 Text(
                     stringResource(R.string.audience),
                     style = MaterialTheme.typography.titleSmall,
@@ -447,17 +586,19 @@ private fun PostComposer(
                     onClick = { aiResponsesEnabled = !aiResponsesEnabled },
                     label = { Text(stringResource(R.string.allow_ai_responses)) },
                 )
-                OutlinedTextField(
-                    value = prompt,
-                    onValueChange = { prompt = it },
-                    label = { Text(stringResource(R.string.local_dream_prompt_optional)) },
-                    supportingText = {
-                        Text(stringResource(R.string.local_dream_prompt_summary))
-                    },
-                    minLines = 3,
-                    maxLines = 6,
-                    modifier = Modifier.fillMaxWidth(),
-                )
+                if (cachedImagePath == null) {
+                    OutlinedTextField(
+                        value = prompt,
+                        onValueChange = { prompt = it },
+                        label = { Text(stringResource(R.string.local_dream_prompt_optional)) },
+                        supportingText = {
+                            Text(stringResource(R.string.local_dream_prompt_summary))
+                        },
+                        minLines = 3,
+                        maxLines = 6,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
             }
             Button(
                 onClick = {
@@ -468,12 +609,19 @@ private fun PostComposer(
                         if (kind == "moment") audience else "world",
                         selectedCharacterIds.joinToString(","),
                         kind != "moment" || aiResponsesEnabled,
+                        cachedImagePath,
+                        mediaDescription.trim(),
+                        analyzeImage,
                     )
                     title = ""
                     body = ""
                     prompt = ""
+                    cachedImagePath = null
+                    mediaDescription = ""
+                    analyzeImage = false
+                    imageStatus = null
                 },
-                enabled = body.isNotBlank() &&
+                enabled = (body.isNotBlank() || cachedImagePath != null || prompt.isNotBlank()) &&
                     (kind != "forum" || title.isNotBlank()) &&
                     (kind != "moment" || audience != "selected" || selectedCharacterIds.isNotEmpty()),
                 modifier = Modifier.fillMaxWidth(),
@@ -839,38 +987,38 @@ private fun PostMedia(post: SocialPost, onOpenImage: (Boolean) -> Unit) {
             color = MaterialTheme.colorScheme.error,
         )
     }
-    post.mediaPrompt?.let { prompt ->
-        Text(
-            stringResource(R.string.media_description_from_prompt, prompt),
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
 }
 
 @Composable
 private fun FullScreenMediaPreview(
     post: SocialPost,
+    versions: List<MediaVersion>,
     menuInitiallyOpen: Boolean,
     onDismiss: () -> Unit,
     onRedraw: (String) -> Unit,
+    onRestoreVersion: (Long) -> Unit,
+    onDeleteVersion: (Long) -> Unit,
 ) {
     var menuOpen by rememberSaveable(post.id) { mutableStateOf(menuInitiallyOpen) }
     var editingPrompt by rememberSaveable(post.id) { mutableStateOf(false) }
-    var prompt by rememberSaveable(post.id) { mutableStateOf(post.mediaPrompt.orEmpty()) }
+    var versionListOpen by rememberSaveable(post.id) { mutableStateOf(false) }
+    val originalPrompt = post.mediaPrompt.orEmpty().ifBlank { post.mediaDescription }
+    var prompt by rememberSaveable(post.id) { mutableStateOf(originalPrompt) }
     val bitmap = remember(post.mediaPath) {
         post.mediaPath?.let { BitmapFactory.decodeFile(it) }
     }
 
-    BackHandler {
+    fun dismissTopLayer() {
         when {
             editingPrompt -> editingPrompt = false
+            versionListOpen -> versionListOpen = false
             menuOpen -> menuOpen = false
             else -> onDismiss()
         }
     }
+    BackHandler { dismissTopLayer() }
     Dialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = ::dismissTopLayer,
         properties = DialogProperties(
             usePlatformDefaultWidth = false,
             decorFitsSystemWindows = false,
@@ -913,14 +1061,16 @@ private fun FullScreenMediaPreview(
                         .padding(top = 104.dp, end = 18.dp),
                 ) {
                     Column(Modifier.padding(10.dp)) {
-                        TextButton(
-                            onClick = {
-                                onRedraw(post.mediaPrompt.orEmpty())
-                                menuOpen = false
-                                onDismiss()
-                            },
-                        ) {
-                            Text(stringResource(R.string.redraw_directly))
+                        if (originalPrompt.isNotBlank()) {
+                            TextButton(
+                                onClick = {
+                                    onRedraw(originalPrompt)
+                                    menuOpen = false
+                                    onDismiss()
+                                },
+                            ) {
+                                Text(stringResource(R.string.redraw_directly))
+                            }
                         }
                         TextButton(
                             onClick = {
@@ -929,6 +1079,84 @@ private fun FullScreenMediaPreview(
                             },
                         ) {
                             Text(stringResource(R.string.edit_prompt_and_redraw))
+                        }
+                        if (versions.isNotEmpty()) {
+                            TextButton(
+                                onClick = {
+                                    versionListOpen = true
+                                    menuOpen = false
+                                },
+                            ) {
+                                Text(stringResource(R.string.image_versions, versions.size))
+                            }
+                        }
+                    }
+                }
+            }
+            if (versionListOpen) {
+                Card(
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .padding(18.dp)
+                        .fillMaxWidth(),
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Text(
+                            stringResource(R.string.image_version_history),
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        LazyColumn(Modifier.heightIn(max = 460.dp)) {
+                            items(versions, key = MediaVersion::id) { version ->
+                                val current = version.path == post.mediaPath
+                                Card(Modifier.fillMaxWidth()) {
+                                    Column(
+                                        Modifier.padding(12.dp),
+                                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                                    ) {
+                                        Text(
+                                            if (current) {
+                                                stringResource(R.string.current_image_version)
+                                            } else {
+                                                DateFormat.getDateTimeInstance().format(
+                                                    Date(version.createdAt),
+                                                )
+                                            },
+                                            fontWeight = FontWeight.Bold,
+                                        )
+                                        Text(version.prompt, maxLines = 3)
+                                        if (!current) {
+                                            Row {
+                                                TextButton(
+                                                    onClick = {
+                                                        onRestoreVersion(version.id)
+                                                        versionListOpen = false
+                                                    },
+                                                ) {
+                                                    Text(stringResource(R.string.restore_version))
+                                                }
+                                                TextButton(
+                                                    onClick = {
+                                                        onDeleteVersion(version.id)
+                                                    },
+                                                ) {
+                                                    Text(stringResource(R.string.delete_version))
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                Spacer(Modifier.height(8.dp))
+                            }
+                        }
+                        TextButton(
+                            onClick = { versionListOpen = false },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text(stringResource(R.string.cancel))
                         }
                     }
                 }

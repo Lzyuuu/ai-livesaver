@@ -12,6 +12,8 @@
     <string name="world_title">离你最近的人</string>
     <string name="root_relationship">关系正在变得亲近</string>
     <string name="continue_chat">继续对话</string>
+    <string name="reply_waiting_for_network">你的消息已保存在本地，角色回复尚未完成。</string>
+    <string name="continue_pending_reply">继续请求回复</string>
     <string name="view_updates">查看近况</string>
     <string name="your_circle">你的圈子</string>
     <string name="manage">管理</string>
@@ -120,7 +122,13 @@
     <string name="local_dream_pending">Local Dream 正在生成配图…</string>
     <string name="local_dream_failed">配图生成失败，可稍后重新生成</string>
     <string name="generated_post_image">动态配图</string>
-    <string name="media_description_from_prompt">媒体描述：%1$s</string>
+    <string name="choose_local_image">选择本机图片</string>
+    <string name="image_ready_to_post">图片已选择，只会保存在当前世界。</string>
+    <string name="image_import_failed">无法导入图片</string>
+    <string name="media_description_optional">图片描述或 Local Dream 提示词（可留空）</string>
+    <string name="media_description_privacy">只供角色理解，不公开展示。已有描述时不会调用视觉模型；留空且主动授权后才会发送这一张图片。</string>
+    <string name="allow_vision_analysis">允许视觉模型理解这一张图片</string>
+    <string name="vision_analysis_failed">视觉理解失败，图片仍已保存在本地</string>
     <string name="redraw_directly">直接重新生图</string>
     <string name="edit_prompt_and_redraw">修改提示词后生图</string>
     <string name="edit_generation_prompt">修改提示词</string>
@@ -209,6 +217,14 @@
     <string name="backup_exported">世界备份已导出</string>
     <string name="backup_restored">世界已经恢复</string>
     <string name="backup_failed">备份操作失败</string>
+    <string name="destructive_data_actions">重新开始</string>
+    <string name="destructive_data_actions_summary">建议先导出备份。以下操作没有回收站，只能通过已有备份恢复。</string>
+    <string name="rebuild_world">重建世界</string>
+    <string name="rebuild_world_summary">删除角色、聊天、帖子、记忆、关系和媒体；保留 Provider 与世界偏好，然后重新进入建世流程。</string>
+    <string name="rebuild_world_confirmation">请输入“%1$s”确认重建世界。</string>
+    <string name="erase_all_data">清除全部应用数据</string>
+    <string name="erase_all_data_summary">同时删除世界、Provider 凭据、设置和本地缓存，恢复首次安装状态。</string>
+    <string name="erase_all_data_confirmation">请输入“%1$s”确认清除全部应用数据。</string>
     <string name="about_updates">关于与更新</string>
     <string name="about_updates_summary">Testing 通道 · GitHub Releases</string>
 
@@ -272,9 +288,17 @@
     <string name="checking_local_dream">正在连接…</string>
     <string name="local_dream_connected">Local Dream 已连接</string>
     <string name="local_dream_unavailable">未检测到已加载模型的 Local Dream</string>
+    <string name="media_storage_usage">已保存图片占用 %1$s</string>
+    <string name="storage_low_generation_paused">存储空间不足，生图队列已暂停</string>
+    <string name="retry_generation">重新加入队列</string>
+    <string name="image_versions">图片版本（%1$d）</string>
+    <string name="image_version_history">图片版本</string>
+    <string name="current_image_version">当前显示版本</string>
+    <string name="delete_version">删除版本</string>
 
     <string name="updates_title">关于与更新</string>
     <string name="back">返回</string>
+    <string name="cancel">取消</string>
     <string name="testing_channel">Testing 通道</string>
     <string name="current_version">当前版本</string>
     <string name="update_privacy">只在你点击检查时访问 GitHub，不进行后台更新检查。</string>

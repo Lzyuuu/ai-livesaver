@@ -43,6 +43,21 @@ internal fun allowsAutomaticInference(limit: Int, used: Int): Boolean =
 
 internal fun isDefaultQuietHour(hour: Int): Boolean = hour >= 23 || hour < 8
 
+private val BASE_WORLD_SETTING_KEYS = setOf(
+    "enabled",
+    "activity",
+    "daily_budget",
+    "continuous",
+    "notifications",
+    "notification_preview",
+    "do_not_disturb",
+)
+private val CHARACTER_SETTING_PATTERN =
+    Regex("""character_\d+_(messages|posts|notifications)""")
+
+internal fun isBackedUpWorldSetting(key: String): Boolean =
+    key in BASE_WORLD_SETTING_KEYS || CHARACTER_SETTING_PATTERN.matches(key)
+
 internal object WorldEngine {
     private const val JOB_ID = 0xA11
     private const val RELATIONSHIP_NOTIFICATION_ID = 0xA13
@@ -180,6 +195,47 @@ internal object WorldEngine {
 
     fun setDoNotDisturb(context: Context, enabled: Boolean) {
         preferences(context).edit { putBoolean("do_not_disturb", enabled) }
+    }
+
+    fun backupSettings(context: Context): Map<String, *> =
+        preferences(context).all.filterKeys(::isBackedUpWorldSetting)
+
+    fun restoreSettings(context: Context, values: Map<String, *>) {
+        val preferences = preferences(context)
+        preferences.edit(commit = true) {
+            preferences.all.keys.filter(::isBackedUpWorldSetting).forEach(::remove)
+            values.filterKeys(::isBackedUpWorldSetting).forEach { (key, value) ->
+                when (value) {
+                    is Boolean -> putBoolean(key, value)
+                    is Int -> putInt(key, value)
+                    is Long -> putLong(key, value)
+                    is Float -> putFloat(key, value)
+                    is String -> putString(key, value)
+                }
+            }
+        }
+        resumeAutomation(context)
+    }
+
+    fun resetRuntime(context: Context) {
+        val settings = preferences(context).all.filterKeys(BASE_WORLD_SETTING_KEYS::contains)
+        preferences(context).edit(commit = true) { clear() }
+        restoreSettings(context, settings)
+    }
+
+    fun clearAll(context: Context) {
+        suspendAutomation(context)
+        preferences(context).edit(commit = true) { clear() }
+    }
+
+    fun suspendAutomation(context: Context) {
+        context.getSystemService(JobScheduler::class.java).cancel(JOB_ID)
+        stopContinuous(context)
+    }
+
+    fun resumeAutomation(context: Context) {
+        if (!isEnabled(context)) return
+        if (continuous(context)) startContinuous(context) else schedule(context)
     }
 
     fun proactiveMessages(context: Context, characterId: Long) =

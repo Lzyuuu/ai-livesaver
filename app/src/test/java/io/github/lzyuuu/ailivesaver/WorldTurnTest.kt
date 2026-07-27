@@ -2,6 +2,8 @@ package io.github.lzyuuu.ailivesaver
 
 import org.junit.Assert.assertEquals
 import org.junit.Test
+import java.io.IOException
+import java.net.ConnectException
 
 class WorldTurnTest {
     @Test
@@ -18,5 +20,13 @@ class WorldTurnTest {
         assertEquals(true, isDefaultQuietHour(23))
         assertEquals(true, isDefaultQuietHour(7))
         assertEquals(false, isDefaultQuietHour(12))
+        assertEquals(true, storageAllowsGeneration(256L * 1024 * 1024))
+        assertEquals(false, storageAllowsGeneration(256L * 1024 * 1024 - 1))
+        assertEquals(true, isLocalDreamUnavailable(ConnectException("refused")))
+        assertEquals(false, isLocalDreamUnavailable(IOException("generation failed")))
+        assertEquals(true, isBackedUpWorldSetting("daily_budget"))
+        assertEquals(true, isBackedUpWorldSetting("character_42_notifications"))
+        assertEquals(false, isBackedUpWorldSetting("budget_used"))
+        assertEquals(false, isBackedUpWorldSetting("character_bad_notifications"))
     }
 }

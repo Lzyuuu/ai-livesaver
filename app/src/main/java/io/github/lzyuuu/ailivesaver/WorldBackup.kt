@@ -5,15 +5,21 @@ import android.database.sqlite.SQLiteDatabase
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
+import android.os.StatFs
 import org.json.JSONObject
 import java.io.File
 import java.io.IOException
+import java.nio.file.AtomicMoveNotSupportedException
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 import java.util.UUID
 import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
 import java.util.zip.ZipOutputStream
 
 internal object WorldBackup {
+    private const val MAX_EXTRACTED_BYTES = 8L * 1024 * 1024 * 1024
+
     fun export(
         context: Context,
         store: WorldStore,
@@ -44,10 +50,9 @@ internal object WorldBackup {
             context.contentResolver.openOutputStream(destination, "w")!!.use { output ->
                 ZipOutputStream(output.buffered()).use { zip ->
                     val manifest = JSONObject()
-                        .put("format", 1)
+                        .put("format", 2)
                         .put("type", if (includeMedia) "full" else "light")
-                        .put("worldEngineEnabled", WorldEngine.isEnabled(context))
-                        .put("dailyBudget", WorldEngine.dailyBudget(context))
+                        .put("worldSettings", JSONObject(WorldEngine.backupSettings(context)))
                     zip.writeEntry("manifest.json", manifest.toString().toByteArray())
                     zip.writeFile("world.db", stagedDatabase)
                     if (includeMedia) {
@@ -70,13 +75,28 @@ internal object WorldBackup {
     ) = background(callback) {
         val staging = File(context.cacheDir, "restore-${UUID.randomUUID()}").apply { mkdirs() }
         val rollback = File(context.cacheDir, "rollback-${UUID.randomUUID()}").apply { mkdirs() }
+        val previousSettings = WorldEngine.backupSettings(context)
         try {
-            context.contentResolver.openInputStream(source)!!.use { input ->
+            val maxExtractedBytes = minOf(
+                MAX_EXTRACTED_BYTES,
+                (StatFs(context.cacheDir.path).availableBytes - 256L * 1024 * 1024)
+                    .coerceAtLeast(0),
+            )
+            if (maxExtractedBytes == 0L) throw IOException("存储空间不足，无法恢复备份")
+            val sourceStream = context.contentResolver.openInputStream(source)
+                ?: throw IOException("无法读取备份文件")
+            sourceStream.use { input ->
                 ZipInputStream(input.buffered()).use { zip ->
                     var count = 0
+                    var extractedBytes = 0L
+                    val names = mutableSetOf<String>()
                     while (true) {
                         val entry = zip.nextEntry ?: break
-                        if (++count > 10_000 || !safeEntry(entry.name)) {
+                        if (
+                            ++count > 10_000 ||
+                            !safeEntry(entry.name) ||
+                            !names.add(entry.name)
+                        ) {
                             throw IOException("备份文件包含无效条目")
                         }
                         val target = File(staging, entry.name)
@@ -84,46 +104,120 @@ internal object WorldBackup {
                             target.mkdirs()
                         } else {
                             target.parentFile?.mkdirs()
-                            target.outputStream().use { zip.copyTo(it) }
+                            target.outputStream().use { output ->
+                                val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+                                while (true) {
+                                    val read = zip.read(buffer)
+                                    if (read < 0) break
+                                    extractedBytes += read
+                                    if (extractedBytes > maxExtractedBytes) {
+                                        throw IOException("备份文件过大")
+                                    }
+                                    output.write(buffer, 0, read)
+                                }
+                            }
                         }
                     }
                 }
             }
             val manifest = JSONObject(File(staging, "manifest.json").readText())
-            if (manifest.getInt("format") != 1) throw IOException("不支持的备份版本")
+            val format = manifest.getInt("format")
+            if (format !in 1..2) throw IOException("不支持的备份版本")
+            if (manifest.optString("type") !in setOf("full", "light")) {
+                throw IOException("备份类型无效")
+            }
+            if (format == 2 && manifest.optJSONObject("worldSettings") == null) {
+                throw IOException("备份缺少世界设置")
+            }
             val stagedDatabase = File(staging, "world.db")
             validateDatabase(stagedDatabase)
 
+            WorldEngine.suspendAutomation(context)
             store.close()
             val database = context.getDatabasePath("world.db")
             val media = File(context.filesDir, "media")
+            normalizeMediaPaths(stagedDatabase, File(staging, "media"), media)
             if (database.exists()) database.copyTo(File(rollback, "world.db"))
             if (media.exists() && !media.renameTo(File(rollback, "media"))) {
                 throw IOException("无法创建恢复安全副本")
             }
             try {
                 database.parentFile?.mkdirs()
-                stagedDatabase.copyTo(database, overwrite = true)
                 File(database.path + "-wal").delete()
                 File(database.path + "-shm").delete()
+                val pendingDatabase = File(database.parentFile, ".world-${UUID.randomUUID()}.db")
+                stagedDatabase.copyTo(pendingDatabase)
+                moveReplace(pendingDatabase, database)
                 val stagedMedia = File(staging, "media")
-                if (stagedMedia.exists() && !stagedMedia.renameTo(media)) {
+                val pendingMedia = File(context.filesDir, ".media-${UUID.randomUUID()}")
+                if (stagedMedia.exists()) {
+                    if (
+                        !stagedMedia.renameTo(pendingMedia) &&
+                        !stagedMedia.copyRecursively(pendingMedia)
+                    ) {
+                        throw IOException("无法准备媒体文件")
+                    }
+                } else {
+                    pendingMedia.mkdirs()
+                }
+                if (!pendingMedia.renameTo(media)) {
                     throw IOException("无法恢复媒体文件")
                 }
-                if (!media.exists()) media.mkdirs()
-                WorldEngine.setDailyBudget(context, manifest.optInt("dailyBudget", 12))
-                WorldEngine.setEnabled(context, manifest.optBoolean("worldEngineEnabled", true))
+                val settings = if (format == 1) {
+                    mapOf(
+                        "daily_budget" to manifest.optInt("dailyBudget", 20),
+                        "enabled" to manifest.optBoolean("worldEngineEnabled", true),
+                    )
+                } else {
+                    manifest.optJSONObject("worldSettings")?.toMap().orEmpty()
+                }
+                WorldEngine.restoreSettings(context, settings)
             } catch (error: Throwable) {
                 database.delete()
                 File(rollback, "world.db").takeIf(File::exists)?.copyTo(database)
                 media.deleteRecursively()
                 File(rollback, "media").takeIf(File::exists)?.renameTo(media)
+                WorldEngine.restoreSettings(context, previousSettings)
                 throw error
             }
         } finally {
+            WorldEngine.resumeAutomation(context)
+            context.filesDir.listFiles()
+                ?.filter { it.name.startsWith(".media-") }
+                ?.forEach(File::deleteRecursively)
+            context.getDatabasePath("world.db").parentFile?.listFiles()
+                ?.filter { it.name.startsWith(".world-") }
+                ?.forEach(File::delete)
             staging.deleteRecursively()
             rollback.deleteRecursively()
         }
+    }
+
+    fun rebuildWorld(
+        context: Context,
+        store: WorldStore,
+        callback: (Result<Unit>) -> Unit,
+    ) = background(callback) {
+        WorldEngine.suspendAutomation(context)
+        store.close()
+        context.deleteDatabase("world.db")
+        File(context.filesDir, "media").deleteRecursively()
+        WorldEngine.resetRuntime(context)
+    }
+
+    fun eraseAll(
+        context: Context,
+        store: WorldStore,
+        callback: (Result<Unit>) -> Unit,
+    ) = background(callback) {
+        WorldEngine.clearAll(context)
+        store.close()
+        context.deleteDatabase("world.db")
+        File(context.filesDir, "media").deleteRecursively()
+        context.cacheDir.listFiles()
+            ?.filter { it.name.startsWith("import-") || it.name.startsWith("local-dream-") }
+            ?.forEach(File::deleteRecursively)
+        ProviderStore(context).clearAll()
     }
 
     internal fun safeEntry(name: String): Boolean =
@@ -135,6 +229,14 @@ internal object WorldBackup {
     private fun validateDatabase(file: File) {
         if (!file.isFile) throw IOException("备份缺少世界数据库")
         SQLiteDatabase.openDatabase(file.path, null, SQLiteDatabase.OPEN_READONLY).use { database ->
+            val integrity = database.rawQuery("PRAGMA integrity_check(1)", null).use { cursor ->
+                cursor.moveToFirst() && cursor.getString(0) == "ok"
+            }
+            if (!integrity) throw IOException("世界数据库完整性校验失败")
+            val foreignKeysValid = database.rawQuery("PRAGMA foreign_key_check", null).use {
+                !it.moveToFirst()
+            }
+            if (!foreignKeysValid) throw IOException("世界数据库关联校验失败")
             val tables = database.rawQuery(
                 "SELECT name FROM sqlite_master WHERE type = 'table'",
                 null,
@@ -146,6 +248,82 @@ internal object WorldBackup {
             }
         }
     }
+
+    private fun normalizeMediaPaths(databaseFile: File, source: File, destination: File) {
+        SQLiteDatabase.openDatabase(
+            databaseFile.path,
+            null,
+            SQLiteDatabase.OPEN_READWRITE,
+        ).use { database ->
+            val versions = database.rawQuery(
+                "SELECT id, path FROM media_versions",
+                null,
+            ).use { cursor ->
+                buildList {
+                    while (cursor.moveToNext()) add(cursor.getLong(0) to cursor.getString(1))
+                }
+            }
+            versions.forEach { (id, path) ->
+                val name = File(path).name
+                if (File(source, name).isFile) {
+                    database.execSQL(
+                        "UPDATE media_versions SET path = ? WHERE id = ?",
+                        arrayOf(File(destination, name).path, id),
+                    )
+                } else {
+                    database.execSQL("DELETE FROM media_versions WHERE id = ?", arrayOf(id))
+                }
+            }
+            val posts = database.rawQuery(
+                "SELECT id, media_path FROM social_posts WHERE media_path IS NOT NULL",
+                null,
+            ).use { cursor ->
+                buildList {
+                    while (cursor.moveToNext()) add(cursor.getLong(0) to cursor.getString(1))
+                }
+            }
+            posts.forEach { (id, path) ->
+                val name = File(path).name
+                if (File(source, name).isFile) {
+                    database.execSQL(
+                        "UPDATE social_posts SET media_path = ? WHERE id = ?",
+                        arrayOf(File(destination, name).path, id),
+                    )
+                } else {
+                    database.execSQL(
+                        """
+                        UPDATE social_posts
+                        SET media_path = NULL,
+                            media_status = CASE
+                                WHEN media_prompt IS NULL THEN 'none' ELSE 'failed'
+                            END
+                        WHERE id = ?
+                        """.trimIndent(),
+                        arrayOf(id),
+                    )
+                }
+            }
+        }
+    }
+
+    private fun moveReplace(source: File, destination: File) {
+        try {
+            Files.move(
+                source.toPath(),
+                destination.toPath(),
+                StandardCopyOption.ATOMIC_MOVE,
+                StandardCopyOption.REPLACE_EXISTING,
+            )
+        } catch (_: AtomicMoveNotSupportedException) {
+            Files.move(
+                source.toPath(),
+                destination.toPath(),
+                StandardCopyOption.REPLACE_EXISTING,
+            )
+        }
+    }
+
+    private fun JSONObject.toMap(): Map<String, Any> = keys().asSequence().associateWith(::get)
 
     private fun background(callback: (Result<Unit>) -> Unit, block: () -> Unit) {
         Thread {

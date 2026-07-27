@@ -5,6 +5,7 @@ import android.content.Context
 import android.database.Cursor
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
+import java.io.File
 
 internal data class ResidentCharacter(
     val id: Long,
@@ -94,6 +95,8 @@ internal data class SocialPost(
     val reactedByUser: Boolean = false,
     val providerName: String = "",
     val modelName: String = "",
+    val mediaDescription: String = "",
+    val mediaSource: String = "",
 )
 
 internal data class SocialPostVersion(
@@ -101,6 +104,29 @@ internal data class SocialPostVersion(
     val body: String,
     val providerName: String,
     val modelName: String,
+    val createdAt: Long,
+)
+
+internal data class MediaJob(
+    val postId: Long,
+    val prompt: String,
+    val negativePrompt: String,
+    val steps: Int,
+    val cfg: Double,
+    val scheduler: String,
+    val width: Int,
+    val height: Int,
+    val seed: Long?,
+    val status: String,
+    val error: String,
+)
+
+internal data class MediaVersion(
+    val id: Long,
+    val postId: Long,
+    val path: String,
+    val prompt: String,
+    val seed: Long,
     val createdAt: Long,
 )
 
@@ -157,7 +183,8 @@ internal data class MemberWorldContext(
 )
 
 internal class WorldStore(context: Context) :
-    SQLiteOpenHelper(context, "world.db", null, 12) {
+    SQLiteOpenHelper(context, "world.db", null, 14) {
+    private val mediaDirectory = File(context.filesDir, "media").canonicalFile
 
     override fun onCreate(database: SQLiteDatabase) {
         database.execSQL(
@@ -277,6 +304,8 @@ internal class WorldStore(context: Context) :
         if (oldVersion < 10) migrateM3(database)
         if (oldVersion < 11) createM3Tables(database)
         if (oldVersion < 12) repairLegacyPostAuthors(database)
+        if (oldVersion < 13) migrateMediaQueue(database)
+        if (oldVersion < 14) migrateMediaDescriptions(database)
     }
 
     private fun createSocialTables(database: SQLiteDatabase) {
@@ -293,6 +322,15 @@ internal class WorldStore(context: Context) :
                 media_prompt TEXT,
                 media_seed INTEGER,
                 media_status TEXT NOT NULL DEFAULT 'none',
+                media_negative_prompt TEXT NOT NULL DEFAULT '',
+                media_steps INTEGER NOT NULL DEFAULT 20,
+                media_cfg REAL NOT NULL DEFAULT 7.5,
+                media_scheduler TEXT NOT NULL DEFAULT 'dpm',
+                media_width INTEGER NOT NULL DEFAULT 512,
+                media_height INTEGER NOT NULL DEFAULT 512,
+                media_error TEXT NOT NULL DEFAULT '',
+                media_description TEXT NOT NULL DEFAULT '',
+                media_source TEXT NOT NULL DEFAULT '',
                 author_kind TEXT NOT NULL DEFAULT 'user',
                 author_character_id INTEGER REFERENCES characters(id) ON DELETE SET NULL,
                 audience TEXT NOT NULL DEFAULT 'world',
@@ -397,6 +435,43 @@ internal class WorldStore(context: Context) :
         createM3Tables(database)
     }
 
+    private fun migrateMediaQueue(database: SQLiteDatabase) {
+        addColumnIfMissing(
+            database,
+            "social_posts",
+            "media_negative_prompt",
+            "TEXT NOT NULL DEFAULT ''",
+        )
+        addColumnIfMissing(database, "social_posts", "media_steps", "INTEGER NOT NULL DEFAULT 20")
+        addColumnIfMissing(database, "social_posts", "media_cfg", "REAL NOT NULL DEFAULT 7.5")
+        addColumnIfMissing(
+            database,
+            "social_posts",
+            "media_scheduler",
+            "TEXT NOT NULL DEFAULT 'dpm'",
+        )
+        addColumnIfMissing(database, "social_posts", "media_width", "INTEGER NOT NULL DEFAULT 512")
+        addColumnIfMissing(database, "social_posts", "media_height", "INTEGER NOT NULL DEFAULT 512")
+        addColumnIfMissing(database, "social_posts", "media_error", "TEXT NOT NULL DEFAULT ''")
+    }
+
+    private fun migrateMediaDescriptions(database: SQLiteDatabase) {
+        addColumnIfMissing(
+            database,
+            "social_posts",
+            "media_description",
+            "TEXT NOT NULL DEFAULT ''",
+        )
+        addColumnIfMissing(database, "social_posts", "media_source", "TEXT NOT NULL DEFAULT ''")
+        database.execSQL(
+            """
+            UPDATE social_posts
+            SET media_description = COALESCE(media_prompt, ''),
+                media_source = CASE WHEN media_prompt IS NULL THEN '' ELSE 'local_dream' END
+            WHERE media_description = ''
+            """.trimIndent(),
+        )
+    }
     private fun repairLegacyPostAuthors(database: SQLiteDatabase) {
         database.execSQL(
             """
@@ -1043,7 +1118,7 @@ internal class WorldStore(context: Context) :
                    SELECT 1 FROM social_reactions
                    WHERE post_id = social_posts.id AND actor_kind = 'user' AND actor_name = ?
                ),
-               provider_name, model_name
+               provider_name, model_name, media_description, media_source
         FROM social_posts
         WHERE kind = ? AND hidden = 0 AND media_status IN ('none', 'ready')
         ORDER BY $order
@@ -1073,6 +1148,8 @@ internal class WorldStore(context: Context) :
                         cursor.getInt(16) == 1,
                         cursor.getString(17),
                         cursor.getString(18),
+                        cursor.getString(19),
+                        cursor.getString(20),
                     ),
                 )
             }
@@ -1150,6 +1227,8 @@ internal class WorldStore(context: Context) :
                 put("body", body.trim())
                 put("media_prompt", prompt.trim())
                 put("media_status", "pending")
+                put("media_description", prompt.trim())
+                put("media_source", "local_dream")
                 put("created_at", System.currentTimeMillis())
                 put("author_kind", "user")
                 put("audience", audience)
@@ -1157,6 +1236,49 @@ internal class WorldStore(context: Context) :
                 put("ai_responses_enabled", if (aiResponsesEnabled) 1 else 0)
             },
         )
+    }
+
+    fun createImportedMediaPost(
+        body: String,
+        path: String,
+        description: String,
+        audience: String,
+        audienceCharacterIds: String,
+        aiResponsesEnabled: Boolean,
+    ): Long {
+        val createdAt = System.currentTimeMillis()
+        val postId = writableDatabase.insertOrThrow(
+            "social_posts",
+            null,
+            ContentValues().apply {
+                put("kind", "moment")
+                put("author_name", userName())
+                put("body", body.trim())
+                put("media_path", path)
+                put("media_status", "ready")
+                put("media_description", description.trim())
+                put("media_source", "user")
+                if (description.isNotBlank()) put("media_prompt", description.trim())
+                put("created_at", createdAt)
+                put("author_kind", "user")
+                put("audience", audience)
+                put("audience_character_ids", audienceCharacterIds)
+                put("ai_responses_enabled", if (aiResponsesEnabled) 1 else 0)
+            },
+        )
+        writableDatabase.insertOrThrow(
+            "media_versions",
+            null,
+            ContentValues().apply {
+                put("post_id", postId)
+                put("path", path)
+                put("prompt", description.trim())
+                put("seed", 0)
+                put("created_at", createdAt)
+            },
+        )
+        addWorldEvent("moment", body.take(120), userName(), false, postId)
+        return postId
     }
 
     fun toggleReaction(postId: Long) {
@@ -1193,29 +1315,41 @@ internal class WorldStore(context: Context) :
     }
 
     fun deleteUserPost(postId: Long) {
-        writableDatabase.delete(
-            "world_events",
-            "source_post_id = ?",
-            arrayOf(postId.toString()),
-        )
-        writableDatabase.delete(
-            "social_posts",
-            "id = ? AND author_kind = 'user'",
-            arrayOf(postId.toString()),
-        )
+        deletePost(postId, "author_kind = 'user'")
     }
 
     fun deleteAiPost(postId: Long) {
-        writableDatabase.delete(
-            "world_events",
-            "source_post_id = ?",
-            arrayOf(postId.toString()),
-        )
-        writableDatabase.delete(
-            "social_posts",
-            "id = ? AND author_kind != 'user'",
-            arrayOf(postId.toString()),
-        )
+        deletePost(postId, "author_kind != 'user'")
+    }
+
+    private fun deletePost(postId: Long, authorClause: String) {
+        val paths = readableDatabase.rawQuery(
+            """
+            SELECT media_path FROM social_posts WHERE id = ? AND media_path IS NOT NULL
+            UNION
+            SELECT path FROM media_versions WHERE post_id = ?
+            """.trimIndent(),
+            arrayOf(postId.toString(), postId.toString()),
+        ).use { cursor ->
+            buildList { while (cursor.moveToNext()) add(cursor.getString(0)) }
+        }
+        writableDatabase.beginTransaction()
+        try {
+            writableDatabase.delete(
+                "world_events",
+                "source_post_id = ?",
+                arrayOf(postId.toString()),
+            )
+            writableDatabase.delete(
+                "social_posts",
+                "id = ? AND $authorClause",
+                arrayOf(postId.toString()),
+            )
+            writableDatabase.setTransactionSuccessful()
+        } finally {
+            writableDatabase.endTransaction()
+        }
+        paths.forEach(::deleteMediaFileIfUnreferenced)
     }
 
     fun hideAiPost(postId: Long) {
@@ -1621,6 +1755,9 @@ internal class WorldStore(context: Context) :
                         put("media_path", path)
                         put("media_seed", seed)
                         put("media_status", "ready")
+                        put("media_error", "")
+                        put("media_description", prompt)
+                        put("media_source", "local_dream")
                     },
                     "id = ?",
                     arrayOf(postId.toString()),
@@ -1653,10 +1790,38 @@ internal class WorldStore(context: Context) :
     }
 
     fun markMediaFailed(postId: Long) {
+        markMediaFailed(postId, "")
+    }
+
+    fun markMediaFailed(postId: Long, error: String) {
         writableDatabase.update(
             "social_posts",
-            ContentValues().apply { put("media_status", "failed") },
+            ContentValues().apply {
+                put("media_status", "failed")
+                put("media_error", error.take(240))
+            },
             "id = ?",
+            arrayOf(postId.toString()),
+        )
+    }
+
+    fun markMediaWaiting(postId: Long, error: String) {
+        writableDatabase.update(
+            "social_posts",
+            ContentValues().apply {
+                put("media_status", "pending")
+                put("media_error", error.take(240))
+            },
+            "id = ?",
+            arrayOf(postId.toString()),
+        )
+    }
+
+    fun updateMediaDescription(postId: Long, description: String) {
+        writableDatabase.update(
+            "social_posts",
+            ContentValues().apply { put("media_description", description.trim()) },
+            "id = ? AND media_source = 'user'",
             arrayOf(postId.toString()),
         )
     }
@@ -1667,14 +1832,189 @@ internal class WorldStore(context: Context) :
             ContentValues().apply {
                 put("media_prompt", prompt.trim())
                 put("media_status", "pending")
+                putNull("media_seed")
+                put("media_error", "")
             },
             "id = ?",
             arrayOf(postId.toString()),
         )
     }
 
+    fun nextPendingMediaJob(): MediaJob? = readableDatabase.rawQuery(
+        """
+        SELECT id, media_prompt, media_negative_prompt, media_steps, media_cfg,
+               media_scheduler, media_width, media_height, media_seed, media_status, media_error
+        FROM social_posts
+        WHERE media_status = 'pending' AND media_prompt IS NOT NULL
+        ORDER BY created_at, id
+        LIMIT 1
+        """.trimIndent(),
+        null,
+    ).use { cursor ->
+        if (!cursor.moveToFirst()) return@use null
+        MediaJob(
+            postId = cursor.getLong(0),
+            prompt = cursor.getString(1),
+            negativePrompt = cursor.getString(2),
+            steps = cursor.getInt(3),
+            cfg = cursor.getDouble(4),
+            scheduler = cursor.getString(5),
+            width = cursor.getInt(6),
+            height = cursor.getInt(7),
+            seed = if (cursor.isNull(8)) null else cursor.getLong(8),
+            status = cursor.getString(9),
+            error = cursor.getString(10),
+        )
+    }
+
+    fun mediaJobs(): List<MediaJob> = readableDatabase.rawQuery(
+        """
+        SELECT id, media_prompt, media_negative_prompt, media_steps, media_cfg,
+               media_scheduler, media_width, media_height, media_seed, media_status, media_error
+        FROM social_posts
+        WHERE media_status IN ('pending', 'failed') AND media_prompt IS NOT NULL
+        ORDER BY created_at, id
+        """.trimIndent(),
+        null,
+    ).use { cursor ->
+        buildList {
+            while (cursor.moveToNext()) {
+                add(
+                    MediaJob(
+                        cursor.getLong(0),
+                        cursor.getString(1),
+                        cursor.getString(2),
+                        cursor.getInt(3),
+                        cursor.getDouble(4),
+                        cursor.getString(5),
+                        cursor.getInt(6),
+                        cursor.getInt(7),
+                        if (cursor.isNull(8)) null else cursor.getLong(8),
+                        cursor.getString(9),
+                        cursor.getString(10),
+                    ),
+                )
+            }
+        }
+    }
+
+    fun retryMediaJob(postId: Long) {
+        writableDatabase.update(
+            "social_posts",
+            ContentValues().apply {
+                put("media_status", "pending")
+                put("media_error", "")
+            },
+            "id = ? AND media_status = 'failed'",
+            arrayOf(postId.toString()),
+        )
+    }
+
+    fun mediaVersions(postId: Long): List<MediaVersion> = readableDatabase.rawQuery(
+        """
+        SELECT id, post_id, path, prompt, seed, created_at
+        FROM media_versions
+        WHERE post_id = ?
+        ORDER BY created_at DESC, id DESC
+        """.trimIndent(),
+        arrayOf(postId.toString()),
+    ).use { cursor ->
+        buildList {
+            while (cursor.moveToNext()) {
+                add(
+                    MediaVersion(
+                        cursor.getLong(0),
+                        cursor.getLong(1),
+                        cursor.getString(2),
+                        cursor.getString(3),
+                        cursor.getLong(4),
+                        cursor.getLong(5),
+                    ),
+                )
+            }
+        }
+    }
+
+    fun restoreMediaVersion(postId: Long, versionId: Long) {
+        readableDatabase.rawQuery(
+            """
+            SELECT path, prompt, seed
+            FROM media_versions
+            WHERE id = ? AND post_id = ?
+            """.trimIndent(),
+            arrayOf(versionId.toString(), postId.toString()),
+        ).use { cursor ->
+            if (!cursor.moveToFirst()) return
+            writableDatabase.update(
+                "social_posts",
+                ContentValues().apply {
+                    put("media_path", cursor.getString(0))
+                    put("media_prompt", cursor.getString(1))
+                    put("media_seed", cursor.getLong(2))
+                    put("media_status", "ready")
+                    put("media_error", "")
+                },
+                "id = ?",
+                arrayOf(postId.toString()),
+            )
+        }
+    }
+
+    fun deleteMediaVersion(postId: Long, versionId: Long) {
+        val version = mediaVersions(postId).firstOrNull { it.id == versionId } ?: return
+        val currentPath = readableDatabase.rawQuery(
+            "SELECT media_path FROM social_posts WHERE id = ?",
+            arrayOf(postId.toString()),
+        ).use { cursor -> if (cursor.moveToFirst()) cursor.getString(0) else null }
+        if (version.path == currentPath) return
+        writableDatabase.delete(
+            "media_versions",
+            "id = ? AND post_id = ?",
+            arrayOf(versionId.toString(), postId.toString()),
+        )
+        val referenced = readableDatabase.rawQuery(
+            """
+            SELECT EXISTS(SELECT 1 FROM media_versions WHERE path = ?)
+                OR EXISTS(SELECT 1 FROM social_posts WHERE media_path = ?)
+            """.trimIndent(),
+            arrayOf(version.path, version.path),
+        ).use { cursor -> cursor.moveToFirst() && cursor.getInt(0) == 1 }
+        if (!referenced) deleteOwnedMediaFile(version.path)
+    }
+
+    private fun deleteMediaFileIfUnreferenced(path: String) {
+        val referenced = readableDatabase.rawQuery(
+            """
+            SELECT EXISTS(SELECT 1 FROM media_versions WHERE path = ?)
+                OR EXISTS(SELECT 1 FROM social_posts WHERE media_path = ?)
+            """.trimIndent(),
+            arrayOf(path, path),
+        ).use { cursor -> cursor.moveToFirst() && cursor.getInt(0) == 1 }
+        if (!referenced) deleteOwnedMediaFile(path)
+    }
+
+    private fun deleteOwnedMediaFile(path: String) {
+        runCatching { File(path).canonicalFile }
+            .getOrNull()
+            ?.takeIf { it.parentFile == mediaDirectory }
+            ?.delete()
+    }
+
+    fun mediaStorageBytes(): Long = readableDatabase.rawQuery(
+        """
+        SELECT path FROM media_versions
+        UNION
+        SELECT media_path FROM social_posts WHERE media_path IS NOT NULL
+        """.trimIndent(),
+        null,
+    ).use { cursor ->
+        var total = 0L
+        while (cursor.moveToNext()) total += File(cursor.getString(0)).length()
+        total
+    }
+
     fun queueCount(): Int = readableDatabase.rawQuery(
-        "SELECT COUNT(*) FROM social_posts WHERE media_status = 'pending'",
+        "SELECT COUNT(*) FROM social_posts WHERE media_status IN ('pending', 'failed')",
         null,
     ).use { cursor -> cursor.moveToFirst(); cursor.getInt(0) }
 }

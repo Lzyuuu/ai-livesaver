@@ -195,6 +195,30 @@ private fun ConversationScreen(
     var error by remember { mutableStateOf<String?>(null) }
     var showContext by rememberSaveable { mutableStateOf(false) }
 
+    fun requestReply() {
+        sending = true
+        error = null
+        ProviderChatClient.complete(
+            config = provider.load(),
+            character = character,
+            messages = store.messages(character.id),
+            memories = store.memories(character.id),
+            recap = store.conversationRecap(character.id),
+            worldFacts = store.worldFacts(),
+            cognition = store.characterCognition(character.id),
+            userContext = store.memberWorldContext("user"),
+            characterContext = store.memberWorldContext("character:${character.id}"),
+        ) { result ->
+            sending = false
+            result.onSuccess {
+                store.addMessage(character.id, "assistant", it)
+                onChanged()
+            }.onFailure {
+                error = it.message.orEmpty()
+            }
+        }
+    }
+
     BackHandler(showContext) { showContext = false }
     LaunchedEffect(messages.size) {
         if (messages.isNotEmpty()) listState.animateScrollToItem(messages.lastIndex + 1)
@@ -316,6 +340,14 @@ private fun ConversationScreen(
         error?.let { message ->
             item { StatusCard(stringResource(R.string.chat_failed, message)) }
         }
+        if (messages.lastOrNull()?.sender == "user" && !sending) {
+            item {
+                StatusCard(stringResource(R.string.reply_waiting_for_network))
+                TextButton(onClick = ::requestReply) {
+                    Text(stringResource(R.string.continue_pending_reply))
+                }
+            }
+        }
         item {
             OutlinedTextField(
                 value = input,
@@ -344,25 +376,7 @@ private fun ConversationScreen(
                     )
                     sending = true
                     onChanged()
-                    ProviderChatClient.complete(
-                        config = provider.load(),
-                        character = character,
-                        messages = store.messages(character.id),
-                        memories = store.memories(character.id),
-                        recap = store.conversationRecap(character.id),
-                        worldFacts = store.worldFacts(),
-                        cognition = store.characterCognition(character.id),
-                        userContext = store.memberWorldContext("user"),
-                        characterContext = store.memberWorldContext("character:${character.id}"),
-                    ) { result ->
-                        sending = false
-                        result.onSuccess {
-                            store.addMessage(character.id, "assistant", it)
-                            onChanged()
-                        }.onFailure {
-                            error = it.message.orEmpty()
-                        }
-                    }
+                    requestReply()
                 },
                 enabled = input.isNotBlank() && !sending,
                 modifier = Modifier.fillMaxWidth(),
