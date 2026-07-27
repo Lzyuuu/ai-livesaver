@@ -1,12 +1,22 @@
 package io.github.lzyuuu.ailivesaver
 
+import android.content.Intent
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.IOException
 import java.net.ConnectException
 import android.app.Notification
 
 class WorldTurnTest {
+    @Test
+    fun resumesOnlyForBootCompletedBroadcast() {
+        assertTrue(isWorldBootAction(Intent.ACTION_BOOT_COMPLETED))
+        assertFalse(isWorldBootAction(Intent.ACTION_TIME_CHANGED))
+        assertFalse(isWorldBootAction(null))
+    }
+
     @Test
     fun keepsNpcActivityBoundedAndHonorsCharacterControls() {
         val turns = (0 until 10).map { chooseWorldTurn(it, true, true) }

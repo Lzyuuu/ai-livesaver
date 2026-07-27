@@ -10,6 +10,7 @@ import android.app.job.JobInfo
 import android.app.job.JobParameters
 import android.app.job.JobScheduler
 import android.app.job.JobService
+import android.content.BroadcastReceiver
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -80,6 +81,8 @@ internal fun canRespondToPost(
     taskPaused: Boolean,
 ): Boolean = providerReady && budgetAvailable && !taskPaused
 
+internal fun isWorldBootAction(action: String?): Boolean = action == Intent.ACTION_BOOT_COMPLETED
+
 private val BASE_WORLD_SETTING_KEYS = setOf(
     "enabled",
     "activity",
@@ -119,7 +122,7 @@ internal object WorldEngine {
             JobInfo.Builder(JOB_ID, ComponentName(context, WorldJobService::class.java))
                 .setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY)
                 .setPeriodic(interval)
-                .setPersisted(false)
+                .setPersisted(true)
                 .build(),
         )
     }
@@ -859,6 +862,14 @@ internal class WorldJobService : JobService() {
     }
 
     override fun onStopJob(params: JobParameters): Boolean = true
+}
+
+internal class WorldBootReceiver : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent) {
+        if (isWorldBootAction(intent.action)) {
+            runCatching { WorldEngine.resumeAutomation(context.applicationContext) }
+        }
+    }
 }
 
 internal class ContinuousWorldService : Service() {
