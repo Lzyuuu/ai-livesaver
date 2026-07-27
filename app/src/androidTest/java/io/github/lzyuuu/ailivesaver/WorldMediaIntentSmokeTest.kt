@@ -58,6 +58,9 @@ class WorldMediaIntentSmokeTest {
                 }
                 WorldStore(context).use { store ->
                     store.prepareRedraw(postId, "Mira, red coat, rainy street")
+                    val visibleDuringRedraw = store.posts("moment").first { it.id == postId }
+                    assertEquals("pending", visibleDuringRedraw.mediaStatus)
+                    assertEquals(path.absolutePath, visibleDuringRedraw.mediaPath)
                     store.markMediaReady(postId, secondPath.absolutePath, 456L)
                 }
                 assertEquals(

@@ -1779,7 +1779,10 @@ internal class WorldStore(context: Context) :
                ),
                provider_name, model_name, media_description, media_source
         FROM social_posts
-        WHERE kind = ? AND hidden = 0 AND media_status IN ('none', 'ready')
+        WHERE kind = ? AND hidden = 0 AND (
+            media_status IN ('none', 'ready') OR
+            (media_status IN ('pending', 'failed') AND media_path IS NOT NULL)
+        )
         ORDER BY $order
         """.trimIndent(),
             arrayOf(userName(), kind),
