@@ -84,34 +84,38 @@ class LocalDreamHttpSmokeTest {
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
         val result = CountDownLatch(1)
         var generatedPath: String? = null
+        val postId = WorldStore(context).use { store ->
+            store.createMediaPost(
+                body = "queue smoke test",
+                prompt = "queue smoke test image",
+            )
+        }
         try {
-            LocalDreamClient.generate(
+            LocalDreamQueue.resume(
                 context = context,
-                job = MediaJob(
-                    postId = 1,
-                    prompt = "smoke test",
-                    negativePrompt = "",
-                    steps = 1,
-                    cfg = 1.0,
-                    scheduler = "dpm",
-                    width = 8,
-                    height = 8,
-                    seed = 42,
-                    status = "pending",
-                    error = "",
-                ),
-                onProgress = { _, _ -> progressSeen.set(true) },
-            ) { generation ->
-                generatedPath = generation.getOrNull()?.path
-                result.countDown()
-            }
+                onProgress = { activePostId, _, _ ->
+                    if (activePostId == postId) progressSeen.set(true)
+                },
+                onFinished = { activePostId, generation ->
+                    if (activePostId == postId) {
+                        generatedPath = generation.getOrNull()?.path
+                        result.countDown()
+                    }
+                },
+            )
             assertTrue("Local Dream callback timed out", result.await(10, TimeUnit.SECONDS))
             assertTrue("Local Dream server failed", serverFailure.get() == null)
             assertTrue("Local Dream response did not arrive", responseReady.await(2, TimeUnit.SECONDS))
             assertTrue("Progress event was not delivered", progressSeen.get())
             assertTrue("Generation failed: ${generatedPath ?: "no file"}", generatedPath != null)
             assertTrue(File(requireNotNull(generatedPath)).isFile)
+            val visiblePost = WorldStore(context).use { store ->
+                store.posts("moment").firstOrNull { it.id == postId }
+            }
+            assertTrue("Generated post was not made visible", visiblePost?.mediaStatus == "ready")
+            assertTrue("Generated post has no image path", visiblePost?.mediaPath?.let(::File)?.isFile == true)
         } finally {
+            WorldStore(context).use { it.deleteUserPost(postId) }
             generatedPath?.let { File(it).delete() }
             server.close()
             serverThread.join(2_000)
