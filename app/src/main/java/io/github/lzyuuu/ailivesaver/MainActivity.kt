@@ -139,6 +139,7 @@ private fun AiLivesaverApp() {
     var showWorldSettings by rememberSaveable { mutableStateOf(false) }
     var showWorldKnowledge by rememberSaveable { mutableStateOf(false) }
     var showLocalDream by rememberSaveable { mutableStateOf(false) }
+    var showDiagnostics by rememberSaveable { mutableStateOf(false) }
     var showBackups by rememberSaveable { mutableStateOf(false) }
     var showIdentity by rememberSaveable { mutableStateOf(false) }
     var showCharacters by rememberSaveable { mutableStateOf(false) }
@@ -164,13 +165,14 @@ private fun AiLivesaverApp() {
     BackHandler(
         enabled = showUpdates || showProviders || showWorldSettings || showWorldKnowledge ||
             showLocalDream ||
-            showBackups || showIdentity || showCharacters,
+            showDiagnostics || showBackups || showIdentity || showCharacters,
     ) {
         showUpdates = false
         showProviders = false
         showWorldSettings = false
         showWorldKnowledge = false
         showLocalDream = false
+        showDiagnostics = false
         showBackups = false
         showIdentity = false
         showCharacters = false
@@ -180,7 +182,7 @@ private fun AiLivesaverApp() {
         bottomBar = {
             if (
                 !showUpdates && !showProviders && !showWorldSettings && !showWorldKnowledge &&
-                !showLocalDream && !showBackups && !showIdentity && !showCharacters
+                !showLocalDream && !showDiagnostics && !showBackups && !showIdentity && !showCharacters
             ) {
                 NavigationBar {
                     Destination.entries.forEach { item ->
@@ -235,6 +237,11 @@ private fun AiLivesaverApp() {
                     worldRevision++
                 },
                 onChanged = { worldRevision++ },
+            )
+        } else if (showDiagnostics) {
+            DiagnosticsScreen(
+                contentPadding = padding,
+                onBack = { showDiagnostics = false },
             )
         } else if (showBackups) {
             BackupSettingsScreen(
@@ -322,6 +329,7 @@ private fun AiLivesaverApp() {
                     onOpenWorldSettings = { showWorldSettings = true },
                     onOpenWorldKnowledge = { showWorldKnowledge = true },
                     onOpenLocalDream = { showLocalDream = true },
+                    onOpenDiagnostics = { showDiagnostics = true },
                     onOpenBackups = { showBackups = true },
                 )
             }
@@ -707,6 +715,7 @@ private fun MeScreen(
     onOpenWorldSettings: () -> Unit,
     onOpenWorldKnowledge: () -> Unit,
     onOpenLocalDream: () -> Unit,
+    onOpenDiagnostics: () -> Unit,
     onOpenBackups: () -> Unit,
 ) {
     val settings = listOf(
@@ -716,6 +725,7 @@ private fun MeScreen(
         SettingRow(R.string.local_dream_settings, R.string.local_dream_settings_summary, "dream"),
         SettingRow(R.string.world_settings, R.string.world_settings_summary, "world"),
         SettingRow(R.string.world_knowledge, R.string.world_knowledge_summary, "knowledge"),
+        SettingRow(R.string.runtime_status, R.string.runtime_status_summary, "diagnostics"),
         SettingRow(R.string.backup_settings, R.string.backup_settings_summary, "backups"),
         SettingRow(R.string.about_updates, R.string.about_updates_summary, "updates"),
     )
@@ -760,6 +770,7 @@ private fun MeScreen(
                             "dream" -> onOpenLocalDream()
                             "world" -> onOpenWorldSettings()
                             "knowledge" -> onOpenWorldKnowledge()
+                            "diagnostics" -> onOpenDiagnostics()
                             "backups" -> onOpenBackups()
                             "updates" -> onOpenUpdates()
                         }
