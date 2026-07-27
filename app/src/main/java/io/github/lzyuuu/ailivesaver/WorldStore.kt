@@ -2689,6 +2689,30 @@ internal class WorldStore(context: Context) :
         total
     }
 
+    fun pruneOrphanMedia(): Int {
+        val referenced = readableDatabase.rawQuery(
+            """
+            SELECT path FROM media_versions
+            UNION
+            SELECT media_path FROM social_posts WHERE media_path IS NOT NULL
+            """.trimIndent(),
+            null,
+        ).use { cursor ->
+            buildSet {
+                while (cursor.moveToNext()) {
+                    runCatching { add(File(cursor.getString(0)).canonicalFile) }
+                }
+            }
+        }
+        return mediaDirectory.listFiles()
+            ?.count { file ->
+                val canonical = runCatching { file.canonicalFile }.getOrNull()
+                file.isFile && canonical?.parentFile == mediaDirectory &&
+                    canonical !in referenced && file.delete()
+            }
+            ?: 0
+    }
+
     fun enqueueSocialResponse(
         postId: Long,
         kind: String,
