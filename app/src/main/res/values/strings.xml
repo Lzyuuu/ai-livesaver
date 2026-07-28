@@ -48,6 +48,20 @@
     <string name="primary_character_status">特别关注 · 常驻角色</string>
     <string name="add">添加</string>
 
+    <string name="chats_eyebrow">PRIVATE RELATIONSHIPS</string>
+    <string name="chats_title">Chats</string>
+    <string name="chats_summary">这里保留你与常驻角色之间的私密时间线。</string>
+    <string name="manage_characters">管理角色</string>
+    <string name="search_conversations">搜索角色或对话</string>
+    <string name="no_matching_conversations">没有匹配的会话。</string>
+    <string name="no_messages_yet">还没有消息</string>
+    <string name="world_creation_path">这段关系将怎样开始</string>
+    <string name="connect_inference">连接推理</string>
+    <string name="connect_inference_summary">保存你选择的云端 Provider，让角色能够回应。</string>
+    <string name="choose_first_character">选择第一位角色</string>
+    <string name="choose_first_character_summary">自己创建，或导入已有的 Character Card V2。</string>
+    <string name="begin_shared_life">开始共同生活</string>
+    <string name="begin_shared_life_summary">第一段真实对话会成为这个世界的起点。</string>
     <string name="first_relationship_title">从第一段关系开始</string>
     <string name="first_relationship_summary">建立你的世界身份和第一位常驻角色。之后发生的一切都会围绕真实对话生长。</string>
     <string name="provider_required_for_world">建世前需要先保存一个可用的通用推理配置。</string>

@@ -3,6 +3,8 @@ package io.github.lzyuuu.ailivesaver
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -12,18 +14,30 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Email
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -37,9 +51,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import java.text.DateFormat
 import java.util.Date
@@ -104,6 +120,7 @@ internal fun ChatsScreen(
     onInitialCharacterConsumed: () -> Unit,
     onChanged: () -> Unit,
     onConfigureProvider: () -> Unit,
+    onManageCharacters: () -> Unit,
 ) {
     val characters = remember(revision) { store.characters(includeDeparted = false) }
     var selectedId by rememberSaveable { mutableStateOf<Long?>(null) }
@@ -112,10 +129,9 @@ internal fun ChatsScreen(
         if (characters.any { it.id == requestedId }) selectedId = requestedId
         onInitialCharacterConsumed()
     }
-    val character = characters.firstOrNull { it.id == selectedId } ?: characters.firstOrNull()
-    if (character == null) {
-        FirstRelationshipScreen(contentPadding, store, revision, onChanged, onConfigureProvider)
-    } else {
+    val character = selectedId?.let { id -> characters.firstOrNull { it.id == id } }
+    when {
+        character != null -> {
         key(character.id) {
             ConversationScreen(
                 contentPadding,
@@ -125,7 +141,166 @@ internal fun ChatsScreen(
                 revision,
                 onChanged,
                 onCharacterSelected = { selectedId = it },
+                onBack = { selectedId = null },
             )
+        }
+        }
+        characters.isEmpty() -> {
+            FirstRelationshipScreen(
+                contentPadding,
+                store,
+                revision,
+                onChanged,
+                onConfigureProvider,
+            )
+        }
+        else -> {
+            ChatListScreen(
+                contentPadding = contentPadding,
+                store = store,
+                characters = characters,
+                revision = revision,
+                onCharacterSelected = { selectedId = it },
+                onManageCharacters = onManageCharacters,
+            )
+        }
+    }
+}
+
+@Composable
+private fun ChatListScreen(
+    contentPadding: PaddingValues,
+    store: WorldStore,
+    characters: List<ResidentCharacter>,
+    revision: Int,
+    onCharacterSelected: (Long) -> Unit,
+    onManageCharacters: () -> Unit,
+) {
+    var query by rememberSaveable { mutableStateOf("") }
+    val latestMessages = remember(revision, characters) {
+        characters.associate { it.id to store.messages(it.id).lastOrNull() }
+    }
+    val visibleCharacters = characters
+        .filter { character ->
+            query.isBlank() ||
+                character.name.contains(query, ignoreCase = true) ||
+                latestMessages[character.id]?.body.orEmpty().contains(query, ignoreCase = true)
+        }
+        .sortedWith(
+            compareByDescending<ResidentCharacter> { latestMessages[it.id]?.createdAt ?: 0L }
+                .thenByDescending { it.attentionTier == "special_focus" },
+        )
+    val timeFormatter = remember { DateFormat.getTimeInstance(DateFormat.SHORT) }
+
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(
+            start = 20.dp,
+            top = contentPadding.calculateTopPadding() + 24.dp,
+            end = 20.dp,
+            bottom = contentPadding.calculateBottomPadding() + 24.dp,
+        ),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        item {
+            Text(
+                stringResource(R.string.chats_eyebrow),
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.Bold,
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    stringResource(R.string.chats_title),
+                    style = MaterialTheme.typography.headlineLarge,
+                    fontWeight = FontWeight.Bold,
+                )
+                TextButton(onClick = onManageCharacters) {
+                    Icon(Icons.Default.Add, contentDescription = null)
+                    Spacer(Modifier.width(6.dp))
+                    Text(stringResource(R.string.manage_characters))
+                }
+            }
+            Text(
+                stringResource(R.string.chats_summary),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        item {
+            OutlinedTextField(
+                value = query,
+                onValueChange = { query = it },
+                label = { Text(stringResource(R.string.search_conversations)) },
+                leadingIcon = {
+                    Icon(Icons.Default.Search, contentDescription = null)
+                },
+                singleLine = true,
+                shape = RoundedCornerShape(24.dp),
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        if (visibleCharacters.isEmpty()) {
+            item { StatusCard(stringResource(R.string.no_matching_conversations)) }
+        } else {
+            items(visibleCharacters, key = ResidentCharacter::id) { resident ->
+                val latestMessage = latestMessages[resident.id]
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("chat-character-${resident.id}")
+                        .clickable { onCharacterSelected(resident.id) },
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                    ),
+                    shape = RoundedCornerShape(24.dp),
+                ) {
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Avatar(resident.name.take(1).uppercase(), 56.dp)
+                        Column(Modifier.weight(1f)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                            ) {
+                                Text(
+                                    resident.name,
+                                    style = MaterialTheme.typography.titleLarge,
+                                    fontWeight = FontWeight.Bold,
+                                )
+                                latestMessage?.let {
+                                    Text(
+                                        timeFormatter.format(Date(it.createdAt)),
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.outline,
+                                    )
+                                }
+                            }
+                            Text(
+                                latestMessage?.body?.ifBlank { latestMessage.draftBody }
+                                    ?: stringResource(R.string.no_messages_yet),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            if (resident.attentionTier == "special_focus") {
+                                Spacer(Modifier.height(4.dp))
+                                Text(
+                                    stringResource(R.string.special_focus),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.primary,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -177,6 +352,33 @@ private fun FirstRelationshipScreen(
     ) {
         item {
             Text(
+                stringResource(R.string.chats_eyebrow),
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(
+                stringResource(R.string.chats_title),
+                style = MaterialTheme.typography.headlineLarge,
+                fontWeight = FontWeight.Bold,
+            )
+            Spacer(Modifier.height(18.dp))
+            Surface(
+                modifier = Modifier.size(64.dp),
+                shape = RoundedCornerShape(20.dp),
+                color = MaterialTheme.colorScheme.secondaryContainer,
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        Icons.Default.Email,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(30.dp),
+                    )
+                }
+            }
+            Spacer(Modifier.height(18.dp))
+            Text(
                 stringResource(R.string.first_relationship_title),
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.Bold,
@@ -193,12 +395,34 @@ private fun FirstRelationshipScreen(
                         containerColor = MaterialTheme.colorScheme.primaryContainer,
                     ),
                 ) {
-                    Column(Modifier.padding(18.dp)) {
+                    Column(
+                        modifier = Modifier.padding(18.dp),
+                        verticalArrangement = Arrangement.spacedBy(14.dp),
+                    ) {
+                        Text(
+                            stringResource(R.string.world_creation_path),
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        FirstRelationshipStep(
+                            number = "1",
+                            title = stringResource(R.string.connect_inference),
+                            summary = stringResource(R.string.connect_inference_summary),
+                        )
+                        FirstRelationshipStep(
+                            number = "2",
+                            title = stringResource(R.string.choose_first_character),
+                            summary = stringResource(R.string.choose_first_character_summary),
+                        )
+                        FirstRelationshipStep(
+                            number = "3",
+                            title = stringResource(R.string.begin_shared_life),
+                            summary = stringResource(R.string.begin_shared_life_summary),
+                        )
                         Text(
                             stringResource(R.string.provider_required_for_world),
                             fontWeight = FontWeight.Bold,
                         )
-                        Spacer(Modifier.height(8.dp))
                         Button(onClick = onConfigureProvider) {
                             Text(stringResource(R.string.configure_provider))
                         }
@@ -283,6 +507,40 @@ private fun FirstRelationshipScreen(
 }
 
 @Composable
+private fun FirstRelationshipStep(
+    number: String,
+    title: String,
+    summary: String,
+) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        Surface(
+            modifier = Modifier.size(32.dp),
+            shape = RoundedCornerShape(10.dp),
+            color = MaterialTheme.colorScheme.secondaryContainer,
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Text(
+                    number,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
+        }
+        Column(Modifier.weight(1f)) {
+            Text(title, fontWeight = FontWeight.Bold)
+            Text(
+                summary,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
 private fun ConversationScreen(
     contentPadding: PaddingValues,
     store: WorldStore,
@@ -291,6 +549,7 @@ private fun ConversationScreen(
     revision: Int,
     onChanged: () -> Unit,
     onCharacterSelected: (Long) -> Unit,
+    onBack: () -> Unit,
 ) {
     val context = LocalContext.current
     val provider = remember { ProviderStore(context) }
@@ -474,13 +733,15 @@ private fun ConversationScreen(
         }
     }
 
+    BackHandler(enabled = !showContext) { onBack() }
     BackHandler(showContext) { showContext = false }
     LaunchedEffect(messages.size) {
         if (messages.isNotEmpty()) {
+            val lastMessageIndex = messages.lastIndex + if (characters.size > 1) 2 else 1
             if (systemAnimationsEnabled(context)) {
-                listState.animateScrollToItem(messages.lastIndex + 1)
+                listState.animateScrollToItem(lastMessageIndex)
             } else {
-                listState.scrollToItem(messages.lastIndex + 1)
+                listState.scrollToItem(lastMessageIndex)
             }
         }
     }
@@ -537,18 +798,47 @@ private fun ConversationScreen(
         return
     }
 
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        state = listState,
-        contentPadding = PaddingValues(
-            start = 16.dp,
-            top = contentPadding.calculateTopPadding() + 16.dp,
-            end = 16.dp,
-            bottom = contentPadding.calculateBottomPadding() + 20.dp,
-        ),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+    fun sendMessage() {
+        val body = input.trim()
+        if (body.isEmpty() || sending) return
+        input = ""
+        error = null
+        val userMessage = store.addMessage(character.id, "user", body)
+        val extractedMemory = MemoryExtractor.fromUserMessage(body)
+        extractedMemory?.let {
+            store.rememberIfCurrent(character.id, userMessage.id, it)
+        }
+        store.recordConversationRelationship(
+            character.id,
+            userMessage.id,
+            extractedMemory != null,
+            messageBody = body,
+        )
+        captureLongTermMemory(context, store, character, userMessage, onChanged)
+        onChanged()
+        requestReply()
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(
+                top = contentPadding.calculateTopPadding(),
+                bottom = contentPadding.calculateBottomPadding(),
+            ),
     ) {
-        if (characters.size > 1) {
+        LazyColumn(
+            modifier = Modifier.weight(1f),
+            state = listState,
+            contentPadding = PaddingValues(
+                start = 16.dp,
+                top = 16.dp,
+                end = 16.dp,
+                bottom = 12.dp,
+            ),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            if (characters.size > 1) {
             item {
                 Row(
                     modifier = Modifier.horizontalScroll(rememberScrollState()),
@@ -563,73 +853,74 @@ private fun ConversationScreen(
                     }
                 }
             }
-        }
-        item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column {
-                    Text(
-                        character.name,
-                        style = MaterialTheme.typography.headlineMedium,
-                        fontWeight = FontWeight.Bold,
-                        fontFamily = FontFamily.Serif,
-                    )
-                    Text(
-                        "${relationship.label} · ${stringResource(R.string.private_conversation)}",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                TextButton(onClick = { showContext = true }) {
-                    Text(stringResource(R.string.conversation_context))
-                }
             }
-        }
-        if (messages.isEmpty()) {
             item {
-                StatusCard(stringResource(R.string.start_conversation))
-            }
-        }
-        items(messages, key = ChatMessage::id) { message ->
-            val versions = remember(revision, message.id) {
-                if (message.sender == "assistant") store.messageVersions(message.id)
-                else emptyList()
-            }
-            val visibleBody = when {
-                message.id == streamingMessageId && streamingText.isNotEmpty() -> streamingText
-                message.status != "complete" && message.body.isEmpty() -> message.draftBody
-                else -> message.body
-            }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = if (message.sender == "user") {
-                    Arrangement.End
-                } else {
-                    Arrangement.Start
-                },
-            ) {
-                Card(
-                    modifier = Modifier.fillMaxWidth(0.86f),
-                    colors = CardDefaults.cardColors(
-                        containerColor = if (message.sender == "user") {
-                            MaterialTheme.colorScheme.primaryContainer
-                        } else {
-                            MaterialTheme.colorScheme.surfaceVariant
-                        },
-                    ),
+                ScreenBackButton(onBack)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Column(
-                        modifier = Modifier.padding(14.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp),
-                    ) {
+                    Column {
                         Text(
-                            visibleBody.ifBlank {
-                                stringResource(R.string.character_thinking)
-                            },
+                            character.name,
+                            style = MaterialTheme.typography.headlineMedium,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = FontFamily.Serif,
                         )
-                        if (message.sender == "assistant") {
+                        Text(
+                            "${relationship.label} · ${stringResource(R.string.private_conversation)}",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    TextButton(onClick = { showContext = true }) {
+                        Text(stringResource(R.string.conversation_context))
+                    }
+                }
+            }
+            if (messages.isEmpty()) {
+                item {
+                    StatusCard(stringResource(R.string.start_conversation))
+                }
+            }
+            items(messages, key = ChatMessage::id) { message ->
+                val versions = remember(revision, message.id) {
+                    if (message.sender == "assistant") store.messageVersions(message.id)
+                    else emptyList()
+                }
+                val visibleBody = when {
+                    message.id == streamingMessageId && streamingText.isNotEmpty() -> streamingText
+                    message.status != "complete" && message.body.isEmpty() -> message.draftBody
+                    else -> message.body
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = if (message.sender == "user") {
+                        Arrangement.End
+                    } else {
+                        Arrangement.Start
+                    },
+                ) {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(0.86f),
+                        colors = CardDefaults.cardColors(
+                            containerColor = if (message.sender == "user") {
+                                MaterialTheme.colorScheme.primaryContainer
+                            } else {
+                                MaterialTheme.colorScheme.surfaceVariant
+                            },
+                        ),
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(14.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            Text(
+                                visibleBody.ifBlank {
+                                    stringResource(R.string.character_thinking)
+                                },
+                            )
+                            if (message.sender == "assistant") {
                             when (message.status) {
                                 "streaming" -> Text(
                                     stringResource(R.string.streaming_reply),
@@ -730,72 +1021,67 @@ private fun ConversationScreen(
                                     }
                                 }
                             }
-                        } else if (!sending) {
-                            TextButton(
-                                onClick = {
-                                    rewritingMessageId = message.id
-                                    rewriteText = message.body
-                                },
-                            ) {
-                                Text(stringResource(R.string.rewrite_from_here))
+                            } else if (!sending) {
+                                TextButton(
+                                    onClick = {
+                                        rewritingMessageId = message.id
+                                        rewriteText = message.body
+                                    },
+                                ) {
+                                    Text(stringResource(R.string.rewrite_from_here))
+                                }
                             }
                         }
                     }
                 }
             }
-        }
-        error?.let { message ->
-            item { StatusCard(stringResource(R.string.chat_failed, message)) }
-        }
-        if (messages.lastOrNull()?.sender == "user" && !sending) {
-            item {
-                StatusCard(stringResource(R.string.reply_waiting_for_network))
-                TextButton(onClick = { requestReply() }) {
-                    Text(stringResource(R.string.continue_pending_reply))
+            error?.let { message ->
+                item { StatusCard(stringResource(R.string.chat_failed, message)) }
+            }
+            if (messages.lastOrNull()?.sender == "user" && !sending) {
+                item {
+                    StatusCard(stringResource(R.string.reply_waiting_for_network))
+                    TextButton(onClick = { requestReply() }) {
+                        Text(stringResource(R.string.continue_pending_reply))
+                    }
                 }
             }
         }
-        item {
-            OutlinedTextField(
-                value = input,
-                onValueChange = { input = it },
-                label = { Text(stringResource(R.string.message_character, character.name)) },
-                minLines = 2,
-                maxLines = 5,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            Spacer(Modifier.height(8.dp))
-            Button(
-                onClick = {
-                    val body = input.trim()
-                    if (body.isEmpty()) return@Button
-                    input = ""
-                    error = null
-                    val userMessage = store.addMessage(character.id, "user", body)
-                    val extractedMemory = MemoryExtractor.fromUserMessage(body)
-                    extractedMemory?.let {
-                        store.rememberIfCurrent(character.id, userMessage.id, it)
-                    }
-                    store.recordConversationRelationship(
-                        character.id,
-                        userMessage.id,
-                        extractedMemory != null,
-                        messageBody = body,
-                    )
-                    captureLongTermMemory(context, store, character, userMessage, onChanged)
-                    onChanged()
-                    requestReply()
-                },
-                enabled = input.isNotBlank() && !sending,
-                modifier = Modifier.fillMaxWidth(),
+        Surface(
+            color = MaterialTheme.colorScheme.surfaceContainer,
+            tonalElevation = 3.dp,
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(
-                    if (sending) {
-                        stringResource(R.string.character_thinking)
-                    } else {
-                        stringResource(R.string.send)
-                    },
+                OutlinedTextField(
+                    value = input,
+                    onValueChange = { input = it },
+                    label = { Text(stringResource(R.string.message_character, character.name)) },
+                    minLines = 1,
+                    maxLines = 4,
+                    shape = RoundedCornerShape(24.dp),
+                    modifier = Modifier.weight(1f),
                 )
+                FilledIconButton(
+                    onClick = ::sendMessage,
+                    enabled = input.isNotBlank() && !sending,
+                    modifier = Modifier.size(52.dp),
+                ) {
+                    if (sending) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(22.dp),
+                            strokeWidth = 2.dp,
+                        )
+                    } else {
+                        Icon(
+                            Icons.AutoMirrored.Filled.Send,
+                            contentDescription = stringResource(R.string.send),
+                        )
+                    }
+                }
             }
         }
     }

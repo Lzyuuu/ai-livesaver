@@ -20,6 +20,7 @@ import androidx.compose.ui.test.swipeUp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -35,6 +36,62 @@ class MainActivitySmokeTest {
             composeRule.onAllNodesWithText(label, useUnmergedTree = true)
                 .get(0)
                 .assertIsDisplayed()
+        }
+    }
+
+    @Test
+    fun exposesRelationshipFirstChatsEntry() {
+        composeRule.onNodeWithText("Chats")
+            .performSemanticsAction(SemanticsActions.OnClick)
+        composeRule.onNodeWithText("PRIVATE RELATIONSHIPS", useUnmergedTree = true)
+            .assertIsDisplayed()
+        assertTrue(
+            composeRule.onAllNodesWithText("从第一段关系开始", useUnmergedTree = true)
+                .fetchSemanticsNodes().isNotEmpty() ||
+                composeRule.onAllNodesWithText("搜索角色或对话", useUnmergedTree = true)
+                    .fetchSemanticsNodes().isNotEmpty(),
+        )
+    }
+
+    @Test
+    fun opensResidentConversationFromChatsAndReturnsToList() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val characterName = "Chats test ${System.nanoTime()}"
+        val characterId = WorldStore(context).use {
+            it.addCharacter(
+                name = characterName,
+                persona = "A test resident",
+                attentionTier = "special_focus",
+                appearance = "",
+                clothing = "",
+                negativePrompt = "",
+            )
+        }
+
+        try {
+            composeRule.activityRule.scenario.recreate()
+            composeRule.waitForIdle()
+            composeRule.onNodeWithText("Chats")
+                .performSemanticsAction(SemanticsActions.OnClick)
+            composeRule.onNodeWithText("搜索角色或对话", useUnmergedTree = true)
+                .assertIsDisplayed()
+            composeRule.onNodeWithTag("chat-character-$characterId")
+                .performSemanticsAction(SemanticsActions.OnClick)
+            composeRule.onAllNodesWithText(characterName, useUnmergedTree = true)
+                .get(0)
+                .assertIsDisplayed()
+            composeRule.onNodeWithText("发给 $characterName", useUnmergedTree = true)
+                .assertIsDisplayed()
+            composeRule.runOnUiThread {
+                composeRule.activity.onBackPressedDispatcher.onBackPressed()
+            }
+            composeRule.onNodeWithText("搜索角色或对话", useUnmergedTree = true)
+                .assertIsDisplayed()
+        } finally {
+            WorldStore(context).use {
+                it.setCharacterActive(characterId, false)
+                it.deleteCharacter(characterId)
+            }
         }
     }
 

@@ -586,6 +586,7 @@ private fun AiLivesaverApp(
                     },
                     onChanged = { worldRevision++ },
                     onConfigureProvider = { showProviders = true },
+                    onManageCharacters = { showCharacters = true },
                 )
                 Destination.Moments -> SocialScreen(
                     kind = "moment",
