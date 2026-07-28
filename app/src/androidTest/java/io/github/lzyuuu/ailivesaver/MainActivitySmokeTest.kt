@@ -10,6 +10,8 @@ import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeLeft
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
+import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -79,5 +81,23 @@ class MainActivitySmokeTest {
         composeRule.onNodeWithText("深色", useUnmergedTree = true).performClick()
         composeRule.onNodeWithText("浅色", useUnmergedTree = true).performClick()
         composeRule.onNodeWithText("跟随系统", useUnmergedTree = true).performClick()
+    }
+
+    @Test
+    fun persistsContextBudgetPerInferenceProfile() {
+        val store = ProviderStore(InstrumentationRegistry.getInstrumentation().targetContext)
+        val config = ProviderConfig(
+            baseUrl = "https://example.com/v1",
+            model = "test-model",
+            apiKey = "test-key",
+            contextBudget = 32_768,
+        )
+
+        try {
+            store.saveTask(ProviderTask.Vision, config)
+            assertEquals(32_768, store.loadTask(ProviderTask.Vision)?.contextBudget)
+        } finally {
+            store.clearTask(ProviderTask.Vision)
+        }
     }
 }

@@ -38,6 +38,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -74,6 +75,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -2397,6 +2399,7 @@ private fun ProviderScreen(
     var presetName by rememberSaveable { mutableStateOf(initial.preset.name) }
     var baseUrl by rememberSaveable { mutableStateOf(initial.baseUrl) }
     var model by rememberSaveable { mutableStateOf(initial.model) }
+    var contextBudget by rememberSaveable { mutableStateOf(initial.contextBudget.toString()) }
     var apiKey by rememberSaveable { mutableStateOf(initial.apiKey) }
     var extraHeaders by rememberSaveable { mutableStateOf(initial.extraHeaders) }
     var capabilities by remember { mutableStateOf(initial.capabilities) }
@@ -2416,6 +2419,7 @@ private fun ProviderScreen(
         presetName = config.preset.name
         baseUrl = config.baseUrl
         model = config.model
+        contextBudget = config.contextBudget.toString()
         apiKey = config.apiKey
         extraHeaders = config.extraHeaders
         capabilities = config.capabilities
@@ -2436,6 +2440,9 @@ private fun ProviderScreen(
         preset = preset,
         baseUrl = baseUrl.trim(),
         model = model.trim(),
+        contextBudget = contextBudget.toIntOrNull()
+            ?.coerceIn(MIN_CONTEXT_BUDGET, MAX_CONTEXT_BUDGET)
+            ?: DEFAULT_CONTEXT_BUDGET,
         apiKey = apiKey.trim(),
         extraHeaders = extraHeaders.trim(),
         capabilities = capabilities,
@@ -2551,6 +2558,21 @@ private fun ProviderScreen(
         }
         item {
             OutlinedTextField(
+                value = contextBudget,
+                onValueChange = { value ->
+                    contextBudget = value.filter(Char::isDigit).take(7)
+                },
+                label = { Text(stringResource(R.string.provider_context_budget)) },
+                supportingText = {
+                    Text(stringResource(R.string.provider_context_budget_hint))
+                },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        item {
+            OutlinedTextField(
                 value = apiKey,
                 onValueChange = { apiKey = it },
                 label = { Text(stringResource(R.string.provider_api_key)) },
@@ -2577,6 +2599,7 @@ private fun ProviderScreen(
                 Button(
                     onClick = {
                         val config = currentConfig()
+                        contextBudget = config.contextBudget.toString()
                         status = if (config.isValid()) {
                             if (editingFallback) {
                                 store.saveFallback(task, config)
@@ -2677,6 +2700,7 @@ private fun ProviderScreen(
                                             val updated = config.copy(
                                                 capabilities = config.capabilities.withResults(results),
                                             )
+                                            contextBudget = updated.contextBudget.toString()
                                             if (task == testedTask) {
                                                 capabilities = updated.capabilities
                                             }

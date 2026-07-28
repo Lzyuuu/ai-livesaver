@@ -85,6 +85,7 @@ internal data class ProviderConfig(
     val model: String = ProviderPreset.DeepSeek.defaultModel,
     val apiKey: String = "",
     val extraHeaders: String = "",
+    val contextBudget: Int = DEFAULT_CONTEXT_BUDGET,
     val capabilities: ProviderCapabilities = ProviderCapabilities(),
     val fallback: ProviderConfig? = null,
 ) {
@@ -237,6 +238,10 @@ internal class ProviderStore(context: Context) {
             "${prefix}model",
             ProviderPreset.DeepSeek.defaultModel,
         ).orEmpty(),
+        contextBudget = preferences.getInt(
+            "${prefix}context_budget",
+            DEFAULT_CONTEXT_BUDGET,
+        ).coerceIn(MIN_CONTEXT_BUDGET, MAX_CONTEXT_BUDGET),
         apiKey = preferences.getString("${prefix}api_key", null)?.let(::decrypt).orEmpty(),
         extraHeaders = preferences.getString("${prefix}extra_headers", null)
             ?.let(::decrypt)
@@ -272,6 +277,7 @@ internal class ProviderStore(context: Context) {
             remove("${prefix}preset")
             remove("${prefix}base_url")
             remove("${prefix}model")
+            remove("${prefix}context_budget")
             remove("${prefix}api_key")
             remove("${prefix}extra_headers")
             remove("${prefix}capabilities")
@@ -289,6 +295,7 @@ internal class ProviderStore(context: Context) {
             remove("${prefix}preset")
             remove("${prefix}base_url")
             remove("${prefix}model")
+            remove("${prefix}context_budget")
             remove("${prefix}api_key")
             remove("${prefix}extra_headers")
             remove("${prefix}capabilities")
@@ -308,6 +315,10 @@ internal class ProviderStore(context: Context) {
             putString("${prefix}preset", config.preset.name)
             putString("${prefix}base_url", config.baseUrl)
             putString("${prefix}model", config.model)
+            putInt(
+                "${prefix}context_budget",
+                config.contextBudget.coerceIn(MIN_CONTEXT_BUDGET, MAX_CONTEXT_BUDGET),
+            )
             putString("${prefix}api_key", encrypt(config.apiKey))
             putString("${prefix}extra_headers", encrypt(config.extraHeaders))
             putString("${prefix}capabilities", encodeCapabilities(config.capabilities))
@@ -513,7 +524,12 @@ internal object ProviderChatClient {
                 val requestMessages = JSONArray().put(
                     JSONObject().put("role", "system").put("content", system),
                 )
-                recentMessagesForContext(messages, recap).forEach { message ->
+                val recentBudget = (
+                    config.contextBudget.coerceIn(MIN_CONTEXT_BUDGET, MAX_CONTEXT_BUDGET) -
+                        estimatedTokenCount(system) -
+                        RESPONSE_TOKEN_RESERVE
+                    ).coerceAtLeast(MIN_RECENT_MESSAGE_BUDGET)
+                recentMessagesForContext(messages, recap, recentBudget).forEach { message ->
                     requestMessages.put(
                         JSONObject()
                             .put("role", if (message.sender == "user") "user" else "assistant")
@@ -548,15 +564,57 @@ internal object ProviderChatClient {
 internal fun recentMessagesForContext(
     messages: List<ChatMessage>,
     recap: ConversationRecap?,
-): List<ChatMessage> = if (recap == null) {
-    messages.filter(::isCanonicalContextMessage).takeLast(40)
-} else {
-    messages.filter { it.id > recap.throughMessageId && isCanonicalContextMessage(it) }
-        .takeLast(20)
+    tokenBudget: Int = DEFAULT_CONTEXT_BUDGET,
+): List<ChatMessage> {
+    val candidates = messages.filter {
+        isCanonicalContextMessage(it) && (recap == null || it.id > recap.throughMessageId)
+    }
+    val selected = ArrayDeque<ChatMessage>()
+    var remaining = tokenBudget.coerceAtLeast(1)
+    for (message in candidates.asReversed()) {
+        val cost = estimatedTokenCount(message.body) + MESSAGE_TOKEN_OVERHEAD
+        if (cost > remaining) {
+            if (selected.isEmpty()) {
+                selected.addFirst(
+                    message.copy(
+                        body = truncateToEstimatedTokens(
+                            message.body,
+                            (remaining - MESSAGE_TOKEN_OVERHEAD).coerceAtLeast(1),
+                        ),
+                    ),
+                )
+            }
+            break
+        }
+        selected.addFirst(message)
+        remaining -= cost
+    }
+    return selected.toList()
+}
+
+internal fun estimatedTokenCount(text: String): Int {
+    val units = text.sumOf { character -> if (character.code > 0x7f) 4 else 1 }
+    return (units + 3) / 4
+}
+
+private fun truncateToEstimatedTokens(text: String, tokenBudget: Int): String {
+    val maxUnits = tokenBudget.coerceAtLeast(1) * 4
+    var units = 0
+    return text.takeWhile { character ->
+        val next = units + if (character.code > 0x7f) 4 else 1
+        (next <= maxUnits).also { if (it) units = next }
+    }
 }
 
 private fun isCanonicalContextMessage(message: ChatMessage) =
     message.active && message.status == "complete"
+
+internal const val DEFAULT_CONTEXT_BUDGET = 16_384
+internal const val MIN_CONTEXT_BUDGET = 2_048
+internal const val MAX_CONTEXT_BUDGET = 1_000_000
+private const val RESPONSE_TOKEN_RESERVE = 1_024
+private const val MIN_RECENT_MESSAGE_BUDGET = 128
+private const val MESSAGE_TOKEN_OVERHEAD = 4
 
 internal fun buildChatSystemPrompt(
     character: ResidentCharacter,

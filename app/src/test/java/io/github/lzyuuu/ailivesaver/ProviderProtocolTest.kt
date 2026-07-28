@@ -122,6 +122,32 @@ class ProviderProtocolTest {
     }
 
     @Test
+    fun contextBudgetKeepsNewestCanonicalMessagesWithinLimit() {
+        val messages = listOf(
+            ChatMessage(1, 1, "user", "older message", 1),
+            ChatMessage(2, 1, "assistant", "newer reply", 2),
+            ChatMessage(3, 1, "user", "最新问题", 3),
+        )
+
+        val recent = recentMessagesForContext(messages, recap = null, tokenBudget = 10)
+
+        assertEquals(listOf(3L), recent.map(ChatMessage::id))
+        assertEquals(4, estimatedTokenCount("最新问题"))
+        assertEquals(4, estimatedTokenCount("older message"))
+    }
+
+    @Test
+    fun contextBudgetTruncatesButNeverDropsLatestUserMessage() {
+        val latest = ChatMessage(9, 1, "user", "这是一个很长的问题", 9)
+
+        val recent = recentMessagesForContext(listOf(latest), recap = null, tokenBudget = 8)
+
+        assertEquals(listOf(9L), recent.map(ChatMessage::id))
+        assertEquals("这是一个", recent.single().body)
+        assertEquals("这是一个很长的问题", latest.body)
+    }
+
+    @Test
     fun retriesOnlyTransientProviderFailures() {
         assertTrue(isTransientProviderFailure("HTTP 429"))
         assertTrue(isTransientProviderFailure("HTTP 503"))
