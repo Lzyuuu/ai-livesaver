@@ -3,6 +3,7 @@ package io.github.lzyuuu.ailivesaver
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertThrows
 import org.junit.Test
 
 class ProviderProtocolTest {
@@ -88,6 +89,21 @@ class ProviderProtocolTest {
         assertTrue(capabilities.supported.contains(ProviderCapability.Chat))
         assertFalse(capabilities.supports(ProviderCapability.Structured))
         assertEquals("unsupported", capabilities.failures[ProviderCapability.Structured])
+    }
+
+    @Test
+    fun rejectsMalformedStructuredRepliesBeforeWorldMutation() {
+        listOf(
+            """{"choices":[{"message":{"content":"not json"}}]}""",
+            """{"choices":[{"message":{"content":"{}"}}]}""",
+            """{"choices":[{"message":{"content":"{\"body\":\"OK\",\"extra\":true}"}}]}""",
+            """{"choices":[{"message":{"content":"{\"body\":42}"}}]}""",
+            """{"choices":[{"message":{"content":"{\"body\":\"  \"}"}}]}""",
+        ).forEach { response ->
+            assertThrows(Exception::class.java) {
+                ProviderProtocol.parseStructuredBody(response)
+            }
+        }
     }
 
     @Test

@@ -149,7 +149,13 @@ internal object ProviderProtocol {
             .removePrefix("json")
             .removeSuffix("```")
             .trim()
-        val body = JSONObject(content).optString("body").trim()
+        val payload = JSONObject(content)
+        require(payload.length() == 1 && payload.has("body")) {
+            "Structured reply must contain only body"
+        }
+        val value = payload.get("body")
+        require(value is String) { "Structured reply body must be a string" }
+        val body = value.trim()
         require(body.isNotEmpty()) { "Structured reply is missing body" }
         return body
     }
