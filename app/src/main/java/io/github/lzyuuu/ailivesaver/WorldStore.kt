@@ -286,10 +286,27 @@ internal const val WORLD_DATABASE_VERSION = 19
 internal class WorldStore(context: Context) :
     SQLiteOpenHelper(context, "world.db", null, WORLD_DATABASE_VERSION),
     java.io.Closeable {
+    private val databaseFile = context.getDatabasePath("world.db")
     private val mediaDirectory = File(context.filesDir, "media").canonicalFile
 
     fun checkpointForBackup() {
-        writableDatabase.rawQuery("PRAGMA wal_checkpoint(FULL)", null).use { }
+        checkpoint(writableDatabase)
+    }
+
+    fun copyDatabaseForBackup(destination: File) {
+        val database = writableDatabase
+        checkpoint(database)
+        database.beginTransaction()
+        try {
+            databaseFile.copyTo(destination)
+            database.setTransactionSuccessful()
+        } finally {
+            database.endTransaction()
+        }
+    }
+
+    private fun checkpoint(database: SQLiteDatabase) {
+        database.rawQuery("PRAGMA wal_checkpoint(FULL)", null).use { it.moveToFirst() }
     }
 
     override fun onCreate(database: SQLiteDatabase) {
