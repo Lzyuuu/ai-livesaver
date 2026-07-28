@@ -191,6 +191,7 @@ internal data class SocialPostVersion(
 
 internal data class MediaJob(
     val postId: Long,
+    val revision: Long,
     val prompt: String,
     val negativePrompt: String,
     val steps: Int,
@@ -281,7 +282,7 @@ internal data class MemberWorldContext(
     val timeZone: String,
 )
 
-internal const val WORLD_DATABASE_VERSION = 19
+internal const val WORLD_DATABASE_VERSION = 20
 
 internal class WorldStore(context: Context) :
     SQLiteOpenHelper(context, "world.db", null, WORLD_DATABASE_VERSION),
@@ -443,6 +444,14 @@ internal class WorldStore(context: Context) :
         if (oldVersion < 17) createSocialResponseQueueTable(database)
         if (oldVersion < 18) migrateWorldEventProvenance(database)
         if (oldVersion < 19) addColumnIfMissing(database, "profile", "avatar_path", "TEXT NOT NULL DEFAULT ''")
+        if (oldVersion < 20) {
+            addColumnIfMissing(
+                database,
+                "social_posts",
+                "media_generation_revision",
+                "INTEGER NOT NULL DEFAULT 0",
+            )
+        }
     }
 
     private fun createSocialTables(database: SQLiteDatabase) {
@@ -459,6 +468,7 @@ internal class WorldStore(context: Context) :
                 media_prompt TEXT,
                 media_seed INTEGER,
                 media_status TEXT NOT NULL DEFAULT 'none',
+                media_generation_revision INTEGER NOT NULL DEFAULT 0,
                 media_negative_prompt TEXT NOT NULL DEFAULT '',
                 media_steps INTEGER NOT NULL DEFAULT 20,
                 media_cfg REAL NOT NULL DEFAULT 7.5,
@@ -2444,19 +2454,21 @@ internal class WorldStore(context: Context) :
         )
     }
 
-    fun markMediaReady(postId: Long, path: String, seed: Long) {
+    fun markMediaReady(postId: Long, revision: Long, path: String, seed: Long): Boolean {
         var eventSummary = ""
         var actorName = ""
         var providerName = ""
         var modelName = ""
         var shouldCreateEvent = false
+        var committed = false
         writableDatabase.run {
             beginTransaction()
             try {
                 val post = rawQuery(
                     "SELECT media_prompt, body, author_name, provider_name, model_name " +
-                        "FROM social_posts WHERE id = ?",
-                    arrayOf(postId.toString()),
+                        "FROM social_posts " +
+                        "WHERE id = ? AND media_generation_revision = ? AND media_status = 'pending'",
+                    arrayOf(postId.toString(), revision.toString()),
                 ).use { cursor ->
                     if (cursor.moveToFirst()) {
                         eventSummary = cursor.getString(1)
@@ -2465,15 +2477,19 @@ internal class WorldStore(context: Context) :
                         modelName = cursor.getString(4)
                         cursor.getString(0)
                     } else {
-                        ""
+                        null
                     }
+                }
+                if (post == null) {
+                    setTransactionSuccessful()
+                    return@run
                 }
                 val prompt = post
                 shouldCreateEvent = eventSummary.isNotBlank() && rawQuery(
                     "SELECT COUNT(*) FROM world_events WHERE source_post_id = ?",
                     arrayOf(postId.toString()),
                 ).use { cursor -> cursor.moveToFirst() && cursor.getInt(0) == 0 }
-                update(
+                val updated = update(
                     "social_posts",
                     ContentValues().apply {
                         put("media_path", path)
@@ -2483,9 +2499,13 @@ internal class WorldStore(context: Context) :
                         put("media_description", prompt)
                         put("media_source", "local_dream")
                     },
-                    "id = ?",
-                    arrayOf(postId.toString()),
+                    "id = ? AND media_generation_revision = ? AND media_status = 'pending'",
+                    arrayOf(postId.toString(), revision.toString()),
                 )
+                if (updated != 1) {
+                    setTransactionSuccessful()
+                    return@run
+                }
                 insertOrThrow(
                     "media_versions",
                     null,
@@ -2508,40 +2528,36 @@ internal class WorldStore(context: Context) :
                         modelName = modelName,
                     )
                 }
+                committed = true
                 setTransactionSuccessful()
             } finally {
                 endTransaction()
             }
         }
+        return committed
     }
 
-    fun markMediaFailed(postId: Long) {
-        markMediaFailed(postId, "")
-    }
-
-    fun markMediaFailed(postId: Long, error: String) {
+    fun markMediaFailed(postId: Long, revision: Long, error: String): Boolean =
         writableDatabase.update(
             "social_posts",
             ContentValues().apply {
                 put("media_status", "failed")
                 put("media_error", error.take(240))
             },
-            "id = ?",
-            arrayOf(postId.toString()),
-        )
-    }
+            "id = ? AND media_generation_revision = ?",
+            arrayOf(postId.toString(), revision.toString()),
+        ) == 1
 
-    fun markMediaWaiting(postId: Long, error: String) {
+    fun markMediaWaiting(postId: Long, revision: Long, error: String): Boolean =
         writableDatabase.update(
             "social_posts",
             ContentValues().apply {
                 put("media_status", "pending")
                 put("media_error", error.take(240))
             },
-            "id = ?",
-            arrayOf(postId.toString()),
-        )
-    }
+            "id = ? AND media_generation_revision = ?",
+            arrayOf(postId.toString(), revision.toString()),
+        ) == 1
 
     fun updateMediaDescription(postId: Long, description: String) {
         writableDatabase.update(
@@ -2563,22 +2579,23 @@ internal class WorldStore(context: Context) :
         ) == 1
 
     fun prepareRedraw(postId: Long, prompt: String) {
-        writableDatabase.update(
-            "social_posts",
-            ContentValues().apply {
-                put("media_prompt", prompt.trim())
-                put("media_status", "pending")
-                putNull("media_seed")
-                put("media_error", "")
-            },
-            "id = ?",
-            arrayOf(postId.toString()),
+        writableDatabase.execSQL(
+            """
+            UPDATE social_posts
+            SET media_prompt = ?,
+                media_status = 'pending',
+                media_seed = NULL,
+                media_error = '',
+                media_generation_revision = media_generation_revision + 1
+            WHERE id = ?
+            """.trimIndent(),
+            arrayOf<Any>(prompt.trim(), postId),
         )
     }
 
     fun nextPendingMediaJob(): MediaJob? = readableDatabase.rawQuery(
         """
-        SELECT id, media_prompt, media_negative_prompt, media_steps, media_cfg,
+        SELECT id, media_generation_revision, media_prompt, media_negative_prompt, media_steps, media_cfg,
                media_scheduler, media_width, media_height, media_seed, media_status, media_error
         FROM social_posts
         WHERE media_status = 'pending' AND media_prompt IS NOT NULL
@@ -2590,22 +2607,23 @@ internal class WorldStore(context: Context) :
         if (!cursor.moveToFirst()) return@use null
         MediaJob(
             postId = cursor.getLong(0),
-            prompt = cursor.getString(1),
-            negativePrompt = cursor.getString(2),
-            steps = cursor.getInt(3),
-            cfg = cursor.getDouble(4),
-            scheduler = cursor.getString(5),
-            width = cursor.getInt(6),
-            height = cursor.getInt(7),
-            seed = if (cursor.isNull(8)) null else cursor.getLong(8),
-            status = cursor.getString(9),
-            error = cursor.getString(10),
+            revision = cursor.getLong(1),
+            prompt = cursor.getString(2),
+            negativePrompt = cursor.getString(3),
+            steps = cursor.getInt(4),
+            cfg = cursor.getDouble(5),
+            scheduler = cursor.getString(6),
+            width = cursor.getInt(7),
+            height = cursor.getInt(8),
+            seed = if (cursor.isNull(9)) null else cursor.getLong(9),
+            status = cursor.getString(10),
+            error = cursor.getString(11),
         )
     }
 
     fun mediaJobs(): List<MediaJob> = readableDatabase.rawQuery(
         """
-        SELECT id, media_prompt, media_negative_prompt, media_steps, media_cfg,
+        SELECT id, media_generation_revision, media_prompt, media_negative_prompt, media_steps, media_cfg,
                media_scheduler, media_width, media_height, media_seed, media_status, media_error
         FROM social_posts
         WHERE media_status IN ('pending', 'failed') AND media_prompt IS NOT NULL
@@ -2618,16 +2636,17 @@ internal class WorldStore(context: Context) :
                 add(
                     MediaJob(
                         cursor.getLong(0),
-                        cursor.getString(1),
+                        cursor.getLong(1),
                         cursor.getString(2),
-                        cursor.getInt(3),
-                        cursor.getDouble(4),
-                        cursor.getString(5),
-                        cursor.getInt(6),
+                        cursor.getString(3),
+                        cursor.getInt(4),
+                        cursor.getDouble(5),
+                        cursor.getString(6),
                         cursor.getInt(7),
-                        if (cursor.isNull(8)) null else cursor.getLong(8),
-                        cursor.getString(9),
+                        cursor.getInt(8),
+                        if (cursor.isNull(9)) null else cursor.getLong(9),
                         cursor.getString(10),
+                        cursor.getString(11),
                     ),
                 )
             }

@@ -4,6 +4,7 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import java.io.File
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -19,6 +20,7 @@ class WorldMediaIntentSmokeTest {
         }
         val store = WorldStore(context)
         val postId = store.createMediaPost("atomic publication", "test prompt")
+        val job = store.mediaJobs().first { it.postId == postId }
 
         try {
             store.writableDatabase.execSQL(
@@ -30,7 +32,11 @@ class WorldMediaIntentSmokeTest {
                 END
                 """.trimIndent(),
             )
-            assertTrue(runCatching { store.markMediaReady(postId, path.absolutePath, 7L) }.isFailure)
+            assertTrue(
+                runCatching {
+                    store.markMediaReady(postId, job.revision, path.absolutePath, 7L)
+                }.isFailure,
+            )
             assertEquals("pending", store.mediaJobs().first { it.postId == postId }.status)
             assertTrue(store.posts("moment").none { it.id == postId })
             assertTrue(store.mediaVersions(postId).isEmpty())
@@ -45,6 +51,47 @@ class WorldMediaIntentSmokeTest {
     }
 
     @Test
+    fun ignoresACompletedImageFromASupersededRedraw() {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val oldPath = File(context.filesDir, "media/generated-stale-smoke.png").apply {
+            parentFile?.mkdirs()
+            writeBytes(byteArrayOf(1, 2, 3))
+        }
+        val newPath = File(context.filesDir, "media/generated-latest-smoke.png").apply {
+            writeBytes(byteArrayOf(4, 5, 6))
+        }
+        val store = WorldStore(context)
+        val postId = store.createMediaPost("redraw race", "same prompt")
+
+        try {
+            val oldJob = store.mediaJobs().first { it.postId == postId }
+            store.prepareRedraw(postId, "same prompt")
+            val newJob = store.mediaJobs().first { it.postId == postId }
+
+            assertTrue(newJob.revision > oldJob.revision)
+            assertFalse(store.markMediaFailed(postId, oldJob.revision, "stale failure"))
+            assertFalse(store.markMediaWaiting(postId, oldJob.revision, "stale waiting"))
+            assertFalse(
+                store.markMediaReady(postId, oldJob.revision, oldPath.absolutePath, 11L),
+            )
+            assertEquals("pending", store.mediaJobs().first { it.postId == postId }.status)
+            assertTrue(store.mediaVersions(postId).isEmpty())
+            assertTrue(
+                store.markMediaReady(postId, newJob.revision, newPath.absolutePath, 12L),
+            )
+            assertEquals(
+                newPath.absolutePath,
+                store.posts("moment").first { it.id == postId }.mediaPath,
+            )
+        } finally {
+            store.deleteUserPost(postId)
+            store.close()
+            oldPath.delete()
+            newPath.delete()
+        }
+    }
+
+    @Test
     fun keepsPausedMediaJobsPendingForRetry() {
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
         val postId = WorldStore(context).use {
@@ -53,7 +100,8 @@ class WorldMediaIntentSmokeTest {
 
         try {
             WorldStore(context).use { store ->
-                store.markMediaWaiting(postId, "存储空间不足，生成已暂停")
+                val job = store.mediaJobs().first { it.postId == postId }
+                store.markMediaWaiting(postId, job.revision, "存储空间不足，生成已暂停")
                 assertEquals(postId, store.nextPendingMediaJob()?.postId)
                 assertEquals(
                     "pending",
@@ -91,7 +139,10 @@ class WorldMediaIntentSmokeTest {
                     store.posts("moment").none { it.id == postId }
                 },
             )
-            WorldStore(context).use { it.markMediaReady(postId, path.absolutePath, 123L) }
+            WorldStore(context).use {
+                val job = it.mediaJobs().first { queued -> queued.postId == postId }
+                it.markMediaReady(postId, job.revision, path.absolutePath, 123L)
+            }
             val visible = WorldStore(context).use { store ->
                 store.posts("moment").first { it.id == postId }
             }
@@ -116,7 +167,8 @@ class WorldMediaIntentSmokeTest {
                     val visibleDuringRedraw = store.posts("moment").first { it.id == postId }
                     assertEquals("pending", visibleDuringRedraw.mediaStatus)
                     assertEquals(path.absolutePath, visibleDuringRedraw.mediaPath)
-                    store.markMediaReady(postId, secondPath.absolutePath, 456L)
+                    val job = store.mediaJobs().first { it.postId == postId }
+                    store.markMediaReady(postId, job.revision, secondPath.absolutePath, 456L)
                 }
                 assertEquals(
                     eventCount,

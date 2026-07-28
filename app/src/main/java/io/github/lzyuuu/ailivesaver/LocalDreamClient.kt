@@ -434,6 +434,7 @@ internal object LocalDreamClient {
 
 internal object LocalDreamQueue {
     private val running = AtomicBoolean(false)
+    private class SupersededMediaJobException(message: String) : IOException(message)
 
     fun isRunning(): Boolean = running.get()
 
@@ -460,10 +461,19 @@ internal object LocalDreamQueue {
         }
         if (!storageAllowsGeneration(StatFs(context.filesDir.path).availableBytes)) {
             val error = IOException(context.getString(R.string.storage_low_generation_paused))
-            store.markMediaWaiting(job.postId, error.message.orEmpty())
+            val waiting = store.markMediaWaiting(
+                job.postId,
+                job.revision,
+                error.message.orEmpty(),
+            )
             store.close()
-            running.set(false)
-            onFinished(job.postId, Result.failure(error))
+            val result = Result.failure<LocalDreamImage>(
+                if (waiting) error else SupersededMediaJobException(
+                    context.getString(R.string.local_dream_generation_superseded),
+                ),
+            )
+            onFinished(job.postId, result)
+            if (waiting) running.set(false) else processNext(context, onProgress, onFinished)
             return
         }
         val firstPublication = store.mediaVersions(job.postId).isEmpty()
@@ -474,21 +484,43 @@ internal object LocalDreamQueue {
             onProgress = { step, total -> onProgress(job.postId, step, total) },
         ) { generation ->
             val persisted = generation.mapCatching { image ->
-                WorldStore(context).use { updateStore ->
-                    updateStore.markMediaReady(job.postId, image.path, image.seed)
+                val committed = WorldStore(context).use { updateStore ->
+                    updateStore.markMediaReady(
+                        job.postId,
+                        job.revision,
+                        image.path,
+                        image.seed,
+                    )
+                }
+                if (!committed) {
+                    File(image.path).delete()
+                    throw SupersededMediaJobException(
+                        context.getString(R.string.local_dream_generation_superseded),
+                    )
                 }
                 image
             }
-            if (persisted.isFailure) {
+            var superseded = persisted.exceptionOrNull() is SupersededMediaJobException
+            if (persisted.isFailure && !superseded) {
                 val error = persisted.exceptionOrNull()!!
-                WorldStore(context).use { updateStore ->
+                val recorded = WorldStore(context).use { updateStore ->
                     if (isLocalDreamUnavailable(error)) {
-                        updateStore.markMediaWaiting(job.postId, error.message.orEmpty())
+                        updateStore.markMediaWaiting(
+                            job.postId,
+                            job.revision,
+                            error.message.orEmpty(),
+                        )
                     } else {
-                        updateStore.markMediaFailed(job.postId, error.message.orEmpty())
+                        updateStore.markMediaFailed(
+                            job.postId,
+                            job.revision,
+                            error.message.orEmpty(),
+                        )
                     }
                 }
-            } else if (firstPublication) {
+                superseded = !recorded
+            }
+            if (persisted.isSuccess && firstPublication) {
                 WorldStore(context).use { updateStore ->
                     updateStore.posts("moment").firstOrNull { it.id == job.postId }
                 }?.takeIf { it.authorKind == "user" && it.aiResponsesEnabled }?.let { post ->
@@ -508,7 +540,7 @@ internal object LocalDreamQueue {
                 }
             }
             onFinished(job.postId, persisted)
-            if (persisted.isSuccess) {
+            if (persisted.isSuccess || superseded) {
                 processNext(context, onProgress, onFinished)
             } else {
                 running.set(false)

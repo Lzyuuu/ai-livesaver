@@ -155,6 +155,7 @@
     <string name="local_dream_connecting">正在连接 Local Dream…</string>
     <string name="local_dream_generation_ready">Local Dream 配图已完成</string>
     <string name="local_dream_generation_failed">Local Dream 生图失败</string>
+    <string name="local_dream_generation_superseded">生成请求已被较新的操作替代</string>
     <string name="local_dream_pending">Local Dream 正在生成配图…</string>
     <string name="local_dream_failed">配图生成失败，可稍后重新生成</string>
     <string name="generated_post_image">动态配图</string>
