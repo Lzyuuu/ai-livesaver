@@ -51,6 +51,12 @@ internal fun shouldAttachWorldImage(
     turn in setOf("post", "interaction") &&
     hasVisualIdentity
 
+internal fun npcProfileForEvent(eventCount: Int): Pair<String, String> = listOf(
+    "Noa" to "偶尔参与城市话题与日常闲聊的临时世界成员。",
+    "Lin" to "喜欢记录公共空间细节的临时世界成员。",
+    "Yuki" to "会在主题讨论中留下简短观察的临时世界成员。",
+)[(eventCount / 5) % 3]
+
 internal fun budgetUsedForDay(storedDay: String?, currentDay: String, used: Int): Int =
     if (storedDay == currentDay) used else 0
 
@@ -369,20 +375,8 @@ internal object WorldEngine {
         } else {
             null
         }
-        val npc = if (npcTurn) {
-            val profiles = listOf(
-                "Noa" to "偶尔参与城市话题与日常闲聊的临时世界成员。",
-                "Lin" to "喜欢记录公共空间细节的临时世界成员。",
-                "Yuki" to "会在主题讨论中留下简短观察的临时世界成员。",
-            )
-            val profile = profiles[(eventCount / 5) % profiles.size]
-            store.ensureNpc(profile.first, profile.second).also {
-                store.retireOtherNpcs(it.id)
-            }
-        } else {
-            null
-        }
-        val npcForumTarget = if (npc != null && eventCount % 10 == 9) {
+        val pendingNpc = if (npcTurn) npcProfileForEvent(eventCount) else null
+        val npcForumTarget = if (pendingNpc != null && eventCount % 10 == 9) {
             store.posts("forum", "active").firstOrNull()
         } else {
             null
@@ -396,8 +390,8 @@ internal object WorldEngine {
             return false
         }
         val system = when {
-            npc != null ->
-                "You are ${npc.name}, a peripheral member of a fictional social world. " +
+            pendingNpc != null ->
+                "You are ${pendingNpc.first}, a peripheral member of a fictional social world. " +
                     "Never claim a close bond with the user."
             interactionCharacter != null ->
                 "You are ${actor.name}. ${actor.persona}\n" +
@@ -428,7 +422,7 @@ internal object WorldEngine {
                 "Write one concise public reply to this forum topic as a peripheral participant. " +
                     "Do not dominate or address the user as a close friend.\n\n" +
                     "${npcForumTarget.title}\n${npcForumTarget.body}"
-            npc != null ->
+            pendingNpc != null ->
                 "Write one natural short public post adding background community activity. " +
                     "Keep it under 80 Chinese characters and do not address the user directly."
             interactionCharacter != null -> buildString {
@@ -458,6 +452,9 @@ internal object WorldEngine {
                     onSuccess = { response ->
                         val body = response.text
                         val usedConfig = response.config
+                        val npc = pendingNpc?.let { (name, bio) ->
+                            store.ensureNpc(name, bio).also { store.retireOtherNpcs(it.id) }
+                        }
                         when {
                             npcForumTarget != null -> {
                                 val npcName = requireNotNull(npc).name
