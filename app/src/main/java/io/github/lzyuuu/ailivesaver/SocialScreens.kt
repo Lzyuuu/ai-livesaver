@@ -404,8 +404,22 @@ internal fun SocialScreen(
                                 val vision = configStore.loadFor(ProviderTask.Vision)
                                 ProviderVisionClient.describe(vision, path) { result ->
                                     result.onSuccess { response ->
-                                        store.updateMediaDescription(postId, response.text)
-                                        respond(response.text)
+                                        if (
+                                            store.applyVisionDescription(
+                                                postId,
+                                                path,
+                                                response.text,
+                                            )
+                                        ) {
+                                            respond(response.text)
+                                        } else {
+                                            respond(
+                                                store.posts("moment")
+                                                    .firstOrNull { it.id == postId }
+                                                    ?.mediaDescription
+                                                    .orEmpty(),
+                                            )
+                                        }
                                     }.onFailure {
                                         generationStatus =
                                             "$visionAnalysisFailed：" +
@@ -574,6 +588,9 @@ private fun PostComposer(
                     }
                     cachedImagePath = it
                     prompt = ""
+                    mediaDescription = ""
+                    localDreamParameters = ""
+                    analyzeImage = false
                     imageStatus = imageReady
                 }.onFailure {
                     imageStatus = "$imageImportFailed：${it.message.orEmpty()}"

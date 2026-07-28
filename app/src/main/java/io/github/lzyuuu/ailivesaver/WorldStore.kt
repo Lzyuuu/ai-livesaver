@@ -2552,6 +2552,16 @@ internal class WorldStore(context: Context) :
         )
     }
 
+    fun applyVisionDescription(postId: Long, mediaPath: String, description: String): Boolean =
+        writableDatabase.update(
+            "social_posts",
+            ContentValues().apply { put("media_description", description.trim()) },
+            """
+            id = ? AND media_source = 'user' AND media_path = ? AND media_description = ''
+            """.trimIndent(),
+            arrayOf(postId.toString(), mediaPath),
+        ) == 1
+
     fun prepareRedraw(postId: Long, prompt: String) {
         writableDatabase.update(
             "social_posts",
