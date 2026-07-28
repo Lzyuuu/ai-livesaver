@@ -11,6 +11,40 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class WorldMediaIntentSmokeTest {
     @Test
+    fun rollsBackMediaPublicationWhenItsWorldEventCannotBeCommitted() {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val path = File(context.filesDir, "media/generated-atomic-smoke.png").apply {
+            parentFile?.mkdirs()
+            writeBytes(byteArrayOf(1, 2, 3))
+        }
+        val store = WorldStore(context)
+        val postId = store.createMediaPost("atomic publication", "test prompt")
+
+        try {
+            store.writableDatabase.execSQL(
+                """
+                CREATE TEMP TRIGGER reject_test_world_event
+                BEFORE INSERT ON world_events
+                BEGIN
+                    SELECT RAISE(ABORT, 'test rejection');
+                END
+                """.trimIndent(),
+            )
+            assertTrue(runCatching { store.markMediaReady(postId, path.absolutePath, 7L) }.isFailure)
+            assertEquals("pending", store.mediaJobs().first { it.postId == postId }.status)
+            assertTrue(store.posts("moment").none { it.id == postId })
+            assertTrue(store.mediaVersions(postId).isEmpty())
+        } finally {
+            runCatching {
+                store.writableDatabase.execSQL("DROP TRIGGER IF EXISTS reject_test_world_event")
+            }
+            store.deleteUserPost(postId)
+            store.close()
+            path.delete()
+        }
+    }
+
+    @Test
     fun keepsPausedMediaJobsPendingForRetry() {
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
         val postId = WorldStore(context).use {

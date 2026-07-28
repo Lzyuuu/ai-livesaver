@@ -2497,21 +2497,21 @@ internal class WorldStore(context: Context) :
                         put("created_at", System.currentTimeMillis())
                     },
                 )
+                if (shouldCreateEvent) {
+                    addWorldEvent(
+                        "moment",
+                        eventSummary.take(120),
+                        actorName,
+                        needsResponse = false,
+                        sourcePostId = postId,
+                        providerName = providerName,
+                        modelName = modelName,
+                    )
+                }
                 setTransactionSuccessful()
             } finally {
                 endTransaction()
             }
-        }
-        if (shouldCreateEvent) {
-            addWorldEvent(
-                "moment",
-                eventSummary.take(120),
-                actorName,
-                needsResponse = false,
-                sourcePostId = postId,
-                providerName = providerName,
-                modelName = modelName,
-            )
         }
     }
 
