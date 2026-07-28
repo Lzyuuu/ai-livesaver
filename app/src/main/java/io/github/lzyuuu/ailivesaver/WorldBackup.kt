@@ -49,6 +49,7 @@ internal object WorldBackup {
                         "UPDATE social_posts SET media_path = NULL, media_status = " +
                             "CASE WHEN media_prompt IS NULL THEN 'none' ELSE 'failed' END",
                     )
+                    it.execSQL("UPDATE profile SET avatar_path = ''")
                     it.delete("media_versions", null, null)
                 }
             }
@@ -331,6 +332,14 @@ internal object WorldBackup {
             null,
             SQLiteDatabase.OPEN_READWRITE,
         ).use { database ->
+            val avatarPath = database.rawQuery(
+                "SELECT avatar_path FROM profile WHERE id = 1",
+                null,
+            ).use { cursor -> if (cursor.moveToFirst()) cursor.getString(0) else "" }
+            database.execSQL(
+                "UPDATE profile SET avatar_path = ? WHERE id = 1",
+                arrayOf(normalizedMediaPath(avatarPath, source, destination).orEmpty()),
+            )
             val versions = database.rawQuery(
                 "SELECT id, path FROM media_versions",
                 null,
@@ -380,6 +389,12 @@ internal object WorldBackup {
                 }
             }
         }
+    }
+
+    internal fun normalizedMediaPath(path: String, source: File, destination: File): String? {
+        val name = File(path).name
+        return name.takeIf { it.isNotBlank() && File(source, it).isFile }
+            ?.let { File(destination, it).path }
     }
 
     private fun moveReplace(source: File, destination: File) {
