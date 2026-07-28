@@ -275,8 +275,16 @@ internal fun persistImportedImage(context: Context, cachedPath: String): String 
     val directory = File(context.filesDir, "media").apply { mkdirs() }
     val target = File(directory, "${UUID.randomUUID()}.image")
     if (!cached.renameTo(target)) {
-        cached.copyTo(target)
-        cached.delete()
+        try {
+            if (!storageAllowsGeneration(StatFs(context.filesDir.path).availableBytes)) {
+                throw IOException("存储空间不足")
+            }
+            cached.copyTo(target)
+            cached.delete()
+        } catch (error: Throwable) {
+            target.delete()
+            throw error
+        }
     }
     return target.path
 }
@@ -404,15 +412,23 @@ internal object LocalDreamClient {
         bitmap.setPixels(image.pixels, 0, image.width, 0, 0, image.width, image.height)
         val directory = File(context.filesDir, "media").apply { mkdirs() }
         val file = File(directory, "${UUID.randomUUID()}.png")
-        file.outputStream().use {
-            if (!bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)) {
-                throw IOException("Could not save generated image")
+        return try {
+            try {
+                file.outputStream().use {
+                    if (!bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)) {
+                        throw IOException("Could not save generated image")
+                    }
+                }
+            } catch (error: Throwable) {
+                file.delete()
+                throw error
             }
+            val recordedStats = stats.copy(width = image.width, height = image.height)
+            LocalDreamStatsStore.save(context, recordedStats)
+            LocalDreamImage(file.absolutePath, image.seed, recordedStats)
+        } finally {
+            bitmap.recycle()
         }
-        bitmap.recycle()
-        val recordedStats = stats.copy(width = image.width, height = image.height)
-        LocalDreamStatsStore.save(context, recordedStats)
-        return LocalDreamImage(file.absolutePath, image.seed, recordedStats)
     }
 }
 
@@ -444,7 +460,7 @@ internal object LocalDreamQueue {
         }
         if (!storageAllowsGeneration(StatFs(context.filesDir.path).availableBytes)) {
             val error = IOException(context.getString(R.string.storage_low_generation_paused))
-            store.markMediaFailed(job.postId, error.message.orEmpty())
+            store.markMediaWaiting(job.postId, error.message.orEmpty())
             store.close()
             running.set(false)
             onFinished(job.postId, Result.failure(error))

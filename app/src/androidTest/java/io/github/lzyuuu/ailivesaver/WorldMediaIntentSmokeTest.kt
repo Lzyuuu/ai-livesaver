@@ -11,6 +11,27 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class WorldMediaIntentSmokeTest {
     @Test
+    fun keepsPausedMediaJobsPendingForRetry() {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val postId = WorldStore(context).use {
+            it.createMediaPost("waiting for storage", "retryable prompt")
+        }
+
+        try {
+            WorldStore(context).use { store ->
+                store.markMediaWaiting(postId, "存储空间不足，生成已暂停")
+                assertEquals(postId, store.nextPendingMediaJob()?.postId)
+                assertEquals(
+                    "pending",
+                    store.mediaJobs().first { it.postId == postId }.status,
+                )
+            }
+        } finally {
+            WorldStore(context).use { it.deleteUserPost(postId) }
+        }
+    }
+
+    @Test
     fun hidesGeneratedPostUntilReadyAndKeepsProviderProvenance() {
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
         val path = File(context.filesDir, "media/generated-intent-smoke.png").apply {
