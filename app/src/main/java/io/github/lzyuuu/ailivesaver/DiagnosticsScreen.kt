@@ -202,7 +202,7 @@ internal fun DiagnosticsScreen(
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         item {
-            TextButton(onClick = onBack) { Text("‹  ${stringResource(R.string.back)}") }
+            ScreenBackButton(onBack)
             Text(
                 stringResource(R.string.diagnostics_title),
                 style = MaterialTheme.typography.headlineMedium,

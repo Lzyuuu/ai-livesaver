@@ -44,18 +44,26 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
@@ -94,6 +102,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
@@ -924,9 +933,7 @@ private fun WorldChronicleScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                TextButton(onClick = onBack) {
-                    Text("‹  ${stringResource(R.string.back)}")
-                }
+                ScreenBackButton(onBack)
                 TextButton(
                     onClick = onMarkAllSeen,
                     enabled = events.any { !it.seen },
@@ -1283,8 +1290,18 @@ internal fun Avatar(
 private data class SettingRow(
     val titleRes: Int,
     val summaryRes: Int,
+    val icon: ImageVector,
     val destination: String? = null,
 )
+
+@Composable
+internal fun ScreenBackButton(onBack: () -> Unit) {
+    TextButton(onClick = onBack) {
+        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
+        Spacer(Modifier.width(6.dp))
+        Text(stringResource(R.string.back))
+    }
+}
 
 @Composable
 private fun MeScreen(
@@ -1315,17 +1332,36 @@ private fun MeScreen(
             .sortedByDescending(SocialPost::createdAt)
     }
     val settings = listOf(
-        SettingRow(R.string.user_identity, R.string.user_identity_summary, "identity"),
-        SettingRow(R.string.world_members, R.string.world_members_summary, "characters"),
-        SettingRow(R.string.provider_settings, R.string.provider_settings_summary, "providers"),
-        SettingRow(R.string.local_dream_settings, R.string.local_dream_settings_summary, "dream"),
-        SettingRow(R.string.world_settings, R.string.world_settings_summary, "world"),
-        SettingRow(R.string.world_knowledge, R.string.world_knowledge_summary, "knowledge"),
-        SettingRow(R.string.runtime_status, R.string.runtime_status_summary, "diagnostics"),
-        SettingRow(R.string.privacy_settings, R.string.privacy_settings_summary, "privacy"),
-        SettingRow(R.string.backup_settings, R.string.backup_settings_summary, "backups"),
-        SettingRow(R.string.about_updates, R.string.about_updates_summary, "updates"),
+        SettingRow(R.string.user_identity, R.string.user_identity_summary, Icons.Default.Person, "identity"),
+        SettingRow(R.string.world_members, R.string.world_members_summary, Icons.Default.Favorite, "characters"),
+        SettingRow(R.string.provider_settings, R.string.provider_settings_summary, Icons.Default.Settings, "providers"),
+        SettingRow(R.string.local_dream_settings, R.string.local_dream_settings_summary, Icons.Default.Star, "dream"),
+        SettingRow(R.string.world_settings, R.string.world_settings_summary, Icons.Default.Home, "world"),
+        SettingRow(
+            R.string.world_knowledge,
+            R.string.world_knowledge_summary,
+            Icons.AutoMirrored.Filled.List,
+            "knowledge",
+        ),
+        SettingRow(R.string.runtime_status, R.string.runtime_status_summary, Icons.Default.Build, "diagnostics"),
+        SettingRow(R.string.privacy_settings, R.string.privacy_settings_summary, Icons.Default.Lock, "privacy"),
+        SettingRow(R.string.backup_settings, R.string.backup_settings_summary, Icons.Default.Share, "backups"),
+        SettingRow(R.string.about_updates, R.string.about_updates_summary, Icons.Default.Info, "updates"),
     )
+    fun openSetting(destination: String?) {
+        when (destination) {
+            "identity" -> onOpenIdentity()
+            "characters" -> onOpenCharacters()
+            "providers" -> onOpenProviders()
+            "dream" -> onOpenLocalDream()
+            "world" -> onOpenWorldSettings()
+            "knowledge" -> onOpenWorldKnowledge()
+            "diagnostics" -> onOpenDiagnostics()
+            "privacy" -> onOpenPrivacy()
+            "backups" -> onOpenBackups()
+            "updates" -> onOpenUpdates()
+        }
+    }
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(
@@ -1364,40 +1400,51 @@ private fun MeScreen(
             )
         }
         item {
-            Text(stringResource(R.string.appearance_settings), fontWeight = FontWeight.Bold)
-            Text(
-                stringResource(R.string.appearance_settings_summary),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            Card(
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                ),
             ) {
-                ThemeMode.entries.forEach { option ->
-                    FilterChip(
-                        selected = themeMode == option,
-                        onClick = { onThemeModeChanged(option) },
-                        label = {
-                            Text(
-                                stringResource(
-                                    when (option) {
-                                        ThemeMode.System -> R.string.theme_system
-                                        ThemeMode.Light -> R.string.theme_light
-                                        ThemeMode.Dark -> R.string.theme_dark
-                                    },
-                                ),
+                Column(
+                    modifier = Modifier.padding(18.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text(stringResource(R.string.appearance_settings), fontWeight = FontWeight.Bold)
+                    Text(
+                        stringResource(R.string.appearance_settings_summary),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        ThemeMode.entries.forEach { option ->
+                            FilterChip(
+                                selected = themeMode == option,
+                                onClick = { onThemeModeChanged(option) },
+                                label = {
+                                    Text(
+                                        stringResource(
+                                            when (option) {
+                                                ThemeMode.System -> R.string.theme_system
+                                                ThemeMode.Light -> R.string.theme_light
+                                                ThemeMode.Dark -> R.string.theme_dark
+                                            },
+                                        ),
+                                    )
+                                },
                             )
-                        },
-                    )
-                }
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                    FilterChip(
-                        selected = dynamicColor,
-                        onClick = { onDynamicColorChanged(!dynamicColor) },
-                        label = { Text(stringResource(R.string.theme_dynamic_color)) },
-                    )
+                        }
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                            FilterChip(
+                                selected = dynamicColor,
+                                onClick = { onDynamicColorChanged(!dynamicColor) },
+                                label = { Text(stringResource(R.string.theme_dynamic_color)) },
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -1451,48 +1498,9 @@ private fun MeScreen(
                 }
             }
         }
-        items(settings) { setting ->
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable(enabled = setting.destination != null) {
-                        when (setting.destination) {
-                            "identity" -> onOpenIdentity()
-                            "characters" -> onOpenCharacters()
-                            "providers" -> onOpenProviders()
-                            "dream" -> onOpenLocalDream()
-                            "world" -> onOpenWorldSettings()
-                            "knowledge" -> onOpenWorldKnowledge()
-                            "diagnostics" -> onOpenDiagnostics()
-                            "privacy" -> onOpenPrivacy()
-                            "backups" -> onOpenBackups()
-                            "updates" -> onOpenUpdates()
-                        }
-                    },
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.66f),
-                ),
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(18.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(Modifier.weight(1f)) {
-                        Text(stringResource(setting.titleRes), fontWeight = FontWeight.Bold)
-                        Text(
-                            stringResource(setting.summaryRes),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                    if (setting.destination != null) {
-                        Spacer(Modifier.width(12.dp))
-                        Text("›", fontSize = 28.sp)
-                    }
-                }
+        settings.chunked(2).forEach { group ->
+            item {
+                SettingGroup(group, ::openSetting)
             }
         }
         item {
@@ -1502,6 +1510,69 @@ private fun MeScreen(
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.primary,
             )
+        }
+    }
+}
+
+@Composable
+private fun SettingGroup(
+    settings: List<SettingRow>,
+    onOpen: (String?) -> Unit,
+) {
+    Card(
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        ),
+    ) {
+        Column {
+            settings.forEachIndexed { index, setting ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("me-setting-${setting.destination}")
+                        .clickable(enabled = setting.destination != null) {
+                            onOpen(setting.destination)
+                        }
+                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Surface(
+                        modifier = Modifier.size(40.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        color = MaterialTheme.colorScheme.secondaryContainer,
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                setting.icon,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(20.dp),
+                            )
+                        }
+                    }
+                    Spacer(Modifier.width(14.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(stringResource(setting.titleRes), fontWeight = FontWeight.Bold)
+                        Text(
+                            stringResource(setting.summaryRes),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                    Icon(
+                        Icons.AutoMirrored.Filled.ArrowForward,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.outline,
+                    )
+                }
+                if (index != settings.lastIndex) {
+                    HorizontalDivider(
+                        modifier = Modifier.padding(start = 70.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant,
+                    )
+                }
+            }
         }
     }
 }
@@ -1641,7 +1712,7 @@ private fun BackupSettingsScreen(
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         item {
-            TextButton(onClick = onBack) { Text("‹  ${stringResource(R.string.back)}") }
+            ScreenBackButton(onBack)
             Text(
                 stringResource(R.string.backup_settings),
                 style = MaterialTheme.typography.headlineMedium,
@@ -1772,7 +1843,7 @@ private fun LocalDreamSettingsScreen(
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         item {
-            TextButton(onClick = onBack) { Text("‹  ${stringResource(R.string.back)}") }
+            ScreenBackButton(onBack)
             Text(
                 stringResource(R.string.local_dream_settings),
                 style = MaterialTheme.typography.headlineMedium,
@@ -1949,7 +2020,7 @@ private fun WorldKnowledgeScreen(
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         item {
-            TextButton(onClick = onBack) { Text("‹  ${stringResource(R.string.back)}") }
+            ScreenBackButton(onBack)
             Text(
                 stringResource(R.string.world_knowledge),
                 style = MaterialTheme.typography.headlineMedium,
@@ -2193,7 +2264,7 @@ private fun WorldSettingsScreen(
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         item {
-            TextButton(onClick = onBack) { Text("‹  ${stringResource(R.string.back)}") }
+            ScreenBackButton(onBack)
             Text(
                 stringResource(R.string.world_settings),
                 style = MaterialTheme.typography.headlineMedium,
@@ -2644,9 +2715,7 @@ private fun ProviderScreen(
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         item {
-            TextButton(onClick = onBack) {
-                Text("‹  ${stringResource(R.string.back)}")
-            }
+            ScreenBackButton(onBack)
             Text(
                 stringResource(R.string.provider_title),
                 style = MaterialTheme.typography.headlineMedium,
@@ -2665,7 +2734,9 @@ private fun ProviderScreen(
         }
         item {
             Row(
-                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                modifier = Modifier
+                    .testTag("provider-profile-tabs")
+                    .horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 FilterChip(
@@ -3062,9 +3133,7 @@ private fun UpdateScreen(
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         item {
-            TextButton(onClick = onBack) {
-                Text("‹  ${stringResource(R.string.back)}")
-            }
+            ScreenBackButton(onBack)
             Text(
                 stringResource(R.string.updates_title),
                 style = MaterialTheme.typography.headlineMedium,

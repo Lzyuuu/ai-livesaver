@@ -850,7 +850,7 @@ private fun ConversationContextScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         item {
-            TextButton(onClick = onBack) { Text("‹  ${stringResource(R.string.back)}") }
+            ScreenBackButton(onBack)
             Text(
                 stringResource(R.string.conversation_context),
                 style = MaterialTheme.typography.headlineMedium,

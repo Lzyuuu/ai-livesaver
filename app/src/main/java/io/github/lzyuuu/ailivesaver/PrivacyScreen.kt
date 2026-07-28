@@ -33,7 +33,7 @@ internal fun PrivacyScreen(
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         item {
-            TextButton(onClick = onBack) { Text("‹  ${stringResource(R.string.back)}") }
+            ScreenBackButton(onBack)
             Text(
                 stringResource(R.string.privacy_title),
                 style = MaterialTheme.typography.headlineMedium,

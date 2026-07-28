@@ -3,13 +3,20 @@ package io.github.lzyuuu.ailivesaver
 import android.os.Build
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasScrollToIndexAction
+import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToIndex
+import androidx.compose.ui.test.performScrollToNode
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.swipeLeft
+import androidx.compose.ui.test.swipeUp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.assertEquals
@@ -53,30 +60,42 @@ class MainActivitySmokeTest {
 
     @Test
     fun opensUpdateScreenFromMe() {
-        composeRule.onNodeWithText("Me", useUnmergedTree = true).performClick()
+        composeRule.onNodeWithText("Me")
+            .performSemanticsAction(SemanticsActions.OnClick)
         composeRule.waitForIdle()
         composeRule.onNode(hasScrollToIndexAction(), useUnmergedTree = true)
-            .performScrollToIndex(13)
-        composeRule.onNodeWithText("关于与更新", useUnmergedTree = true)
-            .performClick()
+            .performScrollToNode(hasTestTag("me-setting-updates"))
+        composeRule.onNodeWithTag("me-setting-updates")
+            .performSemanticsAction(SemanticsActions.OnClick)
+        composeRule.waitForIdle()
+        composeRule.onNode(hasScrollToIndexAction(), useUnmergedTree = true)
+            .performScrollToIndex(2)
         composeRule.onNodeWithText("检查更新", useUnmergedTree = true).assertIsDisplayed()
     }
 
     @Test
     fun exposesExplicitProviderFallbackConfiguration() {
-        composeRule.onNodeWithText("Me", useUnmergedTree = true).performClick()
+        composeRule.onNodeWithText("Me")
+            .performSemanticsAction(SemanticsActions.OnClick)
         composeRule.waitForIdle()
-        composeRule.onNode(hasScrollToIndexAction(), useUnmergedTree = true)
-            .performScrollToIndex(6)
-        composeRule.onNodeWithText("推理配置", useUnmergedTree = true).performClick()
-        composeRule.onNodeWithText("独立视觉 Provider", useUnmergedTree = true)
-            .performTouchInput { swipeLeft() }
+        composeRule.onNode(hasScrollToIndexAction(), useUnmergedTree = true).apply {
+            performScrollToNode(hasTestTag("me-setting-providers"))
+            performTouchInput { swipeUp() }
+        }
+        composeRule.onNodeWithTag("me-setting-providers")
+            .performSemanticsAction(SemanticsActions.OnClick)
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("provider-profile-tabs", useUnmergedTree = true).apply {
+            performTouchInput { swipeLeft() }
+            performTouchInput { swipeLeft() }
+        }
         composeRule.onNodeWithText("备用 Provider", useUnmergedTree = true).assertIsDisplayed()
     }
 
     @Test
     fun exposesThemeChoiceInMe() {
-        composeRule.onNodeWithText("Me", useUnmergedTree = true).performClick()
+        composeRule.onNodeWithText("Me")
+            .performSemanticsAction(SemanticsActions.OnClick)
         composeRule.onNodeWithText("外观", useUnmergedTree = true).assertIsDisplayed()
         composeRule.onNodeWithText("跟随系统", useUnmergedTree = true).assertIsDisplayed()
         composeRule.onNodeWithText("深色", useUnmergedTree = true).performClick()

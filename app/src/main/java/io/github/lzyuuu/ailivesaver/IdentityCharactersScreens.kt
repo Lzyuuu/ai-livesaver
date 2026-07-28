@@ -669,7 +669,7 @@ private fun SettingsList(
 
 @Composable
 private fun ScreenHeading(onBack: () -> Unit, title: Int, summary: Int) {
-    TextButton(onClick = onBack) { Text("‹  ${stringResource(R.string.back)}") }
+    ScreenBackButton(onBack)
     Text(
         stringResource(title),
         style = MaterialTheme.typography.headlineMedium,
