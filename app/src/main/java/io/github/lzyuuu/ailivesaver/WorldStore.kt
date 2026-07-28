@@ -1796,52 +1796,60 @@ internal class WorldStore(context: Context) :
         mediaHeight: Int = 512,
     ): Long {
         val cleanMediaPrompt = mediaPrompt.orEmpty().trim()
-        val postId = writableDatabase.insertOrThrow(
-            "social_posts",
-            null,
-            ContentValues().apply {
-                put("kind", kind)
-                put("author_name", authorName)
-                put("title", title.trim())
-                put("body", body.trim())
-                put("created_at", System.currentTimeMillis())
-                put("author_kind", authorKind)
-                put("author_character_id", authorCharacterId)
-                put("audience", audience)
-                put("audience_character_ids", audienceCharacterIds)
-                put("ai_responses_enabled", if (aiResponsesEnabled) 1 else 0)
-                put("provider_name", providerName)
-                put("model_name", modelName)
-                put("media_status", if (cleanMediaPrompt.isBlank()) "none" else "pending")
-                put("media_negative_prompt", mediaNegativePrompt.trim())
-                put("media_steps", mediaSteps.coerceIn(1, 100))
-                put("media_cfg", mediaCfg.coerceIn(0.1, 30.0))
-                put("media_scheduler", mediaScheduler.trim().ifBlank { "dpm" })
-                put("media_width", mediaWidth.coerceIn(8, 2048))
-                put("media_height", mediaHeight.coerceIn(8, 2048))
+        return writableDatabase.run {
+            beginTransaction()
+            try {
+                val postId = insertOrThrow(
+                    "social_posts",
+                    null,
+                    ContentValues().apply {
+                        put("kind", kind)
+                        put("author_name", authorName)
+                        put("title", title.trim())
+                        put("body", body.trim())
+                        put("created_at", System.currentTimeMillis())
+                        put("author_kind", authorKind)
+                        put("author_character_id", authorCharacterId)
+                        put("audience", audience)
+                        put("audience_character_ids", audienceCharacterIds)
+                        put("ai_responses_enabled", if (aiResponsesEnabled) 1 else 0)
+                        put("provider_name", providerName)
+                        put("model_name", modelName)
+                        put("media_status", if (cleanMediaPrompt.isBlank()) "none" else "pending")
+                        put("media_negative_prompt", mediaNegativePrompt.trim())
+                        put("media_steps", mediaSteps.coerceIn(1, 100))
+                        put("media_cfg", mediaCfg.coerceIn(0.1, 30.0))
+                        put("media_scheduler", mediaScheduler.trim().ifBlank { "dpm" })
+                        put("media_width", mediaWidth.coerceIn(8, 2048))
+                        put("media_height", mediaHeight.coerceIn(8, 2048))
+                        if (cleanMediaPrompt.isBlank()) {
+                            putNull("media_prompt")
+                            put("media_description", "")
+                            put("media_source", "")
+                        } else {
+                            put("media_prompt", cleanMediaPrompt)
+                            put("media_description", cleanMediaPrompt)
+                            put("media_source", "local_dream")
+                        }
+                    },
+                )
                 if (cleanMediaPrompt.isBlank()) {
-                    putNull("media_prompt")
-                    put("media_description", "")
-                    put("media_source", "")
-                } else {
-                    put("media_prompt", cleanMediaPrompt)
-                    put("media_description", cleanMediaPrompt)
-                    put("media_source", "local_dream")
+                    addWorldEvent(
+                        kind = worldEventKind ?: if (kind == "moment") "moment" else "commons",
+                        summary = title.ifBlank { body }.take(120),
+                        actorName = authorName,
+                        needsResponse = eventNeedsResponse,
+                        sourcePostId = postId,
+                        providerName = providerName,
+                        modelName = modelName,
+                    )
                 }
-            },
-        )
-        if (cleanMediaPrompt.isBlank()) {
-            addWorldEvent(
-                kind = worldEventKind ?: if (kind == "moment") "moment" else "commons",
-                summary = title.ifBlank { body }.take(120),
-                actorName = authorName,
-                needsResponse = eventNeedsResponse,
-                sourcePostId = postId,
-                providerName = providerName,
-                modelName = modelName,
-            )
+                setTransactionSuccessful()
+                postId
+            } finally {
+                endTransaction()
+            }
         }
-        return postId
     }
 
     fun posts(kind: String, sort: String = "latest"): List<SocialPost> {
@@ -2055,45 +2063,59 @@ internal class WorldStore(context: Context) :
     ): Long {
         val createdAt = System.currentTimeMillis()
         val mediaPrompt = prompt.orEmpty().trim().ifBlank { description.trim() }
-        val postId = writableDatabase.insertOrThrow(
-            "social_posts",
-            null,
-            ContentValues().apply {
-                put("kind", "moment")
-                put("author_name", userName())
-                put("body", body.trim())
-                put("media_path", path)
-                put("media_status", "ready")
-                put("media_description", description.trim())
-                put("media_negative_prompt", negativePrompt.trim())
-                put("media_seed", seed)
-                put("media_steps", steps)
-                put("media_cfg", cfg)
-                put("media_scheduler", scheduler.trim())
-                put("media_width", width)
-                put("media_height", height)
-                put("media_source", "user")
-                if (mediaPrompt.isNotBlank()) put("media_prompt", mediaPrompt)
-                put("created_at", createdAt)
-                put("author_kind", "user")
-                put("audience", audience)
-                put("audience_character_ids", audienceCharacterIds)
-                put("ai_responses_enabled", if (aiResponsesEnabled) 1 else 0)
-            },
-        )
-        writableDatabase.insertOrThrow(
-            "media_versions",
-            null,
-            ContentValues().apply {
-                put("post_id", postId)
-                put("path", path)
-                put("prompt", mediaPrompt)
-                put("seed", seed)
-                put("created_at", createdAt)
-            },
-        )
-        addWorldEvent("moment", body.take(120), userName(), false, postId)
-        return postId
+        var committed = false
+        try {
+            return writableDatabase.run {
+                beginTransaction()
+                try {
+                    val postId = insertOrThrow(
+                        "social_posts",
+                        null,
+                        ContentValues().apply {
+                            put("kind", "moment")
+                            put("author_name", userName())
+                            put("body", body.trim())
+                            put("media_path", path)
+                            put("media_status", "ready")
+                            put("media_description", description.trim())
+                            put("media_negative_prompt", negativePrompt.trim())
+                            put("media_seed", seed)
+                            put("media_steps", steps)
+                            put("media_cfg", cfg)
+                            put("media_scheduler", scheduler.trim())
+                            put("media_width", width)
+                            put("media_height", height)
+                            put("media_source", "user")
+                            if (mediaPrompt.isNotBlank()) put("media_prompt", mediaPrompt)
+                            put("created_at", createdAt)
+                            put("author_kind", "user")
+                            put("audience", audience)
+                            put("audience_character_ids", audienceCharacterIds)
+                            put("ai_responses_enabled", if (aiResponsesEnabled) 1 else 0)
+                        },
+                    )
+                    insertOrThrow(
+                        "media_versions",
+                        null,
+                        ContentValues().apply {
+                            put("post_id", postId)
+                            put("path", path)
+                            put("prompt", mediaPrompt)
+                            put("seed", seed)
+                            put("created_at", createdAt)
+                        },
+                    )
+                    addWorldEvent("moment", body.take(120), userName(), false, postId)
+                    setTransactionSuccessful()
+                    committed = true
+                    postId
+                } finally {
+                    endTransaction()
+                }
+            }
+        } finally {
+            if (!committed) deleteMediaFileIfUnreferenced(path)
+        }
     }
 
     fun toggleReaction(postId: Long) {
@@ -2160,28 +2182,35 @@ internal class WorldStore(context: Context) :
     }
 
     private fun deletePost(postId: Long, authorClause: String) {
-        val paths = readableDatabase.rawQuery(
-            """
-            SELECT media_path FROM social_posts WHERE id = ? AND media_path IS NOT NULL
-            UNION
-            SELECT path FROM media_versions WHERE post_id = ?
-            """.trimIndent(),
-            arrayOf(postId.toString(), postId.toString()),
-        ).use { cursor ->
-            buildList { while (cursor.moveToNext()) add(cursor.getString(0)) }
-        }
+        var paths = emptyList<String>()
         writableDatabase.beginTransaction()
         try {
-            writableDatabase.delete(
-                "world_events",
-                "source_post_id = ?",
+            val authorized = readableDatabase.rawQuery(
+                "SELECT EXISTS(SELECT 1 FROM social_posts WHERE id = ? AND $authorClause)",
                 arrayOf(postId.toString()),
-            )
-            writableDatabase.delete(
-                "social_posts",
-                "id = ? AND $authorClause",
-                arrayOf(postId.toString()),
-            )
+            ).use { cursor -> cursor.moveToFirst() && cursor.getInt(0) == 1 }
+            if (authorized) {
+                paths = readableDatabase.rawQuery(
+                    """
+                    SELECT media_path FROM social_posts WHERE id = ? AND media_path IS NOT NULL
+                    UNION
+                    SELECT path FROM media_versions WHERE post_id = ?
+                    """.trimIndent(),
+                    arrayOf(postId.toString(), postId.toString()),
+                ).use { cursor ->
+                    buildList { while (cursor.moveToNext()) add(cursor.getString(0)) }
+                }
+                writableDatabase.delete(
+                    "world_events",
+                    "source_post_id = ?",
+                    arrayOf(postId.toString()),
+                )
+                writableDatabase.delete(
+                    "social_posts",
+                    "id = ? AND $authorClause",
+                    arrayOf(postId.toString()),
+                )
+            }
             writableDatabase.setTransactionSuccessful()
         } finally {
             writableDatabase.endTransaction()
@@ -2190,18 +2219,28 @@ internal class WorldStore(context: Context) :
     }
 
     fun hideAiPost(postId: Long) {
-        writableDatabase.update(
-            "social_posts",
-            ContentValues().apply { put("hidden", 1) },
-            "id = ? AND author_kind != 'user'",
-            arrayOf(postId.toString()),
-        )
-        writableDatabase.update(
-            "world_events",
-            ContentValues().apply { put("seen", 1) },
-            "source_post_id = ?",
-            arrayOf(postId.toString()),
-        )
+        writableDatabase.run {
+            beginTransaction()
+            try {
+                val updated = update(
+                    "social_posts",
+                    ContentValues().apply { put("hidden", 1) },
+                    "id = ? AND author_kind != 'user'",
+                    arrayOf(postId.toString()),
+                )
+                if (updated == 1) {
+                    update(
+                        "world_events",
+                        ContentValues().apply { put("seen", 1) },
+                        "source_post_id = ?",
+                        arrayOf(postId.toString()),
+                    )
+                }
+                setTransactionSuccessful()
+            } finally {
+                endTransaction()
+            }
+        }
     }
 
     fun socialPostVersions(postId: Long): List<SocialPostVersion> =
