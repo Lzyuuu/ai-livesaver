@@ -762,13 +762,15 @@ internal object WorldEngine {
         ) { result ->
             val updated = result.fold(
                 onSuccess = { response ->
-                    store.rewriteAiPost(
-                        post.id,
-                        response.text,
-                        response.config.preset.displayName,
-                        response.config.model,
-                    )
-                    true
+                    runCatching {
+                        store.rewriteAiPost(
+                            post.id,
+                            post.body,
+                            response.text,
+                            response.config.preset.displayName,
+                            response.config.model,
+                        )
+                    }.getOrDefault(false)
                 },
                 onFailure = { false },
             )

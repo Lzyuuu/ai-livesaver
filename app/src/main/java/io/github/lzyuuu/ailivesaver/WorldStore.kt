@@ -2209,10 +2209,12 @@ internal class WorldStore(context: Context) :
 
     fun rewriteAiPost(
         postId: Long,
+        expectedBody: String,
         body: String,
         providerName: String,
         modelName: String,
-    ) {
+    ): Boolean {
+        var rewritten = false
         writableDatabase.run {
             beginTransaction()
             try {
@@ -2220,9 +2222,9 @@ internal class WorldStore(context: Context) :
                     """
                     SELECT body, provider_name, model_name, created_at
                     FROM social_posts
-                    WHERE id = ? AND author_kind != 'user'
+                    WHERE id = ? AND author_kind != 'user' AND hidden = 0 AND body = ?
                     """.trimIndent(),
-                    arrayOf(postId.toString()),
+                    arrayOf(postId.toString(), expectedBody),
                 ).use { cursor ->
                     if (cursor.moveToFirst()) {
                         SocialPostVersion(
@@ -2247,7 +2249,7 @@ internal class WorldStore(context: Context) :
                         put("created_at", current.createdAt)
                     },
                 )
-                update(
+                val updated = update(
                     "social_posts",
                     ContentValues().apply {
                         put("body", body.trim())
@@ -2255,17 +2257,20 @@ internal class WorldStore(context: Context) :
                         put("model_name", modelName)
                         put("created_at", System.currentTimeMillis())
                     },
-                    "id = ? AND author_kind != 'user'",
-                    arrayOf(postId.toString()),
+                    "id = ? AND author_kind != 'user' AND hidden = 0 AND body = ?",
+                    arrayOf(postId.toString(), expectedBody),
                 )
+                if (updated != 1) return@run
+                rewritten = true
                 setTransactionSuccessful()
             } finally {
                 endTransaction()
             }
         }
+        return rewritten
     }
 
-    fun restoreAiPostVersion(postId: Long, versionId: Long) {
+    fun restoreAiPostVersion(postId: Long, versionId: Long): Boolean {
         val version = readableDatabase.rawQuery(
             """
             SELECT body, provider_name, model_name
@@ -2279,8 +2284,19 @@ internal class WorldStore(context: Context) :
             } else {
                 null
             }
-        } ?: return
-        rewriteAiPost(postId, version.first, version.second, version.third)
+        } ?: return false
+        val currentBody = readableDatabase.rawQuery(
+            "SELECT body FROM social_posts WHERE id = ? AND author_kind != 'user' AND hidden = 0",
+            arrayOf(postId.toString()),
+        ).use { cursor -> if (cursor.moveToFirst()) cursor.getString(0) else null }
+            ?: return false
+        return rewriteAiPost(
+            postId,
+            currentBody,
+            version.first,
+            version.second,
+            version.third,
+        )
     }
 
     fun addWorldEvent(
