@@ -643,54 +643,6 @@ private fun WorldScreen(
         }
         item {
             WorldSection(
-                title = stringResource(R.string.world_chronicle),
-                action = stringResource(R.string.mark_all_read),
-                onAction = onMarkAllEventsSeen,
-            ) {
-                if (chronicleEvents.isEmpty()) {
-                    Text(
-                        stringResource(R.string.no_world_history),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                } else {
-                    val formatter = remember {
-                        SimpleDateFormat("MM-dd HH:mm", Locale.getDefault())
-                    }
-                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        chronicleEvents.take(3).forEach { event ->
-                            val source = event.providerName
-                                .takeIf { it.isNotBlank() }
-                                ?.let { "$it · ${event.modelName}" }
-                                ?: stringResource(R.string.world_provider)
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable { onOpenEvent(event) },
-                            ) {
-                                PersonMessage(
-                                    event.actorName.take(1).uppercase(),
-                                    event.actorName,
-                                    event.summary,
-                                    stringResource(
-                                        R.string.world_event_time,
-                                        formatter.format(Date(event.createdAt)),
-                                        source,
-                                    ),
-                                )
-                            }
-                        }
-                    }
-                }
-                TextButton(
-                    onClick = onOpenChronicle,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text(stringResource(R.string.view_all))
-                }
-            }
-        }
-        item {
-            WorldSection(
                 title = stringResource(R.string.respond_first),
                 action = stringResource(
                     if (responseEvents.any { "message" in it.kind }) {
@@ -797,6 +749,54 @@ private fun WorldScreen(
                     },
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+            }
+        }
+        item {
+            WorldSection(
+                title = stringResource(R.string.world_chronicle),
+                action = stringResource(R.string.mark_all_read),
+                onAction = onMarkAllEventsSeen,
+            ) {
+                if (chronicleEvents.isEmpty()) {
+                    Text(
+                        stringResource(R.string.no_world_history),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                } else {
+                    val formatter = remember {
+                        SimpleDateFormat("MM-dd HH:mm", Locale.getDefault())
+                    }
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        chronicleEvents.take(3).forEach { event ->
+                            val source = event.providerName
+                                .takeIf { it.isNotBlank() }
+                                ?.let { "$it · ${event.modelName}" }
+                                ?: stringResource(R.string.world_provider)
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { onOpenEvent(event) },
+                            ) {
+                                PersonMessage(
+                                    event.actorName.take(1).uppercase(),
+                                    event.actorName,
+                                    event.summary,
+                                    stringResource(
+                                        R.string.world_event_time,
+                                        formatter.format(Date(event.createdAt)),
+                                        source,
+                                    ),
+                                )
+                            }
+                        }
+                    }
+                }
+                TextButton(
+                    onClick = onOpenChronicle,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(stringResource(R.string.view_all))
+                }
             }
         }
     }

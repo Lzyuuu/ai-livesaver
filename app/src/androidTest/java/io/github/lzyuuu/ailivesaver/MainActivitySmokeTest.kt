@@ -30,12 +30,16 @@ class MainActivitySmokeTest {
 
     @Test
     fun exposesWorldChronicleEntry() {
+        composeRule.onNode(hasScrollToIndexAction(), useUnmergedTree = true)
+            .performScrollToIndex(7)
         composeRule.onNodeWithText("世界纪事", useUnmergedTree = true).assertIsDisplayed()
         composeRule.onNodeWithText("全部已读", useUnmergedTree = true).assertIsDisplayed()
     }
 
     @Test
     fun opensFullWorldChronicle() {
+        composeRule.onNode(hasScrollToIndexAction(), useUnmergedTree = true)
+            .performScrollToIndex(7)
         composeRule.onNodeWithText("查看全部", useUnmergedTree = true).performClick()
         composeRule.waitForIdle()
         composeRule.onAllNodesWithText(
