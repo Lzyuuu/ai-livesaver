@@ -1142,25 +1142,41 @@ internal class WorldStore(context: Context) :
         sharedPersonalFact: Boolean,
         messageBody: String = "",
     ) {
-        val current = relationship(characterId)
-        if (current.pinned) return
-        val next = nextRelationship(
-            current,
-            sharedPersonalFact,
-            relationshipSignals(messageBody),
-        ) ?: return
-        writableDatabase.insertOrThrow(
-            "relationship_events",
-            null,
-            ContentValues().apply {
-                put("character_id", characterId)
-                put("label", next.first)
-                put("summary", next.second)
-                put("source_message_id", sourceMessageId)
-                put("created_at", System.currentTimeMillis())
-                put("source", "conversation")
-            },
-        )
+        writableDatabase.beginTransaction()
+        try {
+            val sourceIsCurrent = readableDatabase.rawQuery(
+                """
+                SELECT EXISTS(
+                    SELECT 1 FROM messages
+                    WHERE id = ? AND character_id = ? AND sender = 'user' AND active = 1
+                )
+                """.trimIndent(),
+                arrayOf(sourceMessageId.toString(), characterId.toString()),
+            ).use { cursor -> cursor.moveToFirst() && cursor.getInt(0) == 1 }
+            if (!sourceIsCurrent) return
+            val current = relationship(characterId)
+            if (current.pinned) return
+            val next = nextRelationship(
+                current,
+                sharedPersonalFact,
+                relationshipSignals(messageBody),
+            ) ?: return
+            writableDatabase.insertOrThrow(
+                "relationship_events",
+                null,
+                ContentValues().apply {
+                    put("character_id", characterId)
+                    put("label", next.first)
+                    put("summary", next.second)
+                    put("source_message_id", sourceMessageId)
+                    put("created_at", System.currentTimeMillis())
+                    put("source", "conversation")
+                },
+            )
+            writableDatabase.setTransactionSuccessful()
+        } finally {
+            writableDatabase.endTransaction()
+        }
     }
 
     fun relationshipEvents(characterId: Long): List<RelationshipEvent> =
@@ -1269,20 +1285,59 @@ internal class WorldStore(context: Context) :
             }
         }
 
-    fun saveConversationRecap(characterId: Long, body: String, throughMessageId: Long) {
-        val pinned = conversationRecap(characterId)?.pinned == true
-        writableDatabase.insertWithOnConflict(
-            "conversation_recaps",
-            null,
-            ContentValues().apply {
-                put("character_id", characterId)
-                put("body", body.trim())
-                put("through_message_id", throughMessageId)
-                put("created_at", System.currentTimeMillis())
-                put("pinned", if (pinned) 1 else 0)
-            },
-            SQLiteDatabase.CONFLICT_REPLACE,
-        )
+    fun saveConversationRecapIfCurrent(
+        characterId: Long,
+        body: String,
+        throughMessageId: Long,
+    ): Boolean {
+        var saved = false
+        writableDatabase.run {
+            beginTransaction()
+            try {
+                val current = rawQuery(
+                    """
+                    SELECT EXISTS(
+                        SELECT 1 FROM messages
+                        WHERE id = ? AND character_id = ? AND active = 1
+                          AND id = (
+                              SELECT MAX(id) FROM messages
+                              WHERE character_id = ? AND active = 1
+                          )
+                    )
+                    """.trimIndent(),
+                    arrayOf(
+                        throughMessageId.toString(),
+                        characterId.toString(),
+                        characterId.toString(),
+                    ),
+                ).use { cursor -> cursor.moveToFirst() && cursor.getInt(0) == 1 }
+                if (!current) {
+                    setTransactionSuccessful()
+                    return@run
+                }
+                val pinned = rawQuery(
+                    "SELECT pinned FROM conversation_recaps WHERE character_id = ?",
+                    arrayOf(characterId.toString()),
+                ).use { cursor -> cursor.moveToFirst() && cursor.getInt(0) == 1 }
+                insertWithOnConflict(
+                    "conversation_recaps",
+                    null,
+                    ContentValues().apply {
+                        put("character_id", characterId)
+                        put("body", body.trim())
+                        put("through_message_id", throughMessageId)
+                        put("created_at", System.currentTimeMillis())
+                        put("pinned", if (pinned) 1 else 0)
+                    },
+                    SQLiteDatabase.CONFLICT_REPLACE,
+                )
+                saved = true
+                setTransactionSuccessful()
+            } finally {
+                endTransaction()
+            }
+        }
+        return saved
     }
 
     fun updateConversationRecap(characterId: Long, body: String) {

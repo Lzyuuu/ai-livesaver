@@ -74,8 +74,21 @@ private fun captureLongTermMemory(
     ) { result ->
         val memory = result.getOrNull()?.text?.let(MemoryExtractor::fromProvider)
             ?: return@completeStructured
-        if (store.rememberIfCurrent(character.id, message.id, memory)) {
-            store.recordConversationRelationship(character.id, message.id, sharedPersonalFact = true)
+        val saved = runCatching {
+            WorldStore(context.applicationContext).use { callbackStore ->
+                if (!callbackStore.rememberIfCurrent(character.id, message.id, memory)) {
+                    false
+                } else {
+                    callbackStore.recordConversationRelationship(
+                        character.id,
+                        message.id,
+                        sharedPersonalFact = true,
+                    )
+                    true
+                }
+            }
+        }.getOrDefault(false)
+        if (saved) {
             onChanged()
         }
     }
@@ -335,7 +348,11 @@ private fun ConversationScreen(
                 streamingText = body
                 val now = System.currentTimeMillis()
                 if (now - lastPersistedAt >= 500) {
-                    store.updateAssistantDraft(reply.id, body)
+                    runCatching {
+                        WorldStore(context.applicationContext).use {
+                            it.updateAssistantDraft(reply.id, body)
+                        }
+                    }
                     lastPersistedAt = now
                 }
             },
@@ -344,19 +361,29 @@ private fun ConversationScreen(
                 result.fold(
                     onSuccess = { response ->
                         runCatching {
-                            store.completeAssistantReply(
-                                reply.id,
-                                response.text,
-                                response.config.preset.displayName,
-                                response.config.model,
-                            )
+                            WorldStore(context.applicationContext).use {
+                                it.completeAssistantReply(
+                                    reply.id,
+                                    response.text,
+                                    response.config.preset.displayName,
+                                    response.config.model,
+                                )
+                            }
                         }.onFailure {
-                            store.failAssistantReply(reply.id, it.message.orEmpty())
+                            runCatching {
+                                WorldStore(context.applicationContext).use { callbackStore ->
+                                    callbackStore.failAssistantReply(reply.id, it.message.orEmpty())
+                                }
+                            }
                             error = it.message.orEmpty()
                         }
                     },
                     onFailure = {
-                        store.failAssistantReply(reply.id, it.message.orEmpty())
+                        runCatching {
+                            WorldStore(context.applicationContext).use { callbackStore ->
+                                callbackStore.failAssistantReply(reply.id, it.message.orEmpty())
+                            }
+                        }
                         error = it.message.orEmpty()
                     },
                 )
@@ -468,8 +495,13 @@ private fun ConversationScreen(
             relationshipEvents = relationshipEvents,
             onBack = { showContext = false },
             onSaveRecap = { body, throughMessageId ->
-                store.saveConversationRecap(character.id, body, throughMessageId)
-                onChanged()
+                runCatching {
+                    WorldStore(context.applicationContext).use {
+                        it.saveConversationRecapIfCurrent(character.id, body, throughMessageId)
+                    }
+                }.getOrDefault(false).also { saved ->
+                    if (saved) onChanged()
+                }
             },
             onUpdateRecap = { body ->
                 store.updateConversationRecap(character.id, body)
@@ -777,7 +809,7 @@ private fun ConversationContextScreen(
     relationship: RelationshipState,
     relationshipEvents: List<RelationshipEvent>,
     onBack: () -> Unit,
-    onSaveRecap: (String, Long) -> Unit,
+    onSaveRecap: (String, Long) -> Boolean,
     onUpdateRecap: (String) -> Unit,
     onPinRecap: (Boolean) -> Unit,
     onUpdate: (Long, String) -> Unit,
@@ -790,6 +822,7 @@ private fun ConversationContextScreen(
     val provider = remember { ProviderStore(context) }
     val recapRequiresMessages = stringResource(R.string.recap_requires_messages)
     val recapFailedPrefix = stringResource(R.string.recap_failed, "")
+    val recapOutdated = stringResource(R.string.recap_outdated)
     var generating by remember { mutableStateOf(false) }
     var recapError by remember { mutableStateOf<String?>(null) }
     var editingRecap by rememberSaveable { mutableStateOf(false) }
@@ -1042,7 +1075,9 @@ private fun ConversationContextScreen(
                                 ) { result ->
                                     generating = false
                                     result.onSuccess {
-                                        onSaveRecap(it.text, messages.last().id)
+                                        if (!onSaveRecap(it.text, messages.last().id)) {
+                                            recapError = recapOutdated
+                                        }
                                     }.onFailure {
                                         recapError = "$recapFailedPrefix ${it.message.orEmpty()}"
                                     }

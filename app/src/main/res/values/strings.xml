@@ -84,6 +84,7 @@
     <string name="generating_recap">正在回顾…</string>
     <string name="recap_requires_messages">至少需要两条消息才能生成回顾。</string>
     <string name="recap_failed">生成回顾失败：%1$s</string>
+    <string name="recap_outdated">生成期间对话已改变，请重新生成回顾。</string>
     <string name="start_conversation">还没有消息。说点什么，让这段关系真正开始。</string>
     <string name="chat_failed">回复失败：%1$s</string>
     <string name="streaming_reply">正在实时回应…</string>
