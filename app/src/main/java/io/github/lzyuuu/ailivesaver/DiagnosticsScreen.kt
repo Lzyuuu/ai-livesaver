@@ -136,9 +136,14 @@ internal object RuntimeDiagnostics {
         if (snapshot.lastFailure.isNotBlank()) appendLine("last_failure=${snapshot.lastFailure}")
     }
 
-    internal fun sanitizeFailure(providerFailure: String): String = providerFailure
-        .replace(Regex("[\\r\\n]+"), " ")
-        .take(160)
+    internal fun sanitizeFailure(providerFailure: String): String {
+        if (providerFailure.isBlank()) return ""
+        val code = Regex("""(?:Provider )?HTTP (\d{3})""")
+            .find(providerFailure)
+            ?.groupValues
+            ?.get(1)
+        return code?.let { "Provider HTTP $it" } ?: "Provider request failed"
+    }
 }
 
 @Composable

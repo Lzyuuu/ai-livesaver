@@ -6,14 +6,16 @@ import org.junit.Test
 
 class DiagnosticsTest {
     @Test
-    fun failureSummaryIsSingleLineAndBounded() {
-        val input = "HTTP 401\nsecret prompt\r\n" + "x".repeat(200)
-        val output = RuntimeDiagnostics.sanitizeFailure(input)
-
-        assertEquals(160, output.length)
-        assertEquals(-1, output.indexOf('\n'))
-        assertEquals(-1, output.indexOf('\r'))
-        assertTrue(output.startsWith("HTTP 401 secret prompt "))
+    fun failureSummaryNeverKeepsProviderResponseText() {
+        assertEquals(
+            "Provider HTTP 401",
+            RuntimeDiagnostics.sanitizeFailure("HTTP 401\nsecret prompt\napi-key"),
+        )
+        assertEquals(
+            "Provider request failed",
+            RuntimeDiagnostics.sanitizeFailure("connection failed: private prompt"),
+        )
+        assertEquals("", RuntimeDiagnostics.sanitizeFailure(""))
     }
 
     @Test
