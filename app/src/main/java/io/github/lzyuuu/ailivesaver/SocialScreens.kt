@@ -27,10 +27,19 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -55,6 +64,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -108,6 +118,9 @@ internal fun composeVisualPrompt(
 internal fun mediaPromptForEditing(mediaPrompt: String?, mediaDescription: String): String =
     mediaPrompt.orEmpty().ifBlank { mediaDescription }
 
+internal fun socialComposerVisible(hasCharacter: Boolean, expanded: Boolean): Boolean =
+    hasCharacter && expanded
+
 internal fun threadedComments(
     comments: List<SocialComment>,
 ): List<Pair<SocialComment, Int>> {
@@ -147,6 +160,8 @@ internal fun SocialScreen(
     var npcProfile by remember { mutableStateOf<NpcProfile?>(null) }
     var previewPostId by rememberSaveable { mutableStateOf<Long?>(null) }
     var openPreviewMenu by rememberSaveable { mutableStateOf(false) }
+    var composerOpen by rememberSaveable(kind) { mutableStateOf(false) }
+    val showComposer = socialComposerVisible(character != null, composerOpen)
     var generationStatus by remember { mutableStateOf<String?>(null) }
     val generationFailed = stringResource(R.string.local_dream_generation_failed)
     val generationReady = stringResource(R.string.local_dream_generation_ready)
@@ -302,11 +317,40 @@ internal fun SocialScreen(
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         item {
-            Text(
-                stringResource(if (kind == "moment") R.string.moments_title else R.string.commons_title),
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold,
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    stringResource(
+                        if (kind == "moment") R.string.moments_title
+                        else R.string.commons_title,
+                    ),
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = FontFamily.Serif,
+                )
+                if (character != null) {
+                    TextButton(onClick = { composerOpen = !composerOpen }) {
+                        if (!composerOpen) {
+                            Icon(Icons.Default.Edit, contentDescription = null)
+                            Spacer(Modifier.size(6.dp))
+                        }
+                        Text(
+                            stringResource(
+                                if (composerOpen) {
+                                    R.string.cancel
+                                } else if (kind == "moment") {
+                                    R.string.share_moment
+                                } else {
+                                    R.string.start_topic
+                                },
+                            ),
+                        )
+                    }
+                }
+            }
             Text(
                 stringResource(
                     if (kind == "moment") R.string.moments_social_summary
@@ -345,9 +389,13 @@ internal fun SocialScreen(
                     Text(stringResource(R.string.begin_world_building))
                 }
             }
-        } else {
+        } else if (showComposer) {
             item {
-                PostComposer(kind, characters) {
+                PostComposer(
+                    kind = kind,
+                    characters = characters,
+                    onPublished = { composerOpen = false },
+                ) {
                         title,
                         body,
                         prompt,
@@ -545,6 +593,7 @@ internal fun SocialScreen(
 private fun PostComposer(
     kind: String,
     characters: List<ResidentCharacter>,
+    onPublished: () -> Unit,
     onPost: (
         String,
         String,
@@ -788,6 +837,7 @@ private fun PostComposer(
                     localDreamParameters = ""
                     analyzeImage = false
                     imageStatus = null
+                    onPublished()
                 },
                 enabled = (body.isNotBlank() || cachedImagePath != null || prompt.isNotBlank()) &&
                     (kind != "forum" || title.isNotBlank()) &&
@@ -861,10 +911,13 @@ private fun PostCard(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 TextButton(onClick = onToggleReaction) {
-                    Text(
-                        "${if (post.reactedByUser) "♥" else "♡"} " +
-                            stringResource(R.string.likes_count, post.reactionCount),
+                    Icon(
+                        if (post.reactedByUser) Icons.Default.Favorite
+                        else Icons.Default.FavoriteBorder,
+                        contentDescription = null,
                     )
+                    Spacer(Modifier.size(6.dp))
+                    Text(stringResource(R.string.likes_count, post.reactionCount))
                 }
                 Text(
                     stringResource(R.string.open_discussion),
@@ -920,7 +973,11 @@ private fun PostDetailScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         item {
-            TextButton(onClick = onBack) { Text("‹  ${stringResource(R.string.back)}") }
+            TextButton(onClick = onBack) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
+                Spacer(Modifier.size(6.dp))
+                Text(stringResource(R.string.back))
+            }
             if (editing && post.kind == "forum") {
                 OutlinedTextField(
                     value = editTitle,
@@ -1299,52 +1356,56 @@ private fun FullScreenMediaPreview(
                         contentDescription = closePreviewLabel
                     },
                 ) {
-                    Text("‹", color = Color.White, style = MaterialTheme.typography.headlineMedium)
+                    Icon(
+                        Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = null,
+                        tint = Color.White,
+                    )
                 }
-                TextButton(
-                    onClick = { menuOpen = true },
-                    modifier = Modifier.semantics {
-                        contentDescription = imageActionsLabel
-                    },
-                ) {
-                    Text("⋮", color = Color.White, style = MaterialTheme.typography.headlineMedium)
-                }
-            }
-            if (menuOpen) {
-                Card(
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(top = 104.dp, end = 18.dp),
-                ) {
-                    Column(Modifier.padding(10.dp)) {
+                Box {
+                    TextButton(
+                        onClick = { menuOpen = true },
+                        modifier = Modifier.semantics {
+                            contentDescription = imageActionsLabel
+                        },
+                    ) {
+                        Icon(
+                            Icons.Default.MoreVert,
+                            contentDescription = null,
+                            tint = Color.White,
+                        )
+                    }
+                    DropdownMenu(
+                        expanded = menuOpen,
+                        onDismissRequest = { menuOpen = false },
+                    ) {
                         if (originalPrompt.isNotBlank()) {
-                            TextButton(
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.redraw_directly)) },
                                 onClick = {
                                     onRedraw(originalPrompt)
                                     menuOpen = false
                                     onDismiss()
                                 },
-                            ) {
-                                Text(stringResource(R.string.redraw_directly))
-                            }
+                            )
                         }
-                        TextButton(
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.edit_prompt_and_redraw)) },
                             onClick = {
                                 editingPrompt = true
                                 menuOpen = false
                             },
-                        ) {
-                            Text(stringResource(R.string.edit_prompt_and_redraw))
-                        }
+                        )
                         if (versions.isNotEmpty()) {
-                            TextButton(
+                            DropdownMenuItem(
+                                text = {
+                                    Text(stringResource(R.string.image_versions, versions.size))
+                                },
                                 onClick = {
                                     versionListOpen = true
                                     menuOpen = false
                                 },
-                            ) {
-                                Text(stringResource(R.string.image_versions, versions.size))
-                            }
+                            )
                         }
                     }
                 }

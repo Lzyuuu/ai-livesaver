@@ -39,6 +39,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import java.text.DateFormat
 import java.util.Date
@@ -574,6 +575,7 @@ private fun ConversationScreen(
                         character.name,
                         style = MaterialTheme.typography.headlineMedium,
                         fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.Serif,
                     )
                     Text(
                         "${relationship.label} · ${stringResource(R.string.private_conversation)}",

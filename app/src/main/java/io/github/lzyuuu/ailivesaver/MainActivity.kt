@@ -18,9 +18,13 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.core.net.toUri
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.LocalIndication
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -39,17 +43,28 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Email
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Shapes
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -67,14 +82,22 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
@@ -88,6 +111,7 @@ import java.util.Locale
 
 internal const val APP_PREFERENCES = "app_settings"
 private const val THEME_MODE_KEY = "theme_mode"
+private const val DYNAMIC_COLOR_KEY = "dynamic_color"
 
 private enum class ThemeMode {
     System,
@@ -107,6 +131,17 @@ private fun writeThemeMode(context: android.content.Context, mode: ThemeMode) {
     context.getSharedPreferences(APP_PREFERENCES, android.content.Context.MODE_PRIVATE)
         .edit()
         .putString(THEME_MODE_KEY, mode.name)
+        .apply()
+}
+
+private fun readDynamicColor(context: android.content.Context): Boolean =
+    context.getSharedPreferences(APP_PREFERENCES, android.content.Context.MODE_PRIVATE)
+        .getBoolean(DYNAMIC_COLOR_KEY, false)
+
+private fun writeDynamicColor(context: android.content.Context, enabled: Boolean) {
+    context.getSharedPreferences(APP_PREFERENCES, android.content.Context.MODE_PRIVATE)
+        .edit()
+        .putBoolean(DYNAMIC_COLOR_KEY, enabled)
         .apply()
 }
 
@@ -142,16 +177,22 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             var themeModeName by rememberSaveable { mutableStateOf(readThemeMode(this).name) }
+            var dynamicColor by rememberSaveable { mutableStateOf(readDynamicColor(this)) }
             val themeMode = runCatching { ThemeMode.valueOf(themeModeName) }
                 .getOrDefault(ThemeMode.System)
-            AiLivesaverTheme(themeMode) {
+            AiLivesaverTheme(themeMode, dynamicColor) {
                 AiLivesaverApp(
                     themeMode = themeMode,
+                    dynamicColor = dynamicColor,
                     notificationCharacterId = notificationCharacterId,
                     onNotificationOpened = { notificationCharacterId = null },
                     onThemeModeChanged = { next ->
                         writeThemeMode(this, next)
                         themeModeName = next.name
+                    },
+                    onDynamicColorChanged = { enabled ->
+                        writeDynamicColor(this, enabled)
+                        dynamicColor = enabled
                     },
                 )
             }
@@ -181,13 +222,13 @@ class MainActivity : ComponentActivity() {
 
 private enum class Destination(
     val labelRes: Int,
-    val glyph: String,
+    val icon: ImageVector,
 ) {
-    World(R.string.nav_world, "◉"),
-    Chats(R.string.nav_chats, "✦"),
-    Moments(R.string.nav_moments, "◎"),
-    Commons(R.string.nav_commons, "#"),
-    Me(R.string.nav_me, "◇"),
+    World(R.string.nav_world, Icons.Default.Home),
+    Chats(R.string.nav_chats, Icons.Default.Email),
+    Moments(R.string.nav_moments, Icons.Default.Favorite),
+    Commons(R.string.nav_commons, Icons.AutoMirrored.Filled.List),
+    Me(R.string.nav_me, Icons.Default.Person),
 }
 
 internal fun routeWorldEvent(kind: String, currentDestination: String): String = when {
@@ -206,39 +247,67 @@ internal fun unreadWorldEventIds(events: List<WorldEvent>): List<Long> =
     events.filterNot(WorldEvent::seen).map(WorldEvent::id)
 
 @Composable
-private fun AiLivesaverTheme(themeMode: ThemeMode, content: @Composable () -> Unit) {
+private fun AiLivesaverTheme(
+    themeMode: ThemeMode,
+    dynamicColor: Boolean,
+    content: @Composable () -> Unit,
+) {
     val context = LocalContext.current
     val dark = when (themeMode) {
         ThemeMode.System -> isSystemInDarkTheme()
         ThemeMode.Light -> false
         ThemeMode.Dark -> true
     }
-    val scheme: ColorScheme = when {
-        Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && dark -> dynamicDarkColorScheme(context)
-        Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> dynamicLightColorScheme(context)
-        dark -> darkColorScheme(
-            primary = Color(0xFFEAB8D9),
-            secondary = Color(0xFFD6B9CF),
-            surface = Color(0xFF171217),
-            background = Color(0xFF171217),
+    val scheme: ColorScheme = if (dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+    } else if (dark) {
+        darkColorScheme(
+            primary = Color(0xFFF0C64E),
+            onPrimary = Color(0xFF3D2F00),
+            primaryContainer = Color(0xFF27251D),
+            onPrimaryContainer = Color(0xFFFFEFAF),
+            secondary = Color(0xFFAFC1FF),
+            secondaryContainer = Color(0xFF263451),
+            onSecondaryContainer = Color(0xFFDCE4FF),
+            background = Color(0xFF0B1017),
+            surface = Color(0xFF10151D),
+            surfaceVariant = Color(0xFF252A33),
         )
-        else -> lightColorScheme(
-            primary = Color(0xFF805372),
-            secondary = Color(0xFF755766),
-            surface = Color(0xFFFFF8FB),
-            background = Color(0xFFFFF8FB),
-            surfaceVariant = Color(0xFFF3E8EF),
+    } else {
+        lightColorScheme(
+            primary = Color(0xFF4F609E),
+            onPrimary = Color.White,
+            primaryContainer = Color(0xFFE0E6FF),
+            onPrimaryContainer = Color(0xFF26376F),
+            secondary = Color(0xFF987421),
+            secondaryContainer = Color(0xFFF7E8B8),
+            onSecondaryContainer = Color(0xFF332400),
+            background = Color(0xFFFBF9F1),
+            surface = Color(0xFFFFFCF5),
+            surfaceVariant = Color(0xFFF0EEF4),
         )
     }
-    MaterialTheme(colorScheme = scheme, content = content)
+    MaterialTheme(
+        colorScheme = scheme,
+        shapes = Shapes(
+            extraSmall = RoundedCornerShape(8.dp),
+            small = RoundedCornerShape(12.dp),
+            medium = RoundedCornerShape(20.dp),
+            large = RoundedCornerShape(28.dp),
+            extraLarge = RoundedCornerShape(32.dp),
+        ),
+        content = content,
+    )
 }
 
 @Composable
 private fun AiLivesaverApp(
     themeMode: ThemeMode,
+    dynamicColor: Boolean,
     notificationCharacterId: Long?,
     onNotificationOpened: () -> Unit,
     onThemeModeChanged: (ThemeMode) -> Unit,
+    onDynamicColorChanged: (Boolean) -> Unit,
 ) {
     val context = LocalContext.current
     val worldStore = remember { WorldStore(context) }
@@ -258,6 +327,7 @@ private fun AiLivesaverApp(
     var showBackups by rememberSaveable { mutableStateOf(false) }
     var showIdentity by rememberSaveable { mutableStateOf(false) }
     var showCharacters by rememberSaveable { mutableStateOf(false) }
+    var requestedChatCharacterId by rememberSaveable { mutableStateOf<Long?>(null) }
     var pendingSocialPostRoute by remember { mutableStateOf<PendingSocialPostRoute?>(null) }
     val destination = Destination.valueOf(destinationName)
     val identity = remember(worldRevision) { worldStore.identity() }
@@ -345,19 +415,23 @@ private fun AiLivesaverApp(
                 !showWorldChronicle && !showLocalDream && !showDiagnostics && !showPrivacy && !showBackups &&
                     !showIdentity && !showCharacters
             ) {
-                NavigationBar {
+                NavigationBar(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                    tonalElevation = 3.dp,
+                ) {
                     Destination.entries.forEach { item ->
                         NavigationBarItem(
                             selected = item == destination,
                             onClick = { destinationName = item.name },
                             icon = {
-                                Text(
-                                    text = item.glyph,
-                                    fontSize = 20.sp,
-                                    fontWeight = FontWeight.Bold,
-                                )
+                                Icon(item.icon, contentDescription = null)
                             },
                             label = { Text(stringResource(item.labelRes)) },
+                            colors = NavigationBarItemDefaults.colors(
+                                selectedIconColor = MaterialTheme.colorScheme.primary,
+                                selectedTextColor = MaterialTheme.colorScheme.primary,
+                                indicatorColor = MaterialTheme.colorScheme.secondaryContainer,
+                            ),
                         )
                     }
                 }
@@ -480,6 +554,10 @@ private fun AiLivesaverApp(
                     onOpenCommons = { destinationName = Destination.Commons.name },
                     onOpenQueue = { showLocalDream = true },
                     onManageCircle = { showCharacters = true },
+                    onOpenCharacter = { characterId ->
+                        requestedChatCharacterId = characterId
+                        destinationName = Destination.Chats.name
+                    },
                     onOpenChronicle = { showWorldChronicle = true },
                     onMarkAllEventsSeen = {
                         unreadWorldEventIds(allWorldEvents)
@@ -492,8 +570,11 @@ private fun AiLivesaverApp(
                     contentPadding = padding,
                     store = worldStore,
                     revision = worldRevision,
-                    initialCharacterId = notificationCharacterId,
-                    onInitialCharacterConsumed = onNotificationOpened,
+                    initialCharacterId = requestedChatCharacterId ?: notificationCharacterId,
+                    onInitialCharacterConsumed = {
+                        requestedChatCharacterId = null
+                        onNotificationOpened()
+                    },
                     onChanged = { worldRevision++ },
                     onConfigureProvider = { showProviders = true },
                 )
@@ -533,7 +614,9 @@ private fun AiLivesaverApp(
                     store = worldStore,
                     revision = worldRevision,
                     themeMode = themeMode,
+                    dynamicColor = dynamicColor,
                     onThemeModeChanged = onThemeModeChanged,
+                    onDynamicColorChanged = onDynamicColorChanged,
                     onOpenIdentity = { showIdentity = true },
                     onOpenCharacters = { showCharacters = true },
                     onOpenUpdates = { showUpdates = true },
@@ -571,6 +654,7 @@ private fun WorldScreen(
     onOpenCommons: () -> Unit,
     onOpenQueue: () -> Unit,
     onManageCircle: () -> Unit,
+    onOpenCharacter: (Long) -> Unit,
     onOpenChronicle: () -> Unit,
     onMarkAllEventsSeen: () -> Unit,
     onOpenEvent: (WorldEvent) -> Unit,
@@ -642,11 +726,16 @@ private fun WorldScreen(
                 onAction = onManageCircle,
             )
             Spacer(Modifier.height(12.dp))
-            CircleStrip(characters, onAdd = onManageCircle)
+            CircleStrip(
+                characters = characters,
+                onOpenCharacter = onOpenCharacter,
+                onAdd = onManageCircle,
+            )
         }
         item {
             WorldSection(
                 title = stringResource(R.string.respond_first),
+                icon = Icons.Default.Email,
                 action = stringResource(
                     if (responseEvents.any { "message" in it.kind }) {
                         R.string.open_chats
@@ -696,6 +785,7 @@ private fun WorldScreen(
         item {
             WorldSection(
                 title = stringResource(R.string.moments_title),
+                icon = Icons.Default.Favorite,
                 action = stringResource(R.string.enter),
                 onAction = onOpenMoments,
             ) {
@@ -716,6 +806,7 @@ private fun WorldScreen(
         item {
             WorldSection(
                 title = stringResource(R.string.commons_title),
+                icon = Icons.AutoMirrored.Filled.List,
                 action = stringResource(R.string.replies_count, latestForumReplyCount),
                 onAction = onOpenCommons,
             ) {
@@ -741,6 +832,7 @@ private fun WorldScreen(
         item {
             WorldSection(
                 title = stringResource(R.string.creation_queue),
+                icon = Icons.Default.Star,
                 action = stringResource(R.string.queue_count, queueCount),
                 onAction = onOpenQueue,
             ) {
@@ -757,6 +849,7 @@ private fun WorldScreen(
         item {
             WorldSection(
                 title = stringResource(R.string.world_chronicle),
+                icon = Icons.Default.Home,
                 action = stringResource(R.string.mark_all_read),
                 onAction = onMarkAllEventsSeen,
             ) {
@@ -924,6 +1017,10 @@ private fun RelationshipHero(
     onOpenUpdates: () -> Unit,
 ) {
     Card(
+        border = BorderStroke(
+            width = 1.dp,
+            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.32f),
+        ),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.primaryContainer,
         ),
@@ -941,6 +1038,7 @@ private fun RelationshipHero(
                 character.name,
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold,
+                fontFamily = FontFamily.Serif,
             )
             Text(
                 stringResource(R.string.primary_character_status),
@@ -989,45 +1087,94 @@ private fun RelationshipHero(
 @Composable
 private fun CircleStrip(
     characters: List<ResidentCharacter>,
+    onOpenCharacter: (Long) -> Unit,
     onAdd: () -> Unit,
 ) {
     val addLabel = stringResource(R.string.add)
-    val people = buildList {
-        characters.forEach { add(it.name to it.name.take(1).uppercase()) }
-        add(addLabel to "+")
-    }
     Row(
         modifier = Modifier.horizontalScroll(rememberScrollState()),
         horizontalArrangement = Arrangement.spacedBy(18.dp),
     ) {
-        people.forEachIndexed { index, (name, initial) ->
+        characters.forEach { character ->
+            val interactionSource = remember(character.id) { MutableInteractionSource() }
             Column(
-                modifier = Modifier.clickable(enabled = index == people.lastIndex, onClick = onAdd),
+                modifier = Modifier
+                    .pressScale(interactionSource)
+                    .clip(RoundedCornerShape(12.dp))
+                    .clickable(
+                        interactionSource = interactionSource,
+                        indication = LocalIndication.current,
+                        role = Role.Button,
+                        onClick = { onOpenCharacter(character.id) },
+                    )
+                    .padding(4.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                Avatar(initial, 58.dp)
+                Avatar(character.name.take(1).uppercase(), 58.dp)
                 Spacer(Modifier.height(6.dp))
-                Text(name, style = MaterialTheme.typography.labelMedium)
+                Text(character.name, style = MaterialTheme.typography.labelMedium)
             }
         }
+        Column(
+            modifier = Modifier
+                .clip(RoundedCornerShape(12.dp))
+                .clickable(role = Role.Button, onClick = onAdd)
+                .padding(4.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Surface(
+                modifier = Modifier.size(58.dp),
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.secondaryContainer,
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        Icons.Default.Add,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                    )
+                }
+            }
+            Spacer(Modifier.height(6.dp))
+            Text(addLabel, style = MaterialTheme.typography.labelMedium)
+        }
+    }
+}
+
+@Composable
+private fun Modifier.pressScale(interactionSource: MutableInteractionSource): Modifier {
+    val pressed by interactionSource.collectIsPressedAsState()
+    val motionEnabled = systemAnimationsEnabled(LocalContext.current)
+    val scale by animateFloatAsState(
+        targetValue = if (pressed && motionEnabled) 0.97f else 1f,
+        animationSpec = tween(
+            durationMillis = if (pressed) 100 else 160,
+            easing = LinearOutSlowInEasing,
+        ),
+        label = "circle press",
+    )
+    return graphicsLayer {
+        scaleX = scale
+        scaleY = scale
     }
 }
 
 @Composable
 private fun WorldSection(
     title: String,
+    icon: ImageVector,
     action: String,
     onAction: () -> Unit = {},
     content: @Composable () -> Unit,
 ) {
     Card(
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.66f),
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
         ),
         shape = RoundedCornerShape(24.dp),
     ) {
         Column(Modifier.padding(18.dp)) {
-            SectionHeader(title, action, onAction)
+            SectionHeader(title, action, onAction, icon)
             Spacer(Modifier.height(14.dp))
             content()
         }
@@ -1039,17 +1186,36 @@ private fun SectionHeader(
     title: String,
     action: String,
     onAction: () -> Unit = {},
+    icon: ImageVector? = null,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(
-            title,
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold,
-        )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            icon?.let {
+                Surface(
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.secondaryContainer,
+                ) {
+                    Icon(
+                        it,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(8.dp).size(18.dp),
+                    )
+                }
+            }
+            Text(
+                title,
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+            )
+        }
         TextButton(onClick = onAction) {
             Text(
                 action,
@@ -1127,7 +1293,9 @@ private fun MeScreen(
     store: WorldStore,
     revision: Int,
     themeMode: ThemeMode,
+    dynamicColor: Boolean,
     onThemeModeChanged: (ThemeMode) -> Unit,
+    onDynamicColorChanged: (Boolean) -> Unit,
     onOpenIdentity: () -> Unit,
     onOpenCharacters: () -> Unit,
     onOpenUpdates: () -> Unit,
@@ -1222,6 +1390,13 @@ private fun MeScreen(
                                 ),
                             )
                         },
+                    )
+                }
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    FilterChip(
+                        selected = dynamicColor,
+                        onClick = { onDynamicColorChanged(!dynamicColor) },
+                        label = { Text(stringResource(R.string.theme_dynamic_color)) },
                     )
                 }
             }

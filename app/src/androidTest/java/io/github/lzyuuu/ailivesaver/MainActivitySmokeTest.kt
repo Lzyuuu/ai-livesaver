@@ -1,5 +1,6 @@
 package io.github.lzyuuu.ailivesaver
 
+import android.os.Build
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasScrollToIndexAction
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -81,6 +82,10 @@ class MainActivitySmokeTest {
         composeRule.onNodeWithText("深色", useUnmergedTree = true).performClick()
         composeRule.onNodeWithText("浅色", useUnmergedTree = true).performClick()
         composeRule.onNodeWithText("跟随系统", useUnmergedTree = true).performClick()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            composeRule.onNodeWithText("动态色", useUnmergedTree = true).performClick()
+            composeRule.onNodeWithText("动态色", useUnmergedTree = true).performClick()
+        }
     }
 
     @Test

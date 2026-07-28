@@ -241,6 +241,7 @@
     <string name="theme_system">跟随系统</string>
     <string name="theme_light">浅色</string>
     <string name="theme_dark">深色</string>
+    <string name="theme_dynamic_color">动态色</string>
     <string name="my_posts">我的动态</string>
     <string name="my_posts_summary">你在这个世界里留下的 Moments 与 Commons。</string>
     <string name="no_my_posts">还没有发布动态。去和这个世界分享一点什么吧。</string>
