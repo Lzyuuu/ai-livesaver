@@ -14,8 +14,9 @@ class ChatPersistenceSmokeTest {
     fun rejectsLateRepliesAndRollsBackProactiveMessagesAfterDeparture() {
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
         val store = WorldStore(context)
+        val characterName = "Departure test ${System.nanoTime()}"
         val characterId = store.addCharacter(
-            name = "Departure test ${System.nanoTime()}",
+            name = characterName,
             persona = "Test resident",
             attentionTier = "resident",
             appearance = "",
@@ -82,6 +83,11 @@ class ChatPersistenceSmokeTest {
                 store.writableDatabase.execSQL("DROP TRIGGER IF EXISTS reject_test_proactive_event")
             }
             store.deleteCharacter(characterId)
+            store.writableDatabase.delete(
+                "world_events",
+                "actor_name = ?",
+                arrayOf(characterName),
+            )
             store.close()
         }
     }
@@ -141,7 +147,13 @@ class ChatPersistenceSmokeTest {
                 assertEquals(rewritten.id, it.conversationRecap(characterId)?.throughMessageId)
             }
 
-            WorldStore(context).use { it.deleteCharacter(characterId) }
+            WorldStore(context).use {
+                it.writableDatabase.execSQL(
+                    "UPDATE characters SET active = 0 WHERE id = ?",
+                    arrayOf(characterId),
+                )
+                it.deleteCharacter(characterId)
+            }
             assertFalse(
                 WorldStore(context).use {
                     it.saveConversationRecapIfCurrent(
@@ -152,7 +164,13 @@ class ChatPersistenceSmokeTest {
                 },
             )
         } finally {
-            WorldStore(context).use { it.deleteCharacter(characterId) }
+            WorldStore(context).use {
+                it.writableDatabase.execSQL(
+                    "UPDATE characters SET active = 0 WHERE id = ?",
+                    arrayOf(characterId),
+                )
+                it.deleteCharacter(characterId)
+            }
         }
     }
 
@@ -197,7 +215,13 @@ class ChatPersistenceSmokeTest {
                 assertEquals("interrupted", store.messages(characterId).last().status)
             }
         } finally {
-            WorldStore(context).use { it.deleteCharacter(characterId) }
+            WorldStore(context).use {
+                it.writableDatabase.execSQL(
+                    "UPDATE characters SET active = 0 WHERE id = ?",
+                    arrayOf(characterId),
+                )
+                it.deleteCharacter(characterId)
+            }
         }
     }
 }

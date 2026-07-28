@@ -14,8 +14,9 @@ class SocialResponsePersistenceSmokeTest {
     fun rejectsLateResidentSocialActivityAfterDeparture() {
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
         val store = WorldStore(context)
+        val characterName = "Social departure ${System.nanoTime()}"
         val characterId = store.addCharacter(
-            name = "Social departure ${System.nanoTime()}",
+            name = characterName,
             persona = "Test resident",
             attentionTier = "resident",
             appearance = "",
@@ -60,6 +61,11 @@ class SocialResponsePersistenceSmokeTest {
         } finally {
             store.deleteUserPost(postId)
             store.deleteCharacter(characterId)
+            store.writableDatabase.delete(
+                "world_events",
+                "actor_name = ?",
+                arrayOf(characterName),
+            )
             store.close()
         }
     }

@@ -41,7 +41,13 @@ class WorldRestoreRecoverySmokeTest {
             }
             assertTrue(copiedName == name)
         } finally {
-            WorldStore(context).use { it.deleteCharacter(characterId) }
+            WorldStore(context).use {
+                it.writableDatabase.execSQL(
+                    "UPDATE characters SET active = 0 WHERE id = ?",
+                    arrayOf(characterId),
+                )
+                it.deleteCharacter(characterId)
+            }
             snapshot.delete()
         }
     }
@@ -92,6 +98,10 @@ class WorldRestoreRecoverySmokeTest {
             }
         } finally {
             WorldStore(context).use {
+                it.writableDatabase.execSQL(
+                    "UPDATE characters SET active = 0 WHERE id IN (?, ?)",
+                    arrayOf(originalId, replacementId),
+                )
                 it.deleteCharacter(originalId)
                 it.deleteCharacter(replacementId)
             }

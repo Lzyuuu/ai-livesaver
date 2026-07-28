@@ -1366,33 +1366,81 @@ internal class WorldStore(context: Context) :
         )
     }
 
-    fun setCharacterActive(id: Long, active: Boolean) {
-        writableDatabase.update(
-            "characters",
-            ContentValues().apply {
-                put("active", if (active) 1 else 0)
-                put("updated_at", System.currentTimeMillis())
-            },
-            "id = ?",
-            arrayOf(id.toString()),
-        )
-    }
-
-    fun deleteCharacter(id: Long) {
-        writableDatabase.apply {
+    fun setCharacterActive(id: Long, active: Boolean): Boolean {
+        var changed = false
+        writableDatabase.run {
             beginTransaction()
             try {
-                delete(
-                    "member_world_context",
-                    "member_key = ?",
-                    arrayOf("character:$id"),
+                val character = rawQuery(
+                    "SELECT name, active FROM characters WHERE id = ?",
+                    arrayOf(id.toString()),
+                ).use { cursor ->
+                    if (cursor.moveToFirst()) cursor.getString(0) to (cursor.getInt(1) == 1)
+                    else null
+                }
+                if (character == null || character.second == active) {
+                    setTransactionSuccessful()
+                    return@run
+                }
+                val updated = update(
+                    "characters",
+                    ContentValues().apply {
+                        put("active", if (active) 1 else 0)
+                        put("updated_at", System.currentTimeMillis())
+                    },
+                    "id = ? AND active = ?",
+                    arrayOf(id.toString(), if (character.second) "1" else "0"),
                 )
-                delete("characters", "id = ?", arrayOf(id.toString()))
+                if (updated != 1) {
+                    setTransactionSuccessful()
+                    return@run
+                }
+                addWorldEvent(
+                    kind = if (active) "character_return" else "character_departure",
+                    summary = if (active) {
+                        "${character.first} 回到了你的圈子。"
+                    } else {
+                        "${character.first} 暂时离开了你的圈子。"
+                    },
+                    actorName = character.first,
+                    needsResponse = false,
+                )
+                changed = true
                 setTransactionSuccessful()
             } finally {
                 endTransaction()
             }
         }
+        return changed
+    }
+
+    fun deleteCharacter(id: Long): Boolean {
+        var deleted = false
+        writableDatabase.apply {
+            beginTransaction()
+            try {
+                val departed = rawQuery(
+                    "SELECT EXISTS(SELECT 1 FROM characters WHERE id = ? AND active = 0)",
+                    arrayOf(id.toString()),
+                ).use { cursor -> cursor.moveToFirst() && cursor.getInt(0) == 1 }
+                if (departed) {
+                    delete(
+                        "member_world_context",
+                        "member_key = ?",
+                        arrayOf("character:$id"),
+                    )
+                    deleted = delete(
+                        "characters",
+                        "id = ? AND active = 0",
+                        arrayOf(id.toString()),
+                    ) == 1
+                }
+                setTransactionSuccessful()
+            } finally {
+                endTransaction()
+            }
+        }
+        return deleted
     }
 
     fun messages(
