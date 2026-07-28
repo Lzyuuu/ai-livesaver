@@ -281,8 +281,10 @@ internal data class MemberWorldContext(
     val timeZone: String,
 )
 
+internal const val WORLD_DATABASE_VERSION = 19
+
 internal class WorldStore(context: Context) :
-    SQLiteOpenHelper(context, "world.db", null, 19),
+    SQLiteOpenHelper(context, "world.db", null, WORLD_DATABASE_VERSION),
     java.io.Closeable {
     private val mediaDirectory = File(context.filesDir, "media").canonicalFile
 

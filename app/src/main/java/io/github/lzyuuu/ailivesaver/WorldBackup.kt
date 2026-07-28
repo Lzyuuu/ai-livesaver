@@ -239,6 +239,12 @@ internal object WorldBackup {
                 !it.moveToFirst()
             }
             if (!foreignKeysValid) throw IOException("世界数据库关联校验失败")
+            val version = database.rawQuery("PRAGMA user_version", null).use { cursor ->
+                if (cursor.moveToFirst()) cursor.getInt(0) else 0
+            }
+            if (!supportsDatabaseVersion(version)) {
+                throw IOException("备份数据库版本不受支持")
+            }
             val tables = database.rawQuery(
                 "SELECT name FROM sqlite_master WHERE type = 'table'",
                 null,
@@ -250,6 +256,9 @@ internal object WorldBackup {
             }
         }
     }
+
+    internal fun supportsDatabaseVersion(version: Int) =
+        version in 1..WORLD_DATABASE_VERSION
 
     private fun normalizeMediaPaths(databaseFile: File, source: File, destination: File) {
         SQLiteDatabase.openDatabase(
