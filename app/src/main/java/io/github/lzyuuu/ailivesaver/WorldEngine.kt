@@ -631,30 +631,32 @@ internal object WorldEngine {
                 onSuccess = { response ->
                     val reply = response.text
                     val usedConfig = response.config
-                    store.addComment(
-                        postId,
-                        reply,
-                        authorName = character.name,
-                        authorKind = "resident",
-                        authorCharacterId = character.id,
-                    )
-                    store.addWorldEvent(
-                        "${kind}_response",
-                        reply.take(120),
-                        character.name,
-                        needsResponse = true,
-                        sourcePostId = postId,
-                        providerName = usedConfig.preset.displayName,
-                        modelName = usedConfig.model,
-                    )
-                    consumeBudget(context)
-                    recordSuccess(context)
-                    queuedJobId?.let { queuedId ->
-                        WorldStore(context).use { queuedStore ->
-                            queuedStore.removeSocialResponse(queuedId)
-                        }
+                    val stored = runCatching {
+                        store.addGeneratedSocialResponse(
+                            postId = postId,
+                            kind = kind,
+                            body = reply,
+                            authorName = character.name,
+                            authorCharacterId = character.id,
+                            providerName = usedConfig.preset.displayName,
+                            modelName = usedConfig.model,
+                        )
                     }
-                    true
+                    if (stored.getOrDefault(false)) {
+                        consumeBudget(context)
+                        recordSuccess(context)
+                        queuedJobId?.let { queuedId ->
+                            WorldStore(context).use { queuedStore ->
+                                queuedStore.removeSocialResponse(queuedId)
+                            }
+                        }
+                        true
+                    } else {
+                        if (stored.getOrNull() == false) {
+                            queuedJobId?.let(store::removeSocialResponse)
+                        }
+                        false
+                    }
                 },
                 onFailure = { failure ->
                     recordFailure(context, failure.message.orEmpty())

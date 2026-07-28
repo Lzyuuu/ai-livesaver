@@ -1902,6 +1902,57 @@ internal class WorldStore(context: Context) :
         )
     }
 
+    fun addGeneratedSocialResponse(
+        postId: Long,
+        kind: String,
+        body: String,
+        authorName: String,
+        authorCharacterId: Long?,
+        providerName: String,
+        modelName: String,
+    ): Boolean {
+        var committed = false
+        writableDatabase.run {
+            beginTransaction()
+            try {
+                val eligible = rawQuery(
+                    """
+                    SELECT EXISTS(
+                        SELECT 1 FROM social_posts
+                        WHERE id = ? AND hidden = 0 AND ai_responses_enabled = 1
+                    )
+                    """.trimIndent(),
+                    arrayOf(postId.toString()),
+                ).use { cursor -> cursor.moveToFirst() && cursor.getInt(0) == 1 }
+                if (!eligible) {
+                    setTransactionSuccessful()
+                    return@run
+                }
+                addComment(
+                    postId,
+                    body,
+                    authorName = authorName,
+                    authorKind = "resident",
+                    authorCharacterId = authorCharacterId,
+                )
+                addWorldEvent(
+                    "${kind}_response",
+                    body.take(120),
+                    authorName,
+                    needsResponse = true,
+                    sourcePostId = postId,
+                    providerName = providerName,
+                    modelName = modelName,
+                )
+                committed = true
+                setTransactionSuccessful()
+            } finally {
+                endTransaction()
+            }
+        }
+        return committed
+    }
+
     fun createMediaPost(
         body: String,
         prompt: String,
