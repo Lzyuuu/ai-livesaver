@@ -400,6 +400,10 @@ internal object WorldEngine {
                     "Do not address the user directly or imply a private bond with them."
             else -> buildString {
                 append("You are ${actor.name}. ${actor.persona}")
+                store.relationship(actor.id).takeIf { it.createdAt > 0 }?.let {
+                    append("\nCurrent relationship with the user: ${it.label}. ${it.summary}")
+                    append("\nRelationship behavior: ${relationshipBehaviorGuidance(it)}")
+                }
                 store.worldFacts().take(20).forEach { append("\nShared world fact: ${it.body}") }
                 store.characterCognition(actor.id).take(20).forEach {
                     append("\nPrivate character knowledge or belief: ${it.body}")

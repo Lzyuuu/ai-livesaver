@@ -344,6 +344,7 @@ private fun ConversationScreen(
             cognition = store.characterCognition(character.id),
             userContext = store.memberWorldContext("user"),
             characterContext = store.memberWorldContext("character:${character.id}"),
+            relationship = relationship,
             onDelta = { body ->
                 streamingText = body
                 val now = System.currentTimeMillis()

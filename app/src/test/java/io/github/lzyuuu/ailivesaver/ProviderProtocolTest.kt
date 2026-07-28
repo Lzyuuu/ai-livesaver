@@ -116,6 +116,15 @@ class ProviderProtocolTest {
             listOf(CharacterCognition(1, 1, "Mira suspects it may reopen.", false, 1)),
             MemberWorldContext("user", "", "Asia/Shanghai"),
             MemberWorldContext("character:1", "Paris", "Europe/Paris"),
+            RelationshipState(
+                "重新靠近",
+                "They chose to repair a recent disagreement.",
+                9,
+                10,
+                closeness = 3,
+                trust = 5,
+                tension = 0,
+            ),
         )
 
         assertTrue(prompt.contains("Conversation recap through message #12"))
@@ -125,6 +134,10 @@ class ProviderProtocolTest {
         assertTrue(prompt.contains("Mira suspects it may reopen."))
         assertTrue(prompt.contains("User-disclosed time zone: Asia/Shanghai"))
         assertTrue(prompt.contains("Character location: Paris"))
+        assertTrue(prompt.contains("Current relationship: 重新靠近"))
+        assertTrue(prompt.contains("established trust and warmth"))
+        assertFalse(prompt.contains("closeness"))
+        assertFalse(prompt.contains("tension ="))
 
         val messages = (1L..15L).map { ChatMessage(it, 1, "user", "m$it", it) }
         val recent = recentMessagesForContext(

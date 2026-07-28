@@ -40,6 +40,9 @@ internal data class RelationshipState(
     val createdAt: Long,
     val pinned: Boolean = false,
     val source: String = "conversation",
+    val closeness: Int = 0,
+    val trust: Int = 0,
+    val tension: Int = 0,
 )
 
 internal data class RelationshipEvent(
@@ -52,6 +55,9 @@ internal data class RelationshipEvent(
     val active: Boolean,
     val pinned: Boolean,
     val source: String,
+    val closeness: Int,
+    val trust: Int,
+    val tension: Int,
 )
 
 internal data class RelationshipSignals(
@@ -59,24 +65,45 @@ internal data class RelationshipSignals(
     val repair: Boolean,
 )
 
+internal data class RelationshipTransition(
+    val label: String,
+    val summary: String,
+    val closeness: Int,
+    val trust: Int,
+    val tension: Int,
+)
+
 internal fun nextRelationship(
     current: RelationshipState,
     sharedPersonalFact: Boolean,
     signals: RelationshipSignals = RelationshipSignals(false, false),
-): Pair<String, String>? = if (current.pinned) {
+): RelationshipTransition? = if (current.pinned) {
     null
 } else {
+    fun transition(
+        label: String,
+        summary: String,
+        closenessDelta: Int,
+        trustDelta: Int,
+        tensionDelta: Int,
+    ) = RelationshipTransition(
+        label,
+        summary,
+        (current.closeness + closenessDelta).coerceIn(0, 10),
+        (current.trust + trustDelta).coerceIn(0, 10),
+        (current.tension + tensionDelta).coerceIn(0, 10),
+    )
     when {
         current.createdAt == 0L ->
-            "开始交谈" to "你主动开启了一段只属于你们的对话。"
+            transition("开始交谈", "你主动开启了一段只属于你们的对话。", 1, 1, 0)
         signals.tension && current.label == "关系出现裂痕" ->
-            "有些疏远" to "刚才的分歧还没有真正过去，你们需要一点空间。"
+            transition("有些疏远", "刚才的分歧还没有真正过去，你们需要一点空间。", -1, -2, 2)
         signals.tension ->
-            "关系出现裂痕" to "这次对话留下了没有被轻轻带过的分歧。"
+            transition("关系出现裂痕", "这次对话留下了没有被轻轻带过的分歧。", -1, -1, 3)
         signals.repair && current.label in setOf("关系出现裂痕", "有些疏远") ->
-            "重新靠近" to "你们愿意把没有说完的部分重新放回对话里。"
+            transition("重新靠近", "你们愿意把没有说完的部分重新放回对话里。", 1, 2, -3)
         sharedPersonalFact && current.label != "更了解彼此" ->
-            "更了解彼此" to "你分享了一件值得长期记住的事。"
+            transition("更了解彼此", "你分享了一件值得长期记住的事。", 1, 2, -1)
         else -> null
     }
 }
@@ -282,7 +309,7 @@ internal data class MemberWorldContext(
     val timeZone: String,
 )
 
-internal const val WORLD_DATABASE_VERSION = 20
+internal const val WORLD_DATABASE_VERSION = 21
 
 internal class WorldStore(context: Context) :
     SQLiteOpenHelper(context, "world.db", null, WORLD_DATABASE_VERSION),
@@ -452,6 +479,7 @@ internal class WorldStore(context: Context) :
                 "INTEGER NOT NULL DEFAULT 0",
             )
         }
+        if (oldVersion < 21) migrateRelationshipDimensions(database)
     }
 
     private fun createSocialTables(database: SQLiteDatabase) {
@@ -801,7 +829,10 @@ internal class WorldStore(context: Context) :
                 created_at INTEGER NOT NULL,
                 active INTEGER NOT NULL DEFAULT 1,
                 pinned INTEGER NOT NULL DEFAULT 0,
-                source TEXT NOT NULL DEFAULT 'conversation'
+                source TEXT NOT NULL DEFAULT 'conversation',
+                closeness INTEGER NOT NULL DEFAULT 0,
+                trust INTEGER NOT NULL DEFAULT 0,
+                tension INTEGER NOT NULL DEFAULT 0
             )
             """.trimIndent(),
         )
@@ -814,6 +845,37 @@ internal class WorldStore(context: Context) :
             "relationship_events",
             "source",
             "TEXT NOT NULL DEFAULT 'conversation'",
+        )
+    }
+
+    private fun migrateRelationshipDimensions(database: SQLiteDatabase) {
+        addColumnIfMissing(database, "relationship_events", "closeness", "INTEGER NOT NULL DEFAULT 0")
+        addColumnIfMissing(database, "relationship_events", "trust", "INTEGER NOT NULL DEFAULT 0")
+        addColumnIfMissing(database, "relationship_events", "tension", "INTEGER NOT NULL DEFAULT 0")
+        database.execSQL(
+            """
+            UPDATE relationship_events
+            SET closeness = CASE label
+                    WHEN '开始交谈' THEN 1
+                    WHEN '更了解彼此' THEN 3
+                    WHEN '关系出现裂痕' THEN 1
+                    WHEN '重新靠近' THEN 2
+                    ELSE 0
+                END,
+                trust = CASE label
+                    WHEN '开始交谈' THEN 1
+                    WHEN '更了解彼此' THEN 3
+                    WHEN '关系出现裂痕' THEN 1
+                    WHEN '重新靠近' THEN 2
+                    ELSE 0
+                END,
+                tension = CASE label
+                    WHEN '关系出现裂痕' THEN 3
+                    WHEN '有些疏远' THEN 5
+                    WHEN '重新靠近' THEN 1
+                    ELSE 0
+                END
+            """.trimIndent(),
         )
     }
 
@@ -1119,7 +1181,8 @@ internal class WorldStore(context: Context) :
     fun relationship(characterId: Long): RelationshipState =
         readableDatabase.rawQuery(
             """
-            SELECT label, summary, source_message_id, created_at, pinned, source
+            SELECT label, summary, source_message_id, created_at, pinned, source,
+                   closeness, trust, tension
             FROM relationship_events
             WHERE character_id = ? AND active = 1
             ORDER BY created_at DESC, id DESC
@@ -1135,6 +1198,9 @@ internal class WorldStore(context: Context) :
                     cursor.getLong(3),
                     cursor.getInt(4) == 1,
                     cursor.getString(5),
+                    cursor.getInt(6),
+                    cursor.getInt(7),
+                    cursor.getInt(8),
                 )
             } else {
                 RelationshipState("刚认识", "你们的共同经历才刚刚开始。", null, 0)
@@ -1171,11 +1237,14 @@ internal class WorldStore(context: Context) :
                 null,
                 ContentValues().apply {
                     put("character_id", characterId)
-                    put("label", next.first)
-                    put("summary", next.second)
+                    put("label", next.label)
+                    put("summary", next.summary)
                     put("source_message_id", sourceMessageId)
                     put("created_at", System.currentTimeMillis())
                     put("source", "conversation")
+                    put("closeness", next.closeness)
+                    put("trust", next.trust)
+                    put("tension", next.tension)
                 },
             )
             writableDatabase.setTransactionSuccessful()
@@ -1188,7 +1257,7 @@ internal class WorldStore(context: Context) :
         readableDatabase.rawQuery(
             """
             SELECT id, character_id, label, summary, source_message_id, created_at, active,
-                   pinned, source
+                   pinned, source, closeness, trust, tension
             FROM relationship_events
             WHERE character_id = ?
             ORDER BY created_at DESC, id DESC
@@ -1208,6 +1277,9 @@ internal class WorldStore(context: Context) :
                             active = cursor.getInt(6) == 1,
                             pinned = cursor.getInt(7) == 1,
                             source = cursor.getString(8),
+                            closeness = cursor.getInt(9),
+                            trust = cursor.getInt(10),
+                            tension = cursor.getInt(11),
                         ),
                     )
                 }
@@ -1225,6 +1297,7 @@ internal class WorldStore(context: Context) :
         require(cleanLabel.isNotEmpty() && cleanSummary.isNotEmpty())
         writableDatabase.beginTransaction()
         try {
+            val current = relationship(characterId)
             writableDatabase.update(
                 "relationship_events",
                 ContentValues().apply { put("active", 0) },
@@ -1243,6 +1316,9 @@ internal class WorldStore(context: Context) :
                     put("active", 1)
                     put("pinned", if (pinned) 1 else 0)
                     put("source", "user_correction")
+                    put("closeness", current.closeness)
+                    put("trust", current.trust)
+                    put("tension", current.tension)
                 },
             )
             writableDatabase.setTransactionSuccessful()

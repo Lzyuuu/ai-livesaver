@@ -513,6 +513,7 @@ internal object ProviderChatClient {
         cognition: List<CharacterCognition>,
         userContext: MemberWorldContext,
         characterContext: MemberWorldContext,
+        relationship: RelationshipState,
         onDelta: (String) -> Unit,
         callback: (Result<ProviderResponse>) -> Unit,
     ) {
@@ -526,6 +527,7 @@ internal object ProviderChatClient {
                     cognition,
                     userContext,
                     characterContext,
+                    relationship,
                 )
                 val requestMessages = JSONArray().put(
                     JSONObject().put("role", "system").put("content", system),
@@ -630,10 +632,15 @@ internal fun buildChatSystemPrompt(
     cognition: List<CharacterCognition> = emptyList(),
     userContext: MemberWorldContext? = null,
     characterContext: MemberWorldContext? = null,
+    relationship: RelationshipState? = null,
 ): String = buildString {
     append("You are ${character.name}. ")
     append(character.persona)
     append("\nStay in character. The user is the center of this relationship.")
+    relationship?.takeIf { it.createdAt > 0 }?.let {
+        append("\nCurrent relationship: ${it.label}. ${it.summary}")
+        append("\nRelationship behavior: ${relationshipBehaviorGuidance(it)}")
+    }
     recap?.let {
         append("\nConversation recap through message #${it.throughMessageId}:\n${it.body}")
     }
@@ -657,6 +664,19 @@ internal fun buildChatSystemPrompt(
         append("\nLong-term memories:\n")
         memories.take(20).forEach { append("- ${it.body}\n") }
     }
+}
+
+internal fun relationshipBehaviorGuidance(relationship: RelationshipState): String = when {
+    relationship.tension >= 5 ->
+        "Give the user space, avoid false intimacy, and leave room for repair."
+    relationship.tension >= 2 ->
+        "Acknowledge unresolved tension and respond carefully without pretending it vanished."
+    relationship.trust >= 4 ->
+        "Respond with established trust and warmth without becoming possessive."
+    relationship.closeness >= 2 ->
+        "Use familiar warmth while continuing to earn trust through the conversation."
+    else ->
+        "Keep the connection tentative and let closeness grow through concrete interaction."
 }
 
 internal object ProviderTextClient {
