@@ -2117,16 +2117,38 @@ internal class WorldStore(context: Context) :
         }
     }
 
-    fun updateUserPost(postId: Long, title: String, body: String) {
-        writableDatabase.update(
-            "social_posts",
-            ContentValues().apply {
-                put("title", title.trim())
-                put("body", body.trim())
-            },
-            "id = ? AND author_kind = 'user'",
-            arrayOf(postId.toString()),
-        )
+    fun updateUserPost(postId: Long, title: String, body: String): Boolean {
+        val cleanTitle = title.trim()
+        val cleanBody = body.trim()
+        var updated = false
+        writableDatabase.run {
+            beginTransaction()
+            try {
+                updated = update(
+                    "social_posts",
+                    ContentValues().apply {
+                        put("title", cleanTitle)
+                        put("body", cleanBody)
+                    },
+                    "id = ? AND author_kind = 'user'",
+                    arrayOf(postId.toString()),
+                ) == 1
+                if (updated) {
+                    update(
+                        "world_events",
+                        ContentValues().apply {
+                            put("summary", cleanTitle.ifBlank { cleanBody }.take(120))
+                        },
+                        "source_post_id = ?",
+                        arrayOf(postId.toString()),
+                    )
+                }
+                setTransactionSuccessful()
+            } finally {
+                endTransaction()
+            }
+        }
+        return updated
     }
 
     fun deleteUserPost(postId: Long) {
@@ -2261,6 +2283,16 @@ internal class WorldStore(context: Context) :
                     arrayOf(postId.toString(), expectedBody),
                 )
                 if (updated != 1) return@run
+                update(
+                    "world_events",
+                    ContentValues().apply {
+                        put("summary", body.trim().take(120))
+                        put("provider_name", providerName)
+                        put("model_name", modelName)
+                    },
+                    "source_post_id = ?",
+                    arrayOf(postId.toString()),
+                )
                 rewritten = true
                 setTransactionSuccessful()
             } finally {
