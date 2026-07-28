@@ -452,42 +452,26 @@ internal object WorldEngine {
                     onSuccess = { response ->
                         val body = response.text
                         val usedConfig = response.config
-                        val npc = pendingNpc?.let { (name, bio) ->
-                            store.ensureNpc(name, bio).also { store.retireOtherNpcs(it.id) }
-                        }
                         when {
-                            npcForumTarget != null -> {
-                                val npcName = requireNotNull(npc).name
-                                store.addComment(
-                                    npcForumTarget.id,
-                                    body,
-                                    authorName = npcName,
-                                    authorKind = "npc",
-                                )
-                                store.addWorldEvent(
-                                    "npc_forum_reply",
-                                    body.take(120),
-                                    npcName,
-                                    needsResponse = false,
-                                    sourcePostId = npcForumTarget.id,
-                                    providerName = usedConfig.preset.displayName,
-                                    modelName = usedConfig.model,
-                                )
+                            pendingNpc != null -> {
+                                check(
+                                    store.publishNpcTurn(
+                                        name = pendingNpc.first,
+                                        bio = pendingNpc.second,
+                                        body = body,
+                                        forumPostId = npcForumTarget?.id,
+                                        eventKind = if (npcForumTarget != null) {
+                                            "npc_forum_reply"
+                                        } else if (reconstructed) {
+                                            "reconstructed_moment"
+                                        } else {
+                                            "moment"
+                                        },
+                                        providerName = usedConfig.preset.displayName,
+                                        modelName = usedConfig.model,
+                                    ),
+                                ) { "NPC publication target is no longer available" }
                             }
-                            npc != null -> store.createPost(
-                                "moment",
-                                npc.name,
-                                "",
-                                body,
-                                authorKind = "npc",
-                                providerName = usedConfig.preset.displayName,
-                                modelName = usedConfig.model,
-                                worldEventKind = if (reconstructed) {
-                                    "reconstructed_moment"
-                                } else {
-                                    "moment"
-                                },
-                            )
                             interactionCharacter != null -> store.createPost(
                                 "moment",
                                 actor.name,

@@ -2573,6 +2573,72 @@ internal class WorldStore(context: Context) :
         )
     }
 
+    fun publishNpcTurn(
+        name: String,
+        bio: String,
+        body: String,
+        forumPostId: Long?,
+        eventKind: String,
+        providerName: String,
+        modelName: String,
+    ): Boolean {
+        var published = false
+        writableDatabase.run {
+            beginTransaction()
+            try {
+                if (forumPostId != null) {
+                    val targetExists = rawQuery(
+                        "SELECT EXISTS(SELECT 1 FROM social_posts WHERE id = ? AND hidden = 0)",
+                        arrayOf(forumPostId.toString()),
+                    ).use { cursor -> cursor.moveToFirst() && cursor.getInt(0) == 1 }
+                    if (!targetExists) {
+                        setTransactionSuccessful()
+                        return@run
+                    }
+                }
+                val npc = ensureNpc(name, bio)
+                retireOtherNpcs(npc.id)
+                val sourcePostId = if (forumPostId != null) {
+                    addComment(
+                        forumPostId,
+                        body,
+                        authorName = npc.name,
+                        authorKind = "npc",
+                    )
+                    forumPostId
+                } else {
+                    insertOrThrow(
+                        "social_posts",
+                        null,
+                        ContentValues().apply {
+                            put("kind", "moment")
+                            put("author_name", npc.name)
+                            put("body", body.trim())
+                            put("created_at", System.currentTimeMillis())
+                            put("author_kind", "npc")
+                            put("provider_name", providerName)
+                            put("model_name", modelName)
+                        },
+                    )
+                }
+                addWorldEvent(
+                    kind = eventKind,
+                    summary = body.take(120),
+                    actorName = npc.name,
+                    needsResponse = false,
+                    sourcePostId = sourcePostId,
+                    providerName = providerName,
+                    modelName = modelName,
+                )
+                published = true
+                setTransactionSuccessful()
+            } finally {
+                endTransaction()
+            }
+        }
+        return published
+    }
+
     fun worldFacts(): List<WorldFact> = readableDatabase.rawQuery(
         "SELECT id, body, pinned, created_at FROM world_facts ORDER BY pinned DESC, created_at DESC",
         null,
