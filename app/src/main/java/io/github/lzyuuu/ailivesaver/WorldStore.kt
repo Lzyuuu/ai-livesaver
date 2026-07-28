@@ -3123,39 +3123,57 @@ internal class WorldStore(context: Context) :
         }
     }
 
-    fun restoreMediaVersion(postId: Long, versionId: Long) {
-        val version = readableDatabase.rawQuery(
-            """
-            SELECT path, prompt, seed
-            FROM media_versions
-            WHERE id = ? AND post_id = ?
-            """.trimIndent(),
-            arrayOf(versionId.toString(), postId.toString()),
-        ).use { cursor ->
-            if (!cursor.moveToFirst()) return
-            MediaVersion(
-                id = versionId,
-                postId = postId,
-                path = cursor.getString(0),
-                prompt = cursor.getString(1),
-                seed = cursor.getLong(2),
-                createdAt = 0,
-            )
+    fun restoreMediaVersion(postId: Long, versionId: Long): Boolean {
+        var restored = false
+        writableDatabase.run {
+            beginTransaction()
+            try {
+                val version = rawQuery(
+                    """
+                    SELECT versions.path, versions.prompt, versions.seed,
+                           posts.media_generation_revision
+                    FROM media_versions versions
+                    JOIN social_posts posts ON posts.id = versions.post_id
+                    WHERE versions.id = ? AND versions.post_id = ?
+                    """.trimIndent(),
+                    arrayOf(versionId.toString(), postId.toString()),
+                ).use { cursor ->
+                    if (!cursor.moveToFirst()) null else Pair(
+                        MediaVersion(
+                            id = versionId,
+                            postId = postId,
+                            path = cursor.getString(0),
+                            prompt = cursor.getString(1),
+                            seed = cursor.getLong(2),
+                            createdAt = 0,
+                        ),
+                        cursor.getLong(3),
+                    )
+                }
+                if (version == null || !File(version.first.path).isFile) {
+                    setTransactionSuccessful()
+                    return@run
+                }
+                restored = update(
+                    "social_posts",
+                    ContentValues().apply {
+                        put("media_path", version.first.path)
+                        put("media_prompt", version.first.prompt)
+                        put("media_seed", version.first.seed)
+                        put("media_description", version.first.prompt)
+                        put("media_status", "ready")
+                        put("media_error", "")
+                        put("media_generation_revision", version.second + 1)
+                    },
+                    "id = ? AND media_generation_revision = ?",
+                    arrayOf(postId.toString(), version.second.toString()),
+                ) == 1
+                setTransactionSuccessful()
+            } finally {
+                endTransaction()
+            }
         }
-        if (!File(version.path).isFile) return
-        writableDatabase.update(
-            "social_posts",
-            ContentValues().apply {
-                put("media_path", version.path)
-                put("media_prompt", version.prompt)
-                put("media_seed", version.seed)
-                put("media_description", version.prompt)
-                put("media_status", "ready")
-                put("media_error", "")
-            },
-            "id = ?",
-            arrayOf(postId.toString()),
-        )
+        return restored
     }
 
     fun deleteMediaVersion(postId: Long, versionId: Long) {

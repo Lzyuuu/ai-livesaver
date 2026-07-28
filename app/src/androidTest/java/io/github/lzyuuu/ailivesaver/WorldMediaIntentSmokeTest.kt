@@ -92,6 +92,47 @@ class WorldMediaIntentSmokeTest {
     }
 
     @Test
+    fun restoringAnImageVersionSupersedesAnInFlightRedraw() {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val restoredPath = File(context.filesDir, "media/generated-restored-smoke.png").apply {
+            parentFile?.mkdirs()
+            writeBytes(byteArrayOf(1, 2, 3))
+        }
+        val stalePath = File(context.filesDir, "media/generated-after-restore-smoke.png").apply {
+            writeBytes(byteArrayOf(4, 5, 6))
+        }
+        val store = WorldStore(context)
+        val postId = store.createMediaPost("restore race", "first prompt")
+
+        try {
+            val firstJob = store.mediaJobs().first { it.postId == postId }
+            assertTrue(
+                store.markMediaReady(postId, firstJob.revision, restoredPath.absolutePath, 21L),
+            )
+            val version = store.mediaVersions(postId).single()
+            store.prepareRedraw(postId, "second prompt")
+            val redraw = store.mediaJobs().first { it.postId == postId }
+
+            assertTrue(store.restoreMediaVersion(postId, version.id))
+            assertFalse(store.markMediaFailed(postId, redraw.revision, "stale failure"))
+            assertFalse(store.markMediaWaiting(postId, redraw.revision, "stale waiting"))
+            assertFalse(
+                store.markMediaReady(postId, redraw.revision, stalePath.absolutePath, 22L),
+            )
+            val restored = store.posts("moment").first { it.id == postId }
+            assertEquals("ready", restored.mediaStatus)
+            assertEquals(restoredPath.absolutePath, restored.mediaPath)
+            assertEquals("first prompt", restored.mediaPrompt)
+            assertEquals(1, store.mediaVersions(postId).size)
+        } finally {
+            store.deleteUserPost(postId)
+            store.close()
+            restoredPath.delete()
+            stalePath.delete()
+        }
+    }
+
+    @Test
     fun keepsPausedMediaJobsPendingForRetry() {
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
         val postId = WorldStore(context).use {
