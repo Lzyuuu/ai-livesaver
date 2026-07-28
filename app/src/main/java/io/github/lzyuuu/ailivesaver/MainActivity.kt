@@ -135,6 +135,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        WorldBackup.recoverInterruptedRestore(this)
         notificationCharacterId = savedInstanceState?.getLong(OPEN_CHARACTER_ID_EXTRA, -1L)
             ?.takeIf { it > 0L }
             ?: intent.getLongExtra(OPEN_CHARACTER_ID_EXTRA, -1L).takeIf { it > 0L }

@@ -13,12 +13,17 @@ import java.nio.file.AtomicMoveNotSupportedException
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import java.util.UUID
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
 import java.util.zip.ZipOutputStream
 
 internal object WorldBackup {
     private const val MAX_EXTRACTED_BYTES = 8L * 1024 * 1024 * 1024
+    private const val RESTORE_STATE = "state.json"
+    private const val RESTORE_READY = "snapshot-ready"
+    private const val RESTORE_COMMITTED = "committed"
+    private val recoveryChecked = AtomicBoolean(false)
 
     fun export(
         context: Context,
@@ -137,7 +142,15 @@ internal object WorldBackup {
             val database = context.getDatabasePath("world.db")
             val media = File(context.filesDir, "media")
             normalizeMediaPaths(stagedDatabase, File(staging, "media"), media)
+            File(rollback, RESTORE_STATE).writeText(
+                JSONObject()
+                    .put("hadDatabase", database.exists())
+                    .put("hadMedia", media.exists())
+                    .put("worldSettings", JSONObject(previousSettings))
+                    .toString(),
+            )
             if (database.exists()) database.copyTo(File(rollback, "world.db"))
+            File(rollback, RESTORE_READY).writeText("")
             if (media.exists() && !media.renameTo(File(rollback, "media"))) {
                 throw IOException("无法创建恢复安全副本")
             }
@@ -172,6 +185,7 @@ internal object WorldBackup {
                     manifest.optJSONObject("worldSettings")?.toMap().orEmpty()
                 }
                 WorldEngine.restoreSettings(context, settings)
+                File(rollback, RESTORE_COMMITTED).writeText("")
             } catch (error: Throwable) {
                 database.delete()
                 File(rollback, "world.db").takeIf(File::exists)?.copyTo(database)
@@ -182,15 +196,66 @@ internal object WorldBackup {
             }
         } finally {
             WorldEngine.resumeAutomation(context)
-            context.filesDir.listFiles()
-                ?.filter { it.name.startsWith(".media-") }
-                ?.forEach(File::deleteRecursively)
-            context.getDatabasePath("world.db").parentFile?.listFiles()
-                ?.filter { it.name.startsWith(".world-") }
-                ?.forEach(File::delete)
+            cleanupRestoreArtifacts(context)
             staging.deleteRecursively()
             rollback.deleteRecursively()
         }
+    }
+
+    fun recoverInterruptedRestore(context: Context, force: Boolean = false): Boolean {
+        if (!force && !recoveryChecked.compareAndSet(false, true)) return false
+        var recovered = false
+        context.cacheDir.listFiles()
+            ?.filter { it.isDirectory && it.name.startsWith("rollback-") }
+            ?.sortedBy(File::lastModified)
+            ?.forEach { rollback ->
+                if (File(rollback, RESTORE_COMMITTED).isFile) {
+                    rollback.deleteRecursively()
+                    return@forEach
+                }
+                if (!File(rollback, RESTORE_READY).isFile) {
+                    rollback.deleteRecursively()
+                    return@forEach
+                }
+                val state = JSONObject(File(rollback, RESTORE_STATE).readText())
+                WorldEngine.suspendAutomation(context)
+                val database = context.getDatabasePath("world.db")
+                if (state.getBoolean("hadDatabase")) {
+                    val snapshot = File(rollback, "world.db")
+                    if (!snapshot.isFile) throw IOException("恢复安全副本缺少世界数据库")
+                    database.parentFile?.mkdirs()
+                    File(database.path + "-wal").delete()
+                    File(database.path + "-shm").delete()
+                    val pending = File(database.parentFile, ".world-recovery-${UUID.randomUUID()}.db")
+                    snapshot.copyTo(pending)
+                    moveReplace(pending, database)
+                } else {
+                    context.deleteDatabase("world.db")
+                }
+                val media = File(context.filesDir, "media")
+                val mediaSnapshot = File(rollback, "media")
+                if (state.getBoolean("hadMedia")) {
+                    if (mediaSnapshot.exists()) {
+                        media.deleteRecursively()
+                        if (
+                            !mediaSnapshot.renameTo(media) &&
+                            !mediaSnapshot.copyRecursively(media)
+                        ) {
+                            throw IOException("无法恢复媒体安全副本")
+                        }
+                    }
+                } else {
+                    media.deleteRecursively()
+                }
+                WorldEngine.restoreSettings(
+                    context,
+                    state.getJSONObject("worldSettings").toMap(),
+                )
+                recovered = true
+                rollback.deleteRecursively()
+            }
+        cleanupRestoreArtifacts(context)
+        return recovered
     }
 
     fun rebuildWorld(
@@ -332,6 +397,15 @@ internal object WorldBackup {
                 StandardCopyOption.REPLACE_EXISTING,
             )
         }
+    }
+
+    private fun cleanupRestoreArtifacts(context: Context) {
+        context.filesDir.listFiles()
+            ?.filter { it.name.startsWith(".media-") }
+            ?.forEach(File::deleteRecursively)
+        context.getDatabasePath("world.db").parentFile?.listFiles()
+            ?.filter { it.name.startsWith(".world-") }
+            ?.forEach(File::delete)
     }
 
     private fun JSONObject.toMap(): Map<String, Any> = keys().asSequence().associateWith(::get)
