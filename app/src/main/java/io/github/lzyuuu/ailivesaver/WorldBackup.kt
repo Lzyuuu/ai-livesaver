@@ -277,11 +277,12 @@ internal object WorldBackup {
         store.close()
         context.deleteDatabase("world.db")
         File(context.filesDir, "media").deleteRecursively()
-        clearTemporaryCache(context)
+        context.cacheDir.listFiles()?.forEach(File::deleteRecursively)
         context.getSharedPreferences(APP_PREFERENCES, Context.MODE_PRIVATE)
             .edit()
             .clear()
             .commit()
+        LocalDreamStatsStore.clear(context)
         ProviderStore(context).clearAll()
     }
 

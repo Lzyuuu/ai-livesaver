@@ -98,6 +98,13 @@ internal object LocalDreamStatsStore {
             recordedAtMs = preferences.getLong(LOCAL_DREAM_RECORDED_AT_MS, 0L),
         )
     }
+
+    fun clear(context: Context) {
+        context.getSharedPreferences(LOCAL_DREAM_STATS_PREFS, Context.MODE_PRIVATE)
+            .edit()
+            .clear()
+            .commit()
+    }
 }
 
 internal data class LocalDreamImportParameters(
