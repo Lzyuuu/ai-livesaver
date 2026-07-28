@@ -511,15 +511,20 @@ internal object WorldEngine {
                                 mediaNegativePrompt = actor.negativePrompt,
                             ).also { mediaQueued = attachWorldImage }
                             messageTurn -> {
-                                store.addMessage(actor.id, "assistant", body)
-                                store.addWorldEvent(
-                                    kind = if (reconstructed) "reconstructed_message" else "message",
-                                    summary = body.take(120),
-                                    actorName = actor.name,
-                                    needsResponse = true,
-                                    providerName = usedConfig.preset.displayName,
-                                    modelName = usedConfig.model,
-                                )
+                                check(
+                                    store.addProactiveMessage(
+                                        characterId = actor.id,
+                                        body = body,
+                                        eventKind = if (reconstructed) {
+                                            "reconstructed_message"
+                                        } else {
+                                            "message"
+                                        },
+                                        actorName = actor.name,
+                                        providerName = usedConfig.preset.displayName,
+                                        modelName = usedConfig.model,
+                                    ),
+                                ) { "Character is no longer active" }
                                 notifyRelationship(context, actor, body)
                             }
                             else -> store.createPost(

@@ -11,6 +11,60 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class SocialResponsePersistenceSmokeTest {
     @Test
+    fun rejectsLateResidentSocialActivityAfterDeparture() {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val store = WorldStore(context)
+        val characterId = store.addCharacter(
+            name = "Social departure ${System.nanoTime()}",
+            persona = "Test resident",
+            attentionTier = "resident",
+            appearance = "",
+            clothing = "",
+            negativePrompt = "",
+        )
+        val postId = store.createPost("moment", "", "departure response target")
+        val initialEventCount = store.worldEvents(limit = null)
+            .count { it.sourcePostId == postId }
+
+        try {
+            store.setCharacterActive(characterId, false)
+            assertFalse(
+                store.addGeneratedSocialResponse(
+                    postId,
+                    "moment",
+                    "Late social response",
+                    "Departed resident",
+                    characterId,
+                    "DeepSeek",
+                    "test-model",
+                ),
+            )
+            assertTrue(store.comments(postId).isEmpty())
+            assertEquals(
+                initialEventCount,
+                store.worldEvents(limit = null).count { it.sourcePostId == postId },
+            )
+            assertTrue(
+                runCatching {
+                    store.createPost(
+                        kind = "moment",
+                        authorName = "Departed resident",
+                        title = "",
+                        body = "Late generated post",
+                        authorKind = "resident",
+                        authorCharacterId = characterId,
+                    )
+                }.isFailure,
+            )
+            assertTrue(store.posts("moment").none { it.body == "Late generated post" })
+        } finally {
+            store.deleteUserPost(postId)
+            store.deleteCharacter(characterId)
+            store.close()
+        }
+    }
+
+    @Test
     fun commitsAResponseAtomicallyAndRejectsLateResults() {
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
         val store = WorldStore(context)

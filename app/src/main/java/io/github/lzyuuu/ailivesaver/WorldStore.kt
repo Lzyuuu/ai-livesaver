@@ -906,6 +906,11 @@ internal class WorldStore(context: Context) :
             buildList { while (cursor.moveToNext()) add(cursor.residentCharacter()) }
         }
 
+    private fun isActiveCharacter(id: Long): Boolean = readableDatabase.rawQuery(
+        "SELECT EXISTS(SELECT 1 FROM characters WHERE id = ? AND active = 1)",
+        arrayOf(id.toString()),
+    ).use { cursor -> cursor.moveToFirst() && cursor.getInt(0) == 1 }
+
     fun identity(): UserIdentity = readableDatabase.rawQuery(
         "SELECT name, address_preference, bio, avatar_path FROM profile WHERE id = 1",
         null,
@@ -1445,6 +1450,7 @@ internal class WorldStore(context: Context) :
         modelName: String,
         existingMessageId: Long? = null,
     ): ChatMessage {
+        require(isActiveCharacter(characterId)) { "Character is no longer active" }
         val now = System.currentTimeMillis()
         val id = if (existingMessageId == null) {
             writableDatabase.insertOrThrow(
@@ -1509,7 +1515,12 @@ internal class WorldStore(context: Context) :
                         put("model_name", modelName)
                         put("error", "")
                     },
-                    "id = ? AND sender = 'assistant' AND active = 1",
+                    """
+                    id = ? AND sender = 'assistant' AND active = 1 AND EXISTS(
+                        SELECT 1 FROM characters
+                        WHERE characters.id = messages.character_id AND characters.active = 1
+                    )
+                    """.trimIndent(),
                     arrayOf(messageId.toString()),
                 )
                 require(updated == 1) { "Reply is no longer in the current timeline" }
@@ -1799,6 +1810,11 @@ internal class WorldStore(context: Context) :
         return writableDatabase.run {
             beginTransaction()
             try {
+                require(
+                    authorKind != "resident" ||
+                        authorCharacterId == null ||
+                        isActiveCharacter(authorCharacterId),
+                ) { "Character is no longer active" }
                 val postId = insertOrThrow(
                     "social_posts",
                     null,
@@ -1978,7 +1994,7 @@ internal class WorldStore(context: Context) :
         writableDatabase.run {
             beginTransaction()
             try {
-                val eligible = rawQuery(
+                val eligiblePost = rawQuery(
                     """
                     SELECT EXISTS(
                         SELECT 1 FROM social_posts
@@ -1987,7 +2003,7 @@ internal class WorldStore(context: Context) :
                     """.trimIndent(),
                     arrayOf(postId.toString()),
                 ).use { cursor -> cursor.moveToFirst() && cursor.getInt(0) == 1 }
-                if (!eligible) {
+                if (!eligiblePost || authorCharacterId?.let(::isActiveCharacter) == false) {
                     setTransactionSuccessful()
                     return@run
                 }
@@ -2004,6 +2020,40 @@ internal class WorldStore(context: Context) :
                     authorName,
                     needsResponse = true,
                     sourcePostId = postId,
+                    providerName = providerName,
+                    modelName = modelName,
+                )
+                committed = true
+                setTransactionSuccessful()
+            } finally {
+                endTransaction()
+            }
+        }
+        return committed
+    }
+
+    fun addProactiveMessage(
+        characterId: Long,
+        body: String,
+        eventKind: String,
+        actorName: String,
+        providerName: String,
+        modelName: String,
+    ): Boolean {
+        var committed = false
+        writableDatabase.run {
+            beginTransaction()
+            try {
+                if (!isActiveCharacter(characterId)) {
+                    setTransactionSuccessful()
+                    return@run
+                }
+                addMessage(characterId, "assistant", body)
+                addWorldEvent(
+                    kind = eventKind,
+                    summary = body.take(120),
+                    actorName = actorName,
+                    needsResponse = true,
                     providerName = providerName,
                     modelName = modelName,
                 )

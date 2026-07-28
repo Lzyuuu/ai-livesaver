@@ -11,6 +11,82 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class ChatPersistenceSmokeTest {
     @Test
+    fun rejectsLateRepliesAndRollsBackProactiveMessagesAfterDeparture() {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val store = WorldStore(context)
+        val characterId = store.addCharacter(
+            name = "Departure test ${System.nanoTime()}",
+            persona = "Test resident",
+            attentionTier = "resident",
+            appearance = "",
+            clothing = "",
+            negativePrompt = "",
+        )
+        val replyId = store.beginAssistantReply(characterId, "Test Provider", "test-model").id
+
+        try {
+            store.writableDatabase.execSQL(
+                """
+                CREATE TEMP TRIGGER reject_test_proactive_event
+                BEFORE INSERT ON world_events
+                BEGIN
+                    SELECT RAISE(ABORT, 'test rejection');
+                END
+                """.trimIndent(),
+            )
+            assertTrue(
+                runCatching {
+                    store.addProactiveMessage(
+                        characterId,
+                        "Atomic proactive message",
+                        "message",
+                        "Test resident",
+                        "Test Provider",
+                        "test-model",
+                    )
+                }.isFailure,
+            )
+            assertTrue(store.messages(characterId).none { it.body == "Atomic proactive message" })
+            store.writableDatabase.execSQL("DROP TRIGGER reject_test_proactive_event")
+
+            store.setCharacterActive(characterId, false)
+            assertFalse(
+                store.addProactiveMessage(
+                    characterId,
+                    "Late proactive message",
+                    "message",
+                    "Test resident",
+                    "Test Provider",
+                    "test-model",
+                ),
+            )
+            assertTrue(
+                runCatching {
+                    store.completeAssistantReply(
+                        replyId,
+                        "Late private reply",
+                        "Test Provider",
+                        "test-model",
+                    )
+                }.isFailure,
+            )
+            assertTrue(store.messageVersions(replyId).isEmpty())
+            assertEquals("", store.messages(characterId).first { it.id == replyId }.body)
+            assertTrue(
+                runCatching {
+                    store.beginAssistantReply(characterId, "Test Provider", "test-model")
+                }.isFailure,
+            )
+        } finally {
+            runCatching {
+                store.writableDatabase.execSQL("DROP TRIGGER IF EXISTS reject_test_proactive_event")
+            }
+            store.deleteCharacter(characterId)
+            store.close()
+        }
+    }
+
+    @Test
     fun completesFromAReopenedStoreAndRejectsAStaleRecap() {
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
         val characterId = WorldStore(context).use {
