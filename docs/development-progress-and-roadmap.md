@@ -11,7 +11,7 @@
 ## 1. 当前交付
 
 - GitHub Release：[AI Livesaver 0.1.0-m110](https://github.com/Lzyuuu/ai-livesaver/releases/tag/v0.1.0-m110)
-- APK：[ai-livesaver-v0.1.0-m110-unsigned.apk](https://github.com/Lzyuuu/ai-livesaver/releases/download/v0.1.0-m110/ai-livesaver-v0.1.0-m110-unsigned.apk)
+- APK：[app-release-unsigned.apk](https://github.com/Lzyuuu/ai-livesaver/releases/download/v0.1.0-m110/app-release-unsigned.apk)
 - APK SHA-256：`33c1b38c261bb6d6cb9d2e5acf5bf03be03b6c5a96724f92a43425d9b1f92d07`
 - 签名证书：本机未提供发布 keystore；该 APK 仅用于构建验收，不能覆盖安装 m109。
 - 规格与进度跟踪：[GitHub Issue #1](https://github.com/Lzyuuu/ai-livesaver/issues/1)
