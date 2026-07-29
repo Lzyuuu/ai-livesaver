@@ -3,7 +3,14 @@ package io.github.lzyuuu.ailivesaver
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -16,25 +23,33 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Email
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilledIconButton
-import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -50,11 +65,16 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import java.text.DateFormat
@@ -136,11 +156,9 @@ internal fun ChatsScreen(
             ConversationScreen(
                 contentPadding,
                 store,
-                characters,
                 character,
                 revision,
                 onChanged,
-                onCharacterSelected = { selectedId = it },
                 onBack = { selectedId = null },
             )
         }
@@ -180,6 +198,7 @@ private fun ChatListScreen(
     val latestMessages = remember(revision, characters) {
         characters.associate { it.id to store.messages(it.id).lastOrNull() }
     }
+    val unreadCounts = remember(revision, characters) { store.unreadMessageCounts() }
     val visibleCharacters = characters
         .filter { character ->
             query.isBlank() ||
@@ -246,62 +265,112 @@ private fun ChatListScreen(
         if (visibleCharacters.isEmpty()) {
             item { StatusCard(stringResource(R.string.no_matching_conversations)) }
         } else {
-            items(visibleCharacters, key = ResidentCharacter::id) { resident ->
+            itemsIndexed(visibleCharacters, key = { _, it -> it.id }) { _, resident ->
                 val latestMessage = latestMessages[resident.id]
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("chat-character-${resident.id}")
-                        .clickable { onCharacterSelected(resident.id) },
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-                    ),
-                    shape = RoundedCornerShape(24.dp),
-                ) {
+                val unread = unreadCounts[resident.id] ?: 0
+                Column(Modifier.fillMaxWidth()) {
                     Row(
-                        modifier = Modifier.padding(16.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("chat-character-${resident.id}")
+                            .clickable { onCharacterSelected(resident.id) }
+                            .padding(horizontal = 4.dp, vertical = 14.dp),
                         horizontalArrangement = Arrangement.spacedBy(14.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Avatar(resident.name.take(1).uppercase(), 56.dp)
+                        Avatar(resident.name.take(1).uppercase(), 54.dp)
                         Column(Modifier.weight(1f)) {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
                             ) {
                                 Text(
                                     resident.name,
-                                    style = MaterialTheme.typography.titleLarge,
+                                    style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f, fill = false),
                                 )
+                                if (resident.attentionTier == "special_focus") {
+                                    Spacer(Modifier.width(5.dp))
+                                    Icon(
+                                        Icons.Default.Star,
+                                        contentDescription = stringResource(R.string.special_focus),
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(14.dp),
+                                    )
+                                }
+                                Spacer(Modifier.weight(1f))
                                 latestMessage?.let {
                                     Text(
-                                        timeFormatter.format(Date(it.createdAt)),
+                                        chatListTimeLabel(it.createdAt),
                                         style = MaterialTheme.typography.labelMedium,
-                                        color = MaterialTheme.colorScheme.outline,
+                                        color = if (unread > 0) {
+                                            MaterialTheme.colorScheme.primary
+                                        } else {
+                                            MaterialTheme.colorScheme.outline
+                                        },
                                     )
                                 }
                             }
-                            Text(
-                                latestMessage?.body?.ifBlank { latestMessage.draftBody }
-                                    ?: stringResource(R.string.no_messages_yet),
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                            if (resident.attentionTier == "special_focus") {
-                                Spacer(Modifier.height(4.dp))
+                            Spacer(Modifier.height(3.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                val streaming = latestMessage?.status == "streaming"
                                 Text(
-                                    stringResource(R.string.special_focus),
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.primary,
+                                    when {
+                                        streaming -> stringResource(R.string.streaming_reply)
+                                        else -> latestMessage?.body
+                                            ?.ifBlank { latestMessage.draftBody }
+                                            ?: stringResource(R.string.no_messages_yet)
+                                    },
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = if (streaming) {
+                                        MaterialTheme.colorScheme.primary
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                    },
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f),
                                 )
+                                if (unread > 0) {
+                                    Spacer(Modifier.width(8.dp))
+                                    Surface(
+                                        shape = CircleShape,
+                                        color = MaterialTheme.colorScheme.primary,
+                                    ) {
+                                        Text(
+                                            if (unread > 99) "99+" else "$unread",
+                                            style = MaterialTheme.typography.labelMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onPrimary,
+                                            modifier = Modifier.padding(
+                                                horizontal = 6.dp,
+                                                vertical = 2.dp,
+                                            ),
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun chatListTimeLabel(timestamp: Long): String {
+    val now = System.currentTimeMillis()
+    return if (isSameChatDay(timestamp, now)) {
+        DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(timestamp))
+    } else {
+        chatDayLabel(timestamp, now)
     }
 }
 
@@ -544,14 +613,13 @@ private fun FirstRelationshipStep(
 private fun ConversationScreen(
     contentPadding: PaddingValues,
     store: WorldStore,
-    characters: List<ResidentCharacter>,
     character: ResidentCharacter,
     revision: Int,
     onChanged: () -> Unit,
-    onCharacterSelected: (Long) -> Unit,
     onBack: () -> Unit,
 ) {
     val context = LocalContext.current
+    val animationsEnabled = remember { systemAnimationsEnabled(context) }
     val provider = remember { ProviderStore(context) }
     val messages = remember(revision) { store.messages(character.id) }
     val retiredMessages = remember(revision) { store.retiredMessages(character.id) }
@@ -735,15 +803,19 @@ private fun ConversationScreen(
 
     BackHandler(enabled = !showContext) { onBack() }
     BackHandler(showContext) { showContext = false }
-    LaunchedEffect(messages.size) {
+    // 回复完成（streaming→complete）也触发已读标记，避免会话内读完最新回复后
+    // 返回列表时未读角标残留。
+    LaunchedEffect(messages.size, messages.lastOrNull()?.status) {
         if (messages.isNotEmpty()) {
-            val lastMessageIndex = messages.lastIndex + if (characters.size > 1) 2 else 1
-            if (systemAnimationsEnabled(context)) {
-                listState.animateScrollToItem(lastMessageIndex)
+            val target = (listState.layoutInfo.totalItemsCount - 1).coerceAtLeast(0)
+            if (animationsEnabled) {
+                listState.animateScrollToItem(target)
             } else {
-                listState.scrollToItem(lastMessageIndex)
+                listState.scrollToItem(target)
             }
         }
+        store.markChatRead(character.id)
+        onChanged()
     }
 
     if (showContext) {
@@ -827,213 +899,94 @@ private fun ConversationScreen(
                 bottom = contentPadding.calculateBottomPadding(),
             ),
     ) {
+        Surface(color = MaterialTheme.colorScheme.surface) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 2.dp, end = 6.dp, top = 4.dp, bottom = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                IconButton(onClick = onBack) {
+                    Icon(
+                        Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = stringResource(R.string.back),
+                    )
+                }
+                Avatar(character.name.take(1).uppercase(), 38.dp)
+                Spacer(Modifier.width(10.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        character.name,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        "${relationship.label} · ${stringResource(R.string.private_conversation)}",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                IconButton(onClick = { showContext = true }) {
+                    Icon(
+                        Icons.Default.MoreVert,
+                        contentDescription = stringResource(R.string.more_actions),
+                    )
+                }
+            }
+        }
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
         LazyColumn(
             modifier = Modifier.weight(1f),
             state = listState,
-            contentPadding = PaddingValues(
-                start = 16.dp,
-                top = 16.dp,
-                end = 16.dp,
-                bottom = 12.dp,
-            ),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            contentPadding = PaddingValues(start = 10.dp, top = 8.dp, end = 10.dp, bottom = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
-            if (characters.size > 1) {
-            item {
-                Row(
-                    modifier = Modifier.horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    characters.forEach { resident ->
-                        FilterChip(
-                            selected = resident.id == character.id,
-                            onClick = { onCharacterSelected(resident.id) },
-                            label = { Text(resident.name) },
-                        )
-                    }
-                }
-            }
-            }
-            item {
-                ScreenBackButton(onBack)
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column {
-                        Text(
-                            character.name,
-                            style = MaterialTheme.typography.headlineMedium,
-                            fontWeight = FontWeight.Bold,
-                            fontFamily = FontFamily.Serif,
-                        )
-                        Text(
-                            "${relationship.label} · ${stringResource(R.string.private_conversation)}",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    TextButton(onClick = { showContext = true }) {
-                        Text(stringResource(R.string.conversation_context))
-                    }
-                }
-            }
             if (messages.isEmpty()) {
                 item {
+                    Spacer(Modifier.height(18.dp))
                     StatusCard(stringResource(R.string.start_conversation))
                 }
             }
-            items(messages, key = ChatMessage::id) { message ->
+            itemsIndexed(messages, key = { _, it -> it.id }) { index, message ->
+                val previous = messages.getOrNull(index - 1)
+                val next = messages.getOrNull(index + 1)
                 val versions = remember(revision, message.id) {
                     if (message.sender == "assistant") store.messageVersions(message.id)
                     else emptyList()
                 }
-                val visibleBody = when {
-                    message.id == streamingMessageId && streamingText.isNotEmpty() -> streamingText
-                    message.status != "complete" && message.body.isEmpty() -> message.draftBody
-                    else -> message.body
-                }
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = if (message.sender == "user") {
-                        Arrangement.End
-                    } else {
-                        Arrangement.Start
+                MessageBubble(
+                    message = message,
+                    characterName = character.name,
+                    modifier = if (animationsEnabled) Modifier.animateItem() else Modifier,
+                    newDay = previous == null ||
+                        !isSameChatDay(previous.createdAt, message.createdAt),
+                    lastOfGroup = next == null ||
+                        next.sender != message.sender ||
+                        !isSameChatDay(message.createdAt, next.createdAt),
+                    isLastMessage = index == messages.lastIndex,
+                    streamingText = if (message.id == streamingMessageId) streamingText else "",
+                    sending = sending,
+                    versions = versions,
+                    versionsExpanded = expandedVersionsId == message.id,
+                    formatter = formatter,
+                    onRetry = { requestReply(message.id) },
+                    onToggleVersions = {
+                        expandedVersionsId = message.id.takeUnless { expandedVersionsId == it }
                     },
-                ) {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(0.86f),
-                        colors = CardDefaults.cardColors(
-                            containerColor = if (message.sender == "user") {
-                                MaterialTheme.colorScheme.primaryContainer
-                            } else {
-                                MaterialTheme.colorScheme.surfaceVariant
-                            },
-                        ),
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(14.dp),
-                            verticalArrangement = Arrangement.spacedBy(6.dp),
-                        ) {
-                            Text(
-                                visibleBody.ifBlank {
-                                    stringResource(R.string.character_thinking)
-                                },
-                            )
-                            if (message.sender == "assistant") {
-                            when (message.status) {
-                                "streaming" -> Text(
-                                    stringResource(R.string.streaming_reply),
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.primary,
-                                )
-                                "failed" -> Text(
-                                    stringResource(R.string.chat_failed, message.error),
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.error,
-                                )
-                                "interrupted" -> Text(
-                                    stringResource(R.string.reply_interrupted),
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.error,
-                                )
-                            }
-                            if (
-                                message == messages.lastOrNull() &&
-                                message.status in setOf("failed", "interrupted") &&
-                                !sending
-                            ) {
-                                TextButton(onClick = { requestReply(message.id) }) {
-                                    Text(stringResource(R.string.retry_reply))
-                                }
-                            }
-                            if (
-                                message == messages.lastOrNull() &&
-                                message.status == "complete" &&
-                                !sending
-                            ) {
-                                TextButton(onClick = { requestReply(message.id) }) {
-                                    Text(stringResource(R.string.regenerate_reply))
-                                }
-                            }
-                            if (versions.isNotEmpty() && message.status != "streaming") {
-                                TextButton(
-                                    onClick = {
-                                        expandedVersionsId =
-                                            message.id.takeUnless { expandedVersionsId == it }
-                                    },
-                                ) {
-                                    Text(
-                                        stringResource(
-                                            R.string.reply_versions,
-                                            versions.size,
-                                        ),
-                                    )
-                                }
-                            }
-                            if (expandedVersionsId == message.id) {
-                                versions.forEach { version ->
-                                    Card(
-                                        colors = CardDefaults.cardColors(
-                                            containerColor =
-                                                MaterialTheme.colorScheme.surface,
-                                        ),
-                                    ) {
-                                        Column(
-                                            Modifier.padding(10.dp),
-                                            verticalArrangement = Arrangement.spacedBy(4.dp),
-                                        ) {
-                                            Text(version.body, maxLines = 5)
-                                            Text(
-                                                stringResource(
-                                                    R.string.generation_provenance,
-                                                    version.providerName.ifBlank { "—" },
-                                                    version.modelName.ifBlank { "—" },
-                                                    formatter.format(Date(version.createdAt)),
-                                                ),
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color =
-                                                    MaterialTheme.colorScheme.onSurfaceVariant,
-                                            )
-                                            if (
-                                                version.body != message.body ||
-                                                version.providerName != message.providerName ||
-                                                version.modelName != message.modelName
-                                            ) {
-                                                TextButton(
-                                                    onClick = {
-                                                        store.restoreMessageVersion(
-                                                            message.id,
-                                                            version.id,
-                                                        )
-                                                        expandedVersionsId = null
-                                                        onChanged()
-                                                    },
-                                                ) {
-                                                    Text(
-                                                        stringResource(
-                                                            R.string.restore_version,
-                                                        ),
-                                                    )
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                            } else if (!sending) {
-                                TextButton(
-                                    onClick = {
-                                        rewritingMessageId = message.id
-                                        rewriteText = message.body
-                                    },
-                                ) {
-                                    Text(stringResource(R.string.rewrite_from_here))
-                                }
-                            }
-                        }
-                    }
-                }
+                    onRestoreVersion = { versionId ->
+                        store.restoreMessageVersion(message.id, versionId)
+                        expandedVersionsId = null
+                        onChanged()
+                    },
+                    onRewrite = {
+                        rewritingMessageId = message.id
+                        rewriteText = message.body
+                    },
+                )
             }
             error?.let { message ->
                 item { StatusCard(stringResource(R.string.chat_failed, message)) }
@@ -1047,12 +1000,10 @@ private fun ConversationScreen(
                 }
             }
         }
-        Surface(
-            color = MaterialTheme.colorScheme.surfaceContainer,
-            tonalElevation = 3.dp,
-        ) {
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+        Surface(color = MaterialTheme.colorScheme.surface) {
             Row(
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -1062,13 +1013,13 @@ private fun ConversationScreen(
                     label = { Text(stringResource(R.string.message_character, character.name)) },
                     minLines = 1,
                     maxLines = 4,
-                    shape = RoundedCornerShape(24.dp),
+                    shape = RoundedCornerShape(26.dp),
                     modifier = Modifier.weight(1f),
                 )
                 FilledIconButton(
                     onClick = ::sendMessage,
                     enabled = input.isNotBlank() && !sending,
-                    modifier = Modifier.size(52.dp),
+                    modifier = Modifier.size(48.dp),
                 ) {
                     if (sending) {
                         CircularProgressIndicator(
@@ -1083,6 +1034,293 @@ private fun ConversationScreen(
                     }
                 }
             }
+        }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun MessageBubble(
+    message: ChatMessage,
+    characterName: String,
+    modifier: Modifier = Modifier,
+    newDay: Boolean,
+    lastOfGroup: Boolean,
+    isLastMessage: Boolean,
+    streamingText: String,
+    sending: Boolean,
+    versions: List<MessageVersion>,
+    versionsExpanded: Boolean,
+    formatter: DateFormat,
+    onRetry: () -> Unit,
+    onToggleVersions: () -> Unit,
+    onRestoreVersion: (Long) -> Unit,
+    onRewrite: () -> Unit,
+) {
+    val isUser = message.sender == "user"
+    val clipboardManager = LocalClipboardManager.current
+    var menuOpen by remember(message.id) { mutableStateOf(false) }
+    val visibleBody = when {
+        streamingText.isNotEmpty() -> streamingText
+        message.status != "complete" && message.body.isEmpty() -> message.draftBody
+        else -> message.body
+    }
+    val streaming = message.status == "streaming"
+    val context = LocalContext.current
+    val animationsEnabled = remember { systemAnimationsEnabled(context) }
+    val cursorAlpha = if (streaming && animationsEnabled) {
+        val cursorTransition = rememberInfiniteTransition(label = "streamCursor")
+        cursorTransition.animateFloat(
+            initialValue = 0.2f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = 800),
+                repeatMode = RepeatMode.Reverse,
+            ),
+            label = "streamCursorAlpha",
+        ).value
+    } else {
+        1f
+    }
+    val timeText = remember(message.createdAt) {
+        DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(message.createdAt))
+    }
+    Column(modifier.fillMaxWidth()) {
+        if (newDay) {
+            DayDividerLabel(
+                chatDayLabel(message.createdAt),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 10.dp),
+            )
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start,
+            verticalAlignment = Alignment.Bottom,
+        ) {
+            if (!isUser) {
+                if (lastOfGroup) {
+                    Avatar(characterName.take(1).uppercase(), 28.dp)
+                } else {
+                    Spacer(Modifier.width(28.dp))
+                }
+                Spacer(Modifier.width(6.dp))
+            }
+            Box {
+                Surface(
+                    color = if (isUser) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.surfaceContainerHigh
+                    },
+                    shape = RoundedCornerShape(
+                        topStart = 18.dp,
+                        topEnd = 18.dp,
+                        bottomEnd = if (isUser && lastOfGroup) 5.dp else 18.dp,
+                        bottomStart = if (!isUser && lastOfGroup) 5.dp else 18.dp,
+                    ),
+                    modifier = Modifier
+                        .widthIn(max = 300.dp)
+                        .combinedClickable(
+                            onClick = {},
+                            onLongClick = { menuOpen = true },
+                        ),
+                ) {
+                    Column(Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
+                        if (visibleBody.isBlank() && message.status == "streaming") {
+                            TypingIndicator(
+                                modifier = Modifier.padding(vertical = 6.dp),
+                            )
+                        } else {
+                            val textColor = if (isUser) {
+                                MaterialTheme.colorScheme.onPrimary
+                            } else {
+                                MaterialTheme.colorScheme.onSurface
+                            }
+                            Text(
+                                text = buildAnnotatedString {
+                                    append(visibleBody)
+                                    if (streaming) {
+                                        withStyle(
+                                            SpanStyle(
+                                                color = textColor.copy(alpha = cursorAlpha),
+                                            ),
+                                        ) {
+                                            append("▍")
+                                        }
+                                    }
+                                },
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = textColor,
+                            )
+                        }
+                        if (!isUser) {
+                            when (message.status) {
+                                "failed" -> Text(
+                                    stringResource(R.string.chat_failed, message.error),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.error,
+                                )
+                                "interrupted" -> Text(
+                                    stringResource(R.string.reply_interrupted),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.error,
+                                )
+                            }
+                        }
+                        if (lastOfGroup) {
+                            Row(
+                                modifier = Modifier.align(Alignment.End),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    timeText,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = if (isUser) {
+                                        MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.62f)
+                                    } else {
+                                        MaterialTheme.colorScheme.outline
+                                    },
+                                )
+                            }
+                        }
+                    }
+                }
+                DropdownMenu(
+                    expanded = menuOpen,
+                    onDismissRequest = { menuOpen = false },
+                ) {
+                    if (visibleBody.isNotBlank() && message.status != "streaming") {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.copy_message)) },
+                            onClick = {
+                                menuOpen = false
+                                clipboardManager.setText(AnnotatedString(visibleBody))
+                            },
+                        )
+                    }
+                    if (
+                        !isUser && isLastMessage &&
+                        message.status in setOf("failed", "interrupted") && !sending
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.retry_reply)) },
+                            onClick = {
+                                menuOpen = false
+                                onRetry()
+                            },
+                        )
+                    }
+                    if (!isUser && isLastMessage && message.status == "complete" && !sending) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.regenerate_reply)) },
+                            onClick = {
+                                menuOpen = false
+                                onRetry()
+                            },
+                        )
+                    }
+                    if (!isUser && versions.isNotEmpty() && message.status != "streaming") {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.reply_versions, versions.size)) },
+                            onClick = {
+                                menuOpen = false
+                                onToggleVersions()
+                            },
+                        )
+                    }
+                    if (isUser && !sending) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.rewrite_from_here)) },
+                            onClick = {
+                                menuOpen = false
+                                onRewrite()
+                            },
+                        )
+                    }
+                }
+            }
+        }
+        if (!isUser && isLastMessage && !sending && message.status == "complete") {
+            Row(
+                modifier = Modifier.padding(start = 34.dp, top = 1.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    Icons.Default.Refresh,
+                    contentDescription = stringResource(R.string.regenerate_reply),
+                    tint = MaterialTheme.colorScheme.outline,
+                    modifier = Modifier
+                        .size(26.dp)
+                        .clip(CircleShape)
+                        .clickable(onClick = onRetry)
+                        .padding(4.dp),
+                )
+            }
+        }
+        if (
+            !isUser && isLastMessage && !sending &&
+            message.status in setOf("failed", "interrupted")
+        ) {
+            Row(Modifier.padding(start = 34.dp, top = 1.dp)) {
+                Text(
+                    stringResource(R.string.retry_reply),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable(onClick = onRetry)
+                        .padding(horizontal = 6.dp, vertical = 4.dp),
+                )
+            }
+        }
+        if (versionsExpanded) {
+            Column(
+                modifier = Modifier
+                    .padding(start = 34.dp, top = 6.dp)
+                    .widthIn(max = 300.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                versions.forEach { version ->
+                    Card(
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        ),
+                    ) {
+                        Column(
+                            Modifier.padding(10.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            Text(version.body, maxLines = 5)
+                            Text(
+                                stringResource(
+                                    R.string.generation_provenance,
+                                    version.providerName.ifBlank { "—" },
+                                    version.modelName.ifBlank { "—" },
+                                    formatter.format(Date(version.createdAt)),
+                                ),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            if (
+                                version.body != message.body ||
+                                version.providerName != message.providerName ||
+                                version.modelName != message.modelName
+                            ) {
+                                TextButton(
+                                    onClick = { onRestoreVersion(version.id) },
+                                ) {
+                                    Text(stringResource(R.string.restore_version))
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        if (lastOfGroup) {
+            Spacer(Modifier.height(8.dp))
         }
     }
 }

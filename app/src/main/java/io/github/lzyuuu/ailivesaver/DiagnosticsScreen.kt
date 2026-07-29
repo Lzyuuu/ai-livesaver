@@ -383,6 +383,35 @@ internal fun DiagnosticsScreen(
                 style = MaterialTheme.typography.bodySmall,
             )
         }
+        if (BuildConfig.DEBUG) {
+            item {
+                var seedState by remember { mutableStateOf<String?>(null) }
+                val seedDone = stringResource(R.string.debug_seed_done)
+                val seedSkipped = stringResource(R.string.debug_seed_skipped)
+                Button(
+                    onClick = {
+                        val seeded = WorldStore(context.applicationContext).use { store ->
+                            DebugWorldSeeder.seedIfEmpty(store)
+                        }
+                        seedState = if (seeded) {
+                            seedDone
+                        } else {
+                            seedSkipped
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(stringResource(R.string.debug_seed_world))
+                }
+                seedState?.let {
+                    Text(
+                        it,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+            }
+        }
     }
 }
 

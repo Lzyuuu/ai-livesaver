@@ -1,22 +1,22 @@
 # AI Livesaver 开发进展报告与后续计划
 
-> 更新日期：2026-07-28
+> 更新日期：2026-07-29
 >
-> 当前版本：`0.1.0-m109`
+> 当前版本：`0.1.0-m110`
 >
 > 当前分支：`codex/prototype-world-entry`
 >
-> 当前提交：`dd6ad9e`
+> 当前提交：发布提交见 `v0.1.0-m110`
 
 ## 1. 当前交付
 
-- GitHub Release：[AI Livesaver 0.1.0-m109](https://github.com/Lzyuuu/ai-livesaver/releases/tag/v0.1.0-m109)
-- APK：[ai-livesaver-v0.1.0-m109.apk](https://github.com/Lzyuuu/ai-livesaver/releases/download/v0.1.0-m109/ai-livesaver-v0.1.0-m109.apk)
-- APK SHA-256：`674ce69abfd7edf8521ac3ec06dcacb6bf658ce00a4ad6ddbde84c0497a76409`
-- 签名证书 SHA-256：`5b66cfc947118d804b2f002f019067659be269270219d98207534c904eeb954b`
+- GitHub Release：[AI Livesaver 0.1.0-m110](https://github.com/Lzyuuu/ai-livesaver/releases/tag/v0.1.0-m110)
+- APK：[ai-livesaver-v0.1.0-m110-unsigned.apk](https://github.com/Lzyuuu/ai-livesaver/releases/download/v0.1.0-m110/ai-livesaver-v0.1.0-m110-unsigned.apk)
+- APK SHA-256：`33c1b38c261bb6d6cb9d2e5acf5bf03be03b6c5a96724f92a43425d9b1f92d07`
+- 签名证书：本机未提供发布 keystore；该 APK 仅用于构建验收，不能覆盖安装 m109。
 - 规格与进度跟踪：[GitHub Issue #1](https://github.com/Lzyuuu/ai-livesaver/issues/1)
 
-`m109` 已完成模拟器验证、签名、覆盖升级测试和 GitHub 预发布，适合进入 iQOO 真机、真实 Provider 与 Local Dream 联调阶段。
+`m110` 已完成模拟器验证、UI 交互验收和 GitHub 预发布，签名 Release 仍需使用项目原有 keystore 重新打包后再进行真机覆盖升级。
 
 ## 2. 产品定位与基础架构
 

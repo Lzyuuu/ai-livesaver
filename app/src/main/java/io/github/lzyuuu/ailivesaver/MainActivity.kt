@@ -271,29 +271,38 @@ private fun AiLivesaverTheme(
         if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
     } else if (dark) {
         darkColorScheme(
-            primary = Color(0xFFF0C64E),
-            onPrimary = Color(0xFF3D2F00),
-            primaryContainer = Color(0xFF27251D),
-            onPrimaryContainer = Color(0xFFFFEFAF),
+            primary = Color(0xFFD7F94E),
+            onPrimary = Color(0xFF232A00),
+            primaryContainer = Color(0xFF2C3905),
+            onPrimaryContainer = Color(0xFFEEFFA6),
             secondary = Color(0xFFAFC1FF),
-            secondaryContainer = Color(0xFF263451),
-            onSecondaryContainer = Color(0xFFDCE4FF),
-            background = Color(0xFF0B1017),
-            surface = Color(0xFF10151D),
-            surfaceVariant = Color(0xFF252A33),
+            secondaryContainer = Color(0xFF22262E),
+            onSecondaryContainer = Color(0xFFE2E5EC),
+            background = Color(0xFF000000),
+            surface = Color(0xFF0D0E10),
+            surfaceVariant = Color(0xFF1F2126),
+            onSurfaceVariant = Color(0xFFB4B7BE),
+            surfaceContainerLowest = Color(0xFF060708),
+            surfaceContainerLow = Color(0xFF111215),
+            surfaceContainer = Color(0xFF15161A),
+            surfaceContainerHigh = Color(0xFF1C1D22),
+            surfaceContainerHighest = Color(0xFF25262C),
+            outline = Color(0xFF7C7F87),
+            outlineVariant = Color(0xFF33353C),
         )
     } else {
         lightColorScheme(
-            primary = Color(0xFF4F609E),
+            primary = Color(0xFF5C6F00),
             onPrimary = Color.White,
-            primaryContainer = Color(0xFFE0E6FF),
-            onPrimaryContainer = Color(0xFF26376F),
-            secondary = Color(0xFF987421),
-            secondaryContainer = Color(0xFFF7E8B8),
-            onSecondaryContainer = Color(0xFF332400),
-            background = Color(0xFFFBF9F1),
+            primaryContainer = Color(0xFFE2F5A4),
+            onPrimaryContainer = Color(0xFF2C3905),
+            secondary = Color(0xFF4F609E),
+            secondaryContainer = Color(0xFFE7EAf5),
+            onSecondaryContainer = Color(0xFF26376F),
+            background = Color(0xFFFAFBF3),
             surface = Color(0xFFFFFCF5),
-            surfaceVariant = Color(0xFFF0EEF4),
+            surfaceVariant = Color(0xFFEDEFE4),
+            onSurfaceVariant = Color(0xFF5A5D52),
         )
     }
     MaterialTheme(
@@ -439,7 +448,7 @@ private fun AiLivesaverApp(
                             colors = NavigationBarItemDefaults.colors(
                                 selectedIconColor = MaterialTheme.colorScheme.primary,
                                 selectedTextColor = MaterialTheme.colorScheme.primary,
-                                indicatorColor = MaterialTheme.colorScheme.secondaryContainer,
+                                indicatorColor = Color.Transparent,
                             ),
                         )
                     }
@@ -511,7 +520,10 @@ private fun AiLivesaverApp(
         } else if (showDiagnostics) {
             DiagnosticsScreen(
                 contentPadding = padding,
-                onBack = { showDiagnostics = false },
+                onBack = {
+                    showDiagnostics = false
+                    worldRevision++
+                },
             )
         } else if (showPrivacy) {
             PrivacyScreen(

@@ -132,10 +132,18 @@ internal object ProviderProtocol {
         .getString("content")
         .trim()
 
-    fun structuredRequest(model: String, system: String, prompt: String): JSONObject = JSONObject()
+    fun structuredRequest(
+        model: String,
+        system: String,
+        prompt: String,
+        disableThinking: Boolean = false,
+    ): JSONObject = JSONObject()
         .put("model", model)
         .put("max_tokens", 240)
         .put("response_format", JSONObject().put("type", "json_object"))
+        .apply {
+            if (disableThinking) put("thinking", JSONObject().put("type", "disabled"))
+        }
         .put(
             "messages",
             JSONArray()
@@ -174,9 +182,16 @@ internal object ProviderProtocol {
         return reason != null && reason != JSONObject.NULL
     }
 
-    fun visionRequest(model: String, dataUrl: String): JSONObject = JSONObject()
+    fun visionRequest(
+        model: String,
+        dataUrl: String,
+        disableThinking: Boolean = false,
+    ): JSONObject = JSONObject()
         .put("model", model)
         .put("max_tokens", 180)
+        .apply {
+            if (disableThinking) put("thinking", JSONObject().put("type", "disabled"))
+        }
         .put(
             "messages",
             JSONArray().put(
@@ -415,7 +430,12 @@ internal object ProviderConnectionTester {
             val result = runCatching {
                 val body = JSONObject()
                     .put("model", config.model)
-                    .put("max_tokens", 1)
+                    .put("max_tokens", 16)
+                    .apply {
+                        if (config.preset == ProviderPreset.DeepSeek) {
+                            put("thinking", JSONObject().put("type", "disabled"))
+                        }
+                    }
                     .put(
                         "messages",
                         JSONArray().put(
@@ -495,7 +515,7 @@ internal object ProviderCapabilityTester {
             put("role", "user")
             put("content", "Reply with OK.")
         }))
-        .put("max_tokens", 4)
+        .put("max_tokens", 16)
         .put("stream", stream)
 
     private const val ONE_PIXEL_DATA_URL =
@@ -851,10 +871,20 @@ private object ProviderHttp {
         throw lastFailure ?: IOException("Provider request failed")
     }
 
+    private fun applyPresetTuning(config: ProviderConfig, body: JSONObject): JSONObject {
+        // DeepSeek v4 是推理模型：不关闭 thinking 时推理段会耗尽短 max_tokens
+        // （能力检测拿不到 content），长对话也要先静默推理很久才有可见输出。
+        // 陪伴聊天优先响应速度，因此对 DeepSeek 预设统一关闭 thinking。
+        if (config.preset == ProviderPreset.DeepSeek && !body.has("thinking")) {
+            body.put("thinking", JSONObject().put("type", "disabled"))
+        }
+        return body
+    }
+
     private fun postOnce(config: ProviderConfig, body: JSONObject): String {
         val connection = open(config)
         return try {
-            write(connection, body)
+            write(connection, applyPresetTuning(config, body))
             if (connection.responseCode !in 200..299) {
                 throw IOException("HTTP ${connection.responseCode}")
             }
@@ -872,7 +902,7 @@ private object ProviderHttp {
         val connection = open(config)
         return try {
             connection.setRequestProperty("Accept", "text/event-stream")
-            write(connection, body)
+            write(connection, applyPresetTuning(config, body))
             if (connection.responseCode !in 200..299) {
                 throw IOException("HTTP ${connection.responseCode}")
             }

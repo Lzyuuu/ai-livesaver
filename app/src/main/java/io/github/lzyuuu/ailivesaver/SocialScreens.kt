@@ -7,6 +7,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -14,6 +15,7 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -22,26 +24,40 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -53,8 +69,11 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -62,6 +81,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.font.FontFamily
@@ -255,6 +275,10 @@ internal fun SocialScreen(
             },
             onToggleReaction = {
                 store.toggleReaction(selectedPost.id)
+                onChanged()
+            },
+            onVote = { value ->
+                store.voteOnPost(selectedPost.id, value)
                 onChanged()
             },
             onUpdatePost = { title, body ->
@@ -539,16 +563,31 @@ internal fun SocialScreen(
         }
         if (kind == "forum") {
             item {
+                val sortChipColors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = MaterialTheme.colorScheme.primary,
+                    selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
+                )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     FilterChip(
                         selected = forumSort == "latest",
                         onClick = { forumSort = "latest" },
                         label = { Text(stringResource(R.string.sort_latest)) },
+                        shape = RoundedCornerShape(50),
+                        colors = sortChipColors,
+                    )
+                    FilterChip(
+                        selected = forumSort == "top",
+                        onClick = { forumSort = "top" },
+                        label = { Text(stringResource(R.string.sort_top)) },
+                        shape = RoundedCornerShape(50),
+                        colors = sortChipColors,
                     )
                     FilterChip(
                         selected = forumSort == "active",
                         onClick = { forumSort = "active" },
                         label = { Text(stringResource(R.string.sort_active)) },
+                        shape = RoundedCornerShape(50),
+                        colors = sortChipColors,
                     )
                 }
             }
@@ -573,6 +612,10 @@ internal fun SocialScreen(
                 onOpen = { selectedPostId = post.id },
                 onToggleReaction = {
                     store.toggleReaction(post.id)
+                    onChanged()
+                },
+                onVote = { value ->
+                    store.voteOnPost(post.id, value)
                     onChanged()
                 },
                 onOpenAuthor = {
@@ -864,71 +907,106 @@ private fun PostCard(
     authorAvatarPath: String?,
     onOpen: () -> Unit,
     onToggleReaction: () -> Unit,
+    onVote: (Int) -> Unit,
     onOpenAuthor: () -> Unit,
     onOpenImage: (Boolean) -> Unit,
 ) {
-    val formatter = remember { DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT) }
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onOpen),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        ),
+        shape = RoundedCornerShape(20.dp),
     ) {
         Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(9.dp),
         ) {
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Row(
-                    modifier = Modifier.weight(1f),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Avatar(post.authorName.take(1).uppercase(), 36.dp, authorAvatarPath)
+                Avatar(post.authorName.take(1).uppercase(), 40.dp, authorAvatarPath)
+                Column(Modifier.weight(1f)) {
                     Text(
                         post.authorName.removeSuffix(" · NPC"),
+                        style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                         modifier = Modifier.clickable(onClick = onOpenAuthor),
                     )
+                    Text(
+                        relativeTimeLabel(post.createdAt),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.outline,
+                    )
                 }
-                Text(
-                    formatter.format(Date(post.createdAt)),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
             }
             if (post.title.isNotBlank()) {
-                Text(post.title, style = MaterialTheme.typography.titleLarge)
+                Text(
+                    post.title,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                )
             }
-            Text(post.body)
-            PostMedia(post, onOpenImage)
+            if (post.body.isNotBlank()) {
+                Text(
+                    post.body,
+                    style = MaterialTheme.typography.bodyMedium,
+                    maxLines = if (post.kind == "forum") 4 else Int.MAX_VALUE,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                )
+            }
+            PostMedia(
+                post,
+                onOpenImage,
+                onDoubleTapLike = if (post.kind == "forum") null else onToggleReaction,
+            )
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                TextButton(onClick = onToggleReaction) {
-                    Icon(
-                        if (post.reactedByUser) Icons.Default.Favorite
-                        else Icons.Default.FavoriteBorder,
-                        contentDescription = null,
+                if (post.kind == "forum") {
+                    VotePill(
+                        score = post.voteScore,
+                        userVote = post.userVote,
+                        onVote = onVote,
                     )
-                    Spacer(Modifier.size(6.dp))
-                    Text(stringResource(R.string.likes_count, post.reactionCount))
+                } else {
+                    AnimatedLikeButton(
+                        liked = post.reactedByUser,
+                        count = post.reactionCount,
+                        onToggle = onToggleReaction,
+                    )
                 }
-                Text(
-                    stringResource(R.string.open_discussion),
-                    color = MaterialTheme.colorScheme.primary,
-                    style = MaterialTheme.typography.labelLarge,
-                )
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(5.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        CommentOutlineIcon,
+                        contentDescription = stringResource(R.string.replies_count, post.commentCount),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(18.dp),
+                    )
+                    if (post.commentCount > 0) {
+                        Text(
+                            "${post.commentCount}",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
             }
         }
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun PostDetailScreen(
     contentPadding: PaddingValues,
@@ -940,6 +1018,7 @@ private fun PostDetailScreen(
     onBack: () -> Unit,
     onComment: (SocialReplyDraft) -> Unit,
     onToggleReaction: () -> Unit,
+    onVote: (Int) -> Unit,
     onUpdatePost: (String, String) -> Unit,
     onUpdateMediaDescription: (String) -> Unit,
     onDeletePost: () -> Unit,
@@ -958,26 +1037,95 @@ private fun PostDetailScreen(
     var editDescription by rememberSaveable(post.id) {
         mutableStateOf(post.mediaDescription)
     }
+    var menuOpen by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    val animationsEnabled = remember { systemAnimationsEnabled(context) }
     val formatter = remember { DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT) }
     val visibleComments = remember(comments, post.kind) {
         if (post.kind == "forum") threadedComments(comments) else comments.map { it to 0 }
     }
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(
-            start = 16.dp,
-            top = contentPadding.calculateTopPadding() + 12.dp,
-            end = 16.dp,
-            bottom = contentPadding.calculateBottomPadding() + 20.dp,
-        ),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(
+                top = contentPadding.calculateTopPadding(),
+                bottom = contentPadding.calculateBottomPadding(),
+            ),
     ) {
-        item {
-            TextButton(onClick = onBack) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
-                Spacer(Modifier.size(6.dp))
-                Text(stringResource(R.string.back))
+        Surface(color = MaterialTheme.colorScheme.surface) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 2.dp, end = 6.dp, top = 4.dp, bottom = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                IconButton(onClick = onBack) {
+                    Icon(
+                        Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = stringResource(R.string.back),
+                    )
+                }
+                Text(
+                    post.authorName.removeSuffix(" · NPC"),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+                Box {
+                    IconButton(onClick = { menuOpen = true }) {
+                        Icon(
+                            Icons.Default.MoreVert,
+                            contentDescription = stringResource(R.string.more_actions),
+                        )
+                    }
+                    DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                        if (post.authorKind == "user") {
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.edit_post)) },
+                                onClick = {
+                                    menuOpen = false
+                                    editTitle = post.title
+                                    editBody = post.body
+                                    editing = true
+                                },
+                            )
+                        } else {
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.rewrite_ai_post)) },
+                                onClick = {
+                                    menuOpen = false
+                                    onRewritePost()
+                                },
+                            )
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.hide_ai_post)) },
+                                onClick = {
+                                    menuOpen = false
+                                    onHidePost()
+                                },
+                            )
+                        }
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.delete_post)) },
+                            onClick = {
+                                menuOpen = false
+                                onDeletePost()
+                            },
+                        )
+                    }
+                }
             }
+        }
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+        LazyColumn(
+            modifier = Modifier.weight(1f),
+            contentPadding = PaddingValues(start = 14.dp, top = 12.dp, end = 14.dp, bottom = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+        item {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             if (editing && post.kind == "forum") {
                 OutlinedTextField(
                     value = editTitle,
@@ -1002,7 +1150,11 @@ private fun PostDetailScreen(
             } else {
                 Text(post.body, style = MaterialTheme.typography.bodyLarge)
             }
-            PostMedia(post, onOpenImage)
+            PostMedia(
+                post,
+                onOpenImage,
+                onDoubleTapLike = if (post.kind == "forum") null else onToggleReaction,
+            )
             if (post.mediaPath != null && post.mediaSource == "user") {
                 Text(
                     stringResource(R.string.media_description_detail_title),
@@ -1049,16 +1201,21 @@ private fun PostDetailScreen(
                 }
             }
             Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Avatar(post.authorName.take(1).uppercase(), 36.dp, authorAvatarPath)
-                TextButton(onClick = onOpenAuthor) {
-                    Text(
-                        "${post.authorName.removeSuffix(" · NPC")} · " +
-                            formatter.format(Date(post.createdAt)),
-                    )
-                }
+                Avatar(post.authorName.take(1).uppercase(), 32.dp, authorAvatarPath)
+                Text(
+                    post.authorName.removeSuffix(" · NPC"),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.clickable(onClick = onOpenAuthor),
+                )
+                Text(
+                    relativeTimeLabel(post.createdAt),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.outline,
+                )
             }
             if (post.kind == "moment" && post.authorKind == "user") {
                 Text(
@@ -1082,45 +1239,63 @@ private fun PostDetailScreen(
                     )
                 }
             }
-            Row(
-                modifier = Modifier.horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                TextButton(onClick = onToggleReaction) {
-                    Text(
-                        "${if (post.reactedByUser) "♥" else "♡"} " +
-                            stringResource(R.string.likes_count, post.reactionCount),
-                    )
-                }
-                if (post.authorKind == "user") {
-                    TextButton(
+            if (editing) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(
                         onClick = {
-                            if (editing) {
-                                if (editBody.isNotBlank()) onUpdatePost(editTitle, editBody)
-                                editing = false
-                            } else {
-                                editing = true
-                            }
+                            if (editBody.isNotBlank()) onUpdatePost(editTitle, editBody)
+                            editing = false
                         },
+                        enabled = editBody.isNotBlank(),
                     ) {
-                        Text(
-                            stringResource(
-                                if (editing) R.string.save_changes else R.string.edit_post,
-                            ),
+                        Text(stringResource(R.string.save_changes))
+                    }
+                    TextButton(onClick = { editing = false }) {
+                        Text(stringResource(R.string.cancel))
+                    }
+                }
+            } else {
+                HorizontalDivider(
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    if (post.kind == "forum") {
+                        VotePill(
+                            score = post.voteScore,
+                            userVote = post.userVote,
+                            onVote = onVote,
+                        )
+                    } else {
+                        AnimatedLikeButton(
+                            liked = post.reactedByUser,
+                            count = post.reactionCount,
+                            onToggle = onToggleReaction,
                         )
                     }
-                    TextButton(onClick = onDeletePost) {
-                        Text(stringResource(R.string.delete_post))
-                    }
-                } else {
-                    TextButton(onClick = onRewritePost) {
-                        Text(stringResource(R.string.rewrite_ai_post))
-                    }
-                    TextButton(onClick = onHidePost) {
-                        Text(stringResource(R.string.hide_ai_post))
-                    }
-                    TextButton(onClick = onDeletePost) {
-                        Text(stringResource(R.string.delete_post))
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(5.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(
+                            CommentOutlineIcon,
+                            contentDescription = stringResource(
+                                R.string.replies_count,
+                                post.commentCount,
+                            ),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(18.dp),
+                        )
+                        if (post.commentCount > 0) {
+                            Text(
+                                "${post.commentCount}",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
                     }
                 }
             }
@@ -1135,6 +1310,7 @@ private fun PostDetailScreen(
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+            }
             }
         }
         status?.let { message -> item { StatusCard(message) } }
@@ -1177,96 +1353,227 @@ private fun PostDetailScreen(
                 fontWeight = FontWeight.Bold,
             )
         }
-        items(visibleComments, key = { it.first.id }) { (reply, depth) ->
-            Card(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(start = (depth.coerceAtMost(4) * 18).dp),
-            ) {
-                Column(Modifier.padding(14.dp)) {
-                    Text(reply.authorName.removeSuffix(" · NPC"), fontWeight = FontWeight.Bold)
-                    if (reply.replyToName.isNotBlank()) {
-                        Text(
-                            stringResource(R.string.reply_to_member, reply.replyToName),
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.primary,
-                        )
-                    }
-                    Text(reply.body)
-                    Text(
-                        formatter.format(Date(reply.createdAt)),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    TextButton(onClick = { replyTo = reply }) {
-                        Text(stringResource(R.string.reply))
-                    }
-                }
+        if (visibleComments.isEmpty()) {
+            item {
+                Text(
+                    stringResource(R.string.comment_empty),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
-        item {
-            replyTo?.let {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(stringResource(R.string.reply_to_member, it.authorName))
-                    TextButton(onClick = { replyTo = null }) {
-                        Text(stringResource(R.string.cancel_reply))
+        itemsIndexed(visibleComments, key = { _, it -> it.first.id }) { _, (reply, depth) ->
+            CommentRow(
+                reply = reply,
+                depth = depth,
+                modifier = if (animationsEnabled) Modifier.animateItem() else Modifier,
+                onReply = { replyTo = reply },
+            )
+        }
+        }
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+        Surface(
+            color = MaterialTheme.colorScheme.surface,
+            modifier = Modifier.imePadding(),
+        ) {
+            Column(
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                replyTo?.let {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            stringResource(
+                                R.string.reply_to_member,
+                                it.authorName.removeSuffix(" · NPC"),
+                            ),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Icon(
+                            Icons.Default.Close,
+                            contentDescription = stringResource(R.string.cancel_reply),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier
+                                .size(20.dp)
+                                .clip(CircleShape)
+                                .clickable { replyTo = null }
+                                .padding(2.dp),
+                        )
                     }
                 }
-            }
-            OutlinedTextField(
-                value = comment,
-                onValueChange = { comment = it },
-                label = { Text(stringResource(R.string.write_reply)) },
-                minLines = 2,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            Spacer(Modifier.height(8.dp))
-            Button(
-                onClick = {
-                    onComment(
-                        SocialReplyDraft(
-                            comment.trim(),
-                            replyTo?.id,
-                            replyTo?.authorName.orEmpty().removeSuffix(" · NPC"),
-                        ),
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    OutlinedTextField(
+                        value = comment,
+                        onValueChange = { comment = it },
+                        label = {
+                            Text(
+                                if (replyTo == null) {
+                                    stringResource(R.string.comment_hint)
+                                } else {
+                                    stringResource(R.string.write_reply)
+                                },
+                            )
+                        },
+                        minLines = 1,
+                        maxLines = 4,
+                        shape = RoundedCornerShape(24.dp),
+                        modifier = Modifier.weight(1f),
                     )
-                    comment = ""
-                    replyTo = null
-                },
-                enabled = comment.isNotBlank(),
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text(stringResource(R.string.reply))
+                    FilledIconButton(
+                        onClick = {
+                            onComment(
+                                SocialReplyDraft(
+                                    comment.trim(),
+                                    replyTo?.id,
+                                    replyTo?.authorName.orEmpty().removeSuffix(" · NPC"),
+                                ),
+                            )
+                            comment = ""
+                            replyTo = null
+                        },
+                        enabled = comment.isNotBlank(),
+                        modifier = Modifier.size(44.dp),
+                    ) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.Send,
+                            contentDescription = stringResource(R.string.reply),
+                        )
+                    }
+                }
             }
         }
     }
 }
 
 @Composable
-private fun PostMedia(post: SocialPost, onOpenImage: (Boolean) -> Unit) {
+private fun CommentRow(
+    reply: SocialComment,
+    depth: Int,
+    modifier: Modifier = Modifier,
+    onReply: () -> Unit,
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(start = (depth.coerceAtMost(3) * 18).dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Avatar(reply.authorName.take(1).uppercase(), 28.dp)
+        Column(Modifier.weight(1f)) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    reply.authorName.removeSuffix(" · NPC"),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    relativeTimeLabel(reply.createdAt),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.outline,
+                )
+            }
+            if (reply.replyToName.isNotBlank()) {
+                Text(
+                    stringResource(R.string.reply_to_member, reply.replyToName),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
+            Text(reply.body, style = MaterialTheme.typography.bodyMedium)
+            Text(
+                stringResource(R.string.reply),
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(6.dp))
+                    .clickable(onClick = onReply)
+                    .padding(horizontal = 2.dp, vertical = 3.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun PostMedia(
+    post: SocialPost,
+    onOpenImage: (Boolean) -> Unit,
+    onDoubleTapLike: (() -> Unit)? = null,
+) {
     post.mediaPath?.let { path ->
         val bitmap = remember(path) { decodeSocialBitmap(path) }
         bitmap?.let {
-            Image(
-                bitmap = it.asImageBitmap(),
-                contentDescription = stringResource(R.string.generated_post_image),
-                contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(320.dp)
-                    .clip(RoundedCornerShape(18.dp))
-                    .pointerInput(post.id) {
-                        detectTapGestures(
-                            onTap = { onOpenImage(false) },
-                            onDoubleTap = { onOpenImage(true) },
-                            onLongPress = { onOpenImage(true) },
-                        )
-                    },
-            )
+            val context = LocalContext.current
+            val animationsEnabled = remember { systemAnimationsEnabled(context) }
+            var burst by remember(post.id) { mutableStateOf(0) }
+            val heartScale = remember { Animatable(0.4f) }
+            val heartAlpha = remember { Animatable(0f) }
+            LaunchedEffect(burst) {
+                if (burst > 0 && animationsEnabled) {
+                    heartAlpha.snapTo(1f)
+                    heartScale.snapTo(0.4f)
+                    heartScale.animateTo(
+                        1f,
+                        spring(
+                            dampingRatio = Spring.DampingRatioMediumBouncy,
+                            stiffness = Spring.StiffnessMediumLow,
+                        ),
+                    )
+                    kotlinx.coroutines.delay(550)
+                    heartAlpha.animateTo(0f, tween(220))
+                }
+            }
+            val mediaRatio = it.width.toFloat() / it.height.toFloat()
+            Box {
+                Image(
+                    bitmap = it.asImageBitmap(),
+                    contentDescription = stringResource(R.string.generated_post_image),
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(mediaRatio.coerceIn(0.8f, 1.91f))
+                        .clip(RoundedCornerShape(16.dp))
+                        .pointerInput(post.id) {
+                            detectTapGestures(
+                                onTap = { onOpenImage(false) },
+                                onDoubleTap = {
+                                    if (onDoubleTapLike == null) {
+                                        onOpenImage(true)
+                                    } else {
+                                        if (!post.reactedByUser) onDoubleTapLike()
+                                        burst++
+                                    }
+                                },
+                                onLongPress = { onOpenImage(true) },
+                            )
+                        },
+                )
+                if (burst > 0 || heartAlpha.value > 0f) {
+                    Icon(
+                        Icons.Default.Favorite,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier
+                            .align(Alignment.Center)
+                            .size(96.dp)
+                            .graphicsLayer {
+                                scaleX = heartScale.value
+                                scaleY = heartScale.value
+                                alpha = heartAlpha.value
+                            },
+                    )
+                }
+            }
         }
     }
     when (post.mediaStatus) {

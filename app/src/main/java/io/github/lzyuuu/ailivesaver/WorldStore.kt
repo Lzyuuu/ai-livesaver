@@ -206,6 +206,9 @@ internal data class SocialPost(
     val modelName: String = "",
     val mediaDescription: String = "",
     val mediaSource: String = "",
+    val commentCount: Int = 0,
+    val voteScore: Int = 0,
+    val userVote: Int = 0,
 )
 
 internal data class SocialPostVersion(
@@ -309,7 +312,7 @@ internal data class MemberWorldContext(
     val timeZone: String,
 )
 
-internal const val WORLD_DATABASE_VERSION = 21
+internal const val WORLD_DATABASE_VERSION = 22
 
 internal class WorldStore(context: Context) :
     SQLiteOpenHelper(context, "world.db", null, WORLD_DATABASE_VERSION),
@@ -405,6 +408,7 @@ internal class WorldStore(context: Context) :
         createMediaVersionsTable(database)
         createM3Tables(database)
         createSocialResponseQueueTable(database)
+        createInteractionTables(database)
     }
 
     override fun onConfigure(database: SQLiteDatabase) {
@@ -480,6 +484,28 @@ internal class WorldStore(context: Context) :
             )
         }
         if (oldVersion < 21) migrateRelationshipDimensions(database)
+        if (oldVersion < 22) createInteractionTables(database)
+    }
+
+    private fun createInteractionTables(database: SQLiteDatabase) {
+        database.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS social_post_votes (
+                post_id INTEGER NOT NULL REFERENCES social_posts(id) ON DELETE CASCADE,
+                actor_name TEXT NOT NULL,
+                value INTEGER NOT NULL,
+                PRIMARY KEY (post_id, actor_name)
+            )
+            """.trimIndent(),
+        )
+        database.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS chat_read_state (
+                character_id INTEGER PRIMARY KEY REFERENCES characters(id) ON DELETE CASCADE,
+                last_read_at INTEGER NOT NULL DEFAULT 0
+            )
+            """.trimIndent(),
+        )
     }
 
     private fun createSocialTables(database: SQLiteDatabase) {
@@ -1993,10 +2019,14 @@ internal class WorldStore(context: Context) :
     }
 
     fun posts(kind: String, sort: String = "latest"): List<SocialPost> {
-        val order = if (kind == "forum" && sort == "active") {
-            "MAX(social_posts.created_at, COALESCE((SELECT MAX(created_at) FROM social_comments WHERE post_id = social_posts.id), 0)) DESC"
-        } else {
-            "social_posts.created_at DESC"
+        val voteScoreSubquery =
+            "COALESCE((SELECT SUM(value) FROM social_post_votes WHERE post_id = social_posts.id), 0)"
+        val order = when {
+            kind == "forum" && sort == "active" ->
+                "MAX(social_posts.created_at, COALESCE((SELECT MAX(created_at) FROM social_comments WHERE post_id = social_posts.id), 0)) DESC"
+            kind == "forum" && sort == "top" ->
+                "$voteScoreSubquery DESC, social_posts.created_at DESC"
+            else -> "social_posts.created_at DESC"
         }
         return readableDatabase.rawQuery(
             """
@@ -2009,7 +2039,14 @@ internal class WorldStore(context: Context) :
                    SELECT 1 FROM social_reactions
                    WHERE post_id = social_posts.id AND actor_kind = 'user' AND actor_name = ?
                ),
-               provider_name, model_name, media_description, media_source
+               provider_name, model_name, media_description, media_source,
+               (SELECT COUNT(*) FROM social_comments WHERE post_id = social_posts.id),
+               $voteScoreSubquery,
+               COALESCE(
+                   (SELECT value FROM social_post_votes
+                    WHERE post_id = social_posts.id AND actor_name = ?),
+                   0
+               )
         FROM social_posts
         WHERE kind = ? AND hidden = 0 AND (
             media_status IN ('none', 'ready') OR
@@ -2017,7 +2054,7 @@ internal class WorldStore(context: Context) :
         )
         ORDER BY $order
         """.trimIndent(),
-            arrayOf(userName(), kind),
+            arrayOf(userName(), userName(), kind),
     ).use { cursor ->
         buildList {
             while (cursor.moveToNext()) {
@@ -2044,11 +2081,67 @@ internal class WorldStore(context: Context) :
                         cursor.getString(18),
                         cursor.getString(19),
                         cursor.getString(20),
+                        cursor.getInt(21),
+                        cursor.getInt(22),
+                        cursor.getInt(23),
                     ),
                 )
             }
         }
     }
+    }
+
+    fun voteOnPost(postId: Long, value: Int) {
+        val name = userName()
+        if (value == 0) {
+            writableDatabase.delete(
+                "social_post_votes",
+                "post_id = ? AND actor_name = ?",
+                arrayOf(postId.toString(), name),
+            )
+        } else {
+            writableDatabase.insertWithOnConflict(
+                "social_post_votes",
+                null,
+                ContentValues().apply {
+                    put("post_id", postId)
+                    put("actor_name", name)
+                    put("value", value.coerceIn(-1, 1))
+                },
+                SQLiteDatabase.CONFLICT_REPLACE,
+            )
+        }
+    }
+
+    fun markChatRead(characterId: Long) {
+        writableDatabase.insertWithOnConflict(
+            "chat_read_state",
+            null,
+            ContentValues().apply {
+                put("character_id", characterId)
+                put("last_read_at", System.currentTimeMillis())
+            },
+            SQLiteDatabase.CONFLICT_REPLACE,
+        )
+    }
+
+    fun unreadMessageCounts(): Map<Long, Int> = readableDatabase.rawQuery(
+        """
+        SELECT character_id, COUNT(*) FROM messages
+        WHERE active = 1 AND sender != 'user' AND created_at > COALESCE(
+            (SELECT last_read_at FROM chat_read_state
+             WHERE chat_read_state.character_id = messages.character_id),
+            0
+        )
+        GROUP BY character_id
+        """.trimIndent(),
+        null,
+    ).use { cursor ->
+        buildMap {
+            while (cursor.moveToNext()) {
+                put(cursor.getLong(0), cursor.getInt(1))
+            }
+        }
     }
 
     fun comments(postId: Long): List<SocialComment> = readableDatabase.rawQuery(
