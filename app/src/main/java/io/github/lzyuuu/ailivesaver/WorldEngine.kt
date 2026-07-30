@@ -722,11 +722,15 @@ internal object WorldEngine {
             callback(false)
             return true
         }
-        val prompt = if (kind == "forum") {
-            "Reply thoughtfully to this public discussion topic. Stay under 180 Chinese characters."
-        } else {
-            "Write one warm, natural flat comment on this social update. " +
-                "Stay under 80 Chinese characters."
+        val prompt = when (kind) {
+            "forum" ->
+                "Reply thoughtfully to this public discussion topic. Stay under 180 Chinese characters."
+            Y_POST_KIND ->
+                "Write one sharp nested microblog reply. Stay under 60 Chinese characters. " +
+                    "Sound public and conversational, not like a private chat."
+            else ->
+                "Write one warm, natural flat comment on this social update. " +
+                    "Stay under 80 Chinese characters."
         }
         ProviderTextClient.completeStructured(
             config,

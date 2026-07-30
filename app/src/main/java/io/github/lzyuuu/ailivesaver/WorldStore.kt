@@ -2056,7 +2056,11 @@ internal class WorldStore(context: Context) :
                 )
                 if (cleanMediaPrompt.isBlank()) {
                     addWorldEvent(
-                        kind = worldEventKind ?: if (kind == "moment") "moment" else "commons",
+                        kind = worldEventKind ?: when (kind) {
+                            "moment" -> "moment"
+                            Y_POST_KIND -> Y_POST_KIND
+                            else -> "commons"
+                        },
                         summary = title.ifBlank { body }.take(120),
                         actorName = authorName,
                         needsResponse = eventNeedsResponse,

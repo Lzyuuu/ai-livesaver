@@ -45,6 +45,18 @@
     <string name="world_event_source">来源：%1$s · %2$s</string>
     <string name="no_moments_yet">尚未发生社交流事件。</string>
     <string name="no_commons_yet">尚未形成主题论坛讨论。</string>
+    <string name="no_y_yet">No posts yet. Tap ✨ to generate one.</string>
+    <string name="y_ai_disclaimer">This feed contains AI-generated content.\nAll posts are simulated.</string>
+    <string name="compose_y">New Y post</string>
+    <string name="y_compose_hint">What\'s on your mind?</string>
+    <string name="y_reply_hint">Add a reply...</string>
+    <string name="y_post_action">Post</string>
+    <string name="y_cancel">Cancel</string>
+    <string name="y_generate">Generate</string>
+    <string name="y_generating">Generating…</string>
+    <string name="y_generate_failed">Generate failed</string>
+    <string name="y_edit_prompt">Edit prompt</string>
+    <string name="y_delete_all">Delete all posts</string>
     <string name="primary_character_status">特别关注 · 常驻角色</string>
     <string name="add">添加</string>
 

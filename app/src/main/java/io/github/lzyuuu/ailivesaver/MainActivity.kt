@@ -270,6 +270,7 @@ private enum class Destination(
 internal fun routeWorldEvent(kind: String, currentDestination: String): String = when {
     "message" in kind -> Destination.Chats.name
     "forum" in kind || "commons" in kind -> Destination.Commons.name
+    kind == Y_POST_KIND || kind.startsWith("${Y_POST_KIND}_") -> DesktopApp.Y.route
     "moment" in kind || "post" in kind || "interaction" in kind -> Destination.Moments.name
     else -> currentDestination
 }
@@ -469,6 +470,7 @@ private fun AiLivesaverApp(
             Destination.Chats.name -> openDesktopApp(DesktopApp.Messenger)
             Destination.Moments.name -> openDesktopApp(DesktopApp.Ustagram)
             Destination.Commons.name -> openDesktopApp(DesktopApp.Rebbit)
+            DesktopApp.Y.route -> openDesktopApp(DesktopApp.Y)
             else -> goDesktopHome()
         }
     }
@@ -686,10 +688,19 @@ private fun AiLivesaverApp(
                         onStartWorld = { openMessenger() },
                     )
                 }
-                DesktopApp.Y -> PlaceholderAppScreen(
-                    title = "Y",
-                    summary = "短帖流入口已开放。完整发帖与嵌套回复将在后续切片接通。",
+                DesktopApp.Y -> YScreen(
                     contentPadding = padding,
+                    store = worldStore,
+                    revision = worldRevision,
+                    openPostId = pendingSocialPostRoute
+                        ?.takeIf { it.destination == DesktopApp.Y.route }
+                        ?.postId,
+                    onOpenPostConsumed = { pendingSocialPostRoute = null },
+                    onChanged = { worldRevision++ },
+                    onResumeQueuedResponses = {
+                        WorldEngine.resumeSocialResponses(context) { worldRevision++ }
+                    },
+                    onStartWorld = { openMessenger() },
                     onBack = { goDesktopHome() },
                 )
                 DesktopApp.Phone -> PhoneContactsScreen(
