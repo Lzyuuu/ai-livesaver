@@ -17,10 +17,38 @@ import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 import java.security.KeyStore
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
+
+/** 可取消的 Provider 流式请求句柄。 */
+internal class ProviderStreamHandle {
+    private val cancelled = AtomicBoolean(false)
+    private val connection = AtomicReference<HttpURLConnection?>(null)
+
+    fun cancel() {
+        cancelled.set(true)
+        runCatching { connection.getAndSet(null)?.disconnect() }
+    }
+
+    fun isCancelled(): Boolean = cancelled.get()
+
+    internal fun attach(conn: HttpURLConnection) {
+        connection.set(conn)
+        if (cancelled.get()) {
+            runCatching { conn.disconnect() }
+        }
+    }
+
+    internal fun detach() {
+        connection.set(null)
+    }
+}
+
+internal class ProviderStreamCancelledException : IOException("Generation stopped")
 
 internal enum class ProviderPreset(
     val displayName: String,
@@ -536,9 +564,11 @@ internal object ProviderChatClient {
         relationship: RelationshipState,
         onDelta: (String) -> Unit,
         callback: (Result<ProviderResponse>) -> Unit,
-    ) {
+        handle: ProviderStreamHandle = ProviderStreamHandle(),
+    ): ProviderStreamHandle {
         Thread {
             val result = runCatching {
+                if (handle.isCancelled()) throw ProviderStreamCancelledException()
                 val system = buildChatSystemPrompt(
                     character,
                     memories,
@@ -566,18 +596,22 @@ internal object ProviderChatClient {
                 }
                 var lastFailure: Throwable? = null
                 for (candidate in providerCandidates(config)) {
+                    if (handle.isCancelled()) throw ProviderStreamCancelledException()
                     var delivered = false
                     try {
                         val body = JSONObject()
                             .put("model", candidate.model)
                             .put("messages", requestMessages)
                             .put("stream", true)
-                        val text = ProviderHttp.stream(candidate, body) { accumulated ->
+                        val text = ProviderHttp.stream(candidate, body, handle) { accumulated ->
                             delivered = true
                             Handler(Looper.getMainLooper()).post { onDelta(accumulated) }
                         }.ifBlank { throw IOException("Provider returned an empty reply") }
                         return@runCatching ProviderResponse(text, candidate)
                     } catch (failure: Throwable) {
+                        if (failure is ProviderStreamCancelledException || handle.isCancelled()) {
+                            throw ProviderStreamCancelledException()
+                        }
                         lastFailure = failure
                         if (delivered) throw failure
                     }
@@ -586,6 +620,7 @@ internal object ProviderChatClient {
             }
             Handler(Looper.getMainLooper()).post { callback(result) }
         }.start()
+        return handle
     }
 }
 
@@ -846,17 +881,22 @@ private object ProviderHttp {
     fun stream(
         config: ProviderConfig,
         body: JSONObject,
+        handle: ProviderStreamHandle = ProviderStreamHandle(),
         onDelta: (String) -> Unit,
     ): String {
         var lastFailure: IOException? = null
         repeat(3) { attempt ->
+            if (handle.isCancelled()) throw ProviderStreamCancelledException()
             var delivered = false
             try {
-                return streamOnce(config, body) {
+                return streamOnce(config, body, handle) {
                     delivered = true
                     onDelta(it)
                 }
             } catch (failure: IOException) {
+                if (failure is ProviderStreamCancelledException || handle.isCancelled()) {
+                    throw ProviderStreamCancelledException()
+                }
                 lastFailure = failure
                 if (
                     delivered ||
@@ -897,16 +937,21 @@ private object ProviderHttp {
     private fun streamOnce(
         config: ProviderConfig,
         body: JSONObject,
+        handle: ProviderStreamHandle,
         onDelta: (String) -> Unit,
     ): String {
+        if (handle.isCancelled()) throw ProviderStreamCancelledException()
         val connection = open(config)
+        handle.attach(connection)
         return try {
             connection.setRequestProperty("Accept", "text/event-stream")
             write(connection, applyPresetTuning(config, body))
+            if (handle.isCancelled()) throw ProviderStreamCancelledException()
             if (connection.responseCode !in 200..299) {
                 throw IOException("HTTP ${connection.responseCode}")
             }
             if (!connection.contentType.orEmpty().contains("text/event-stream", ignoreCase = true)) {
+                if (handle.isCancelled()) throw ProviderStreamCancelledException()
                 return ProviderProtocol.parseReply(
                     connection.inputStream.bufferedReader().use { it.readText() },
                 )
@@ -915,6 +960,7 @@ private object ProviderHttp {
             var complete = false
             connection.inputStream.bufferedReader().useLines { lines ->
                 lines.forEach { line ->
+                    if (handle.isCancelled()) throw ProviderStreamCancelledException()
                     if (!line.startsWith("data:")) return@forEach
                     val data = line.removePrefix("data:").trim()
                     if (data == "[DONE]") {
@@ -932,9 +978,11 @@ private object ProviderHttp {
                     }
                 }
             }
+            if (handle.isCancelled()) throw ProviderStreamCancelledException()
             if (!complete) throw IOException("Provider stream ended before [DONE]")
             accumulated.toString()
         } finally {
+            handle.detach()
             connection.disconnect()
         }
     }

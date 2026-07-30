@@ -12,3 +12,16 @@ internal fun resetImagingStudioOnDeviceForSmoke(context: Context) {
         .putString("backend", "on_device")
         .apply()
 }
+
+internal fun seedDesktopShellForSmoke(context: Context) {
+    writeWelcomeGuideCompleted(context, true)
+    resetImagingStudioOnDeviceForSmoke(context)
+    WorldStore(context).use { store ->
+        DesktopSeed.ensureDesktopWorld(
+            store,
+            userName = "焰宇",
+            about = "smoke",
+            context = context,
+        )
+    }
+}

@@ -633,9 +633,11 @@ private fun AiLivesaverApp(
         } else {
             when (activeDesktopApp) {
                 DesktopApp.Messenger -> Column(Modifier.fillMaxSize()) {
-                    DesktopBackBar(onBack = { goDesktopHome() }, title = "Messenger")
                     ChatsScreen(
-                        contentPadding = PaddingValues(bottom = padding.calculateBottomPadding()),
+                        contentPadding = PaddingValues(
+                            top = padding.calculateTopPadding(),
+                            bottom = padding.calculateBottomPadding(),
+                        ),
                         store = worldStore,
                         revision = worldRevision,
                         initialCharacterId = requestedChatCharacterId ?: notificationCharacterId,
@@ -646,6 +648,7 @@ private fun AiLivesaverApp(
                         onChanged = { worldRevision++ },
                         onConfigureProvider = { showProviders = true },
                         onManageCharacters = { showCharacters = true },
+                        onBackToDesktop = { goDesktopHome() },
                     )
                 }
                 DesktopApp.Ustagram -> Column(Modifier.fillMaxSize()) {

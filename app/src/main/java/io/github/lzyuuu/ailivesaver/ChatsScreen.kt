@@ -9,6 +9,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
@@ -33,12 +34,17 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -46,7 +52,6 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -73,6 +78,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.style.TextOverflow
@@ -80,12 +86,24 @@ import androidx.compose.ui.unit.dp
 import java.text.DateFormat
 import java.util.Date
 
-private object ActiveChatReplies {
+internal object ActiveChatReplies {
     private val characterIds = mutableSetOf<Long>()
+    private val streamHandles = mutableMapOf<Long, ProviderStreamHandle>()
 
     fun contains(characterId: Long) = characterId in characterIds
     fun add(characterId: Long) = characterIds.add(characterId)
-    fun remove(characterId: Long) = characterIds.remove(characterId)
+    fun remove(characterId: Long) {
+        characterIds.remove(characterId)
+        streamHandles.remove(characterId)
+    }
+
+    fun attachStream(characterId: Long, handle: ProviderStreamHandle) {
+        streamHandles[characterId] = handle
+    }
+
+    fun cancelStream(characterId: Long) {
+        streamHandles[characterId]?.cancel()
+    }
 }
 
 private fun captureLongTermMemory(
@@ -141,9 +159,11 @@ internal fun ChatsScreen(
     onChanged: () -> Unit,
     onConfigureProvider: () -> Unit,
     onManageCharacters: () -> Unit,
+    onBackToDesktop: (() -> Unit)? = null,
 ) {
     val characters = remember(revision) { store.characters(includeDeparted = false) }
-    var selectedId by rememberSaveable { mutableStateOf<Long?>(null) }
+    // 不用 rememberSaveable：从桌面 Dock 再进 Messenger 应回到列表，而不是恢复上次会话。
+    var selectedId by remember { mutableStateOf<Long?>(null) }
     LaunchedEffect(initialCharacterId, characters) {
         val requestedId = initialCharacterId ?: return@LaunchedEffect
         if (characters.any { it.id == requestedId }) selectedId = requestedId
@@ -160,19 +180,13 @@ internal fun ChatsScreen(
                 revision,
                 onChanged,
                 onBack = { selectedId = null },
+                onManageCharacters = onManageCharacters,
             )
         }
-        }
-        characters.isEmpty() -> {
-            FirstRelationshipScreen(
-                contentPadding,
-                store,
-                revision,
-                onChanged,
-                onConfigureProvider,
-            )
         }
         else -> {
+            // Fancy OS Messenger 列表即使尚无会话也保持参考 IA（Recent/New/Import/Browse），
+            // 不再回落到旧五 Tab 的 FirstRelationship 建世页。
             ChatListScreen(
                 contentPadding = contentPadding,
                 store = store,
@@ -180,6 +194,8 @@ internal fun ChatsScreen(
                 revision = revision,
                 onCharacterSelected = { selectedId = it },
                 onManageCharacters = onManageCharacters,
+                onBackToDesktop = onBackToDesktop,
+                onChanged = onChanged,
             )
         }
     }
@@ -193,8 +209,20 @@ private fun ChatListScreen(
     revision: Int,
     onCharacterSelected: (Long) -> Unit,
     onManageCharacters: () -> Unit,
+    onBackToDesktop: (() -> Unit)?,
+    onChanged: () -> Unit,
 ) {
+    val context = LocalContext.current
     var query by rememberSaveable { mutableStateOf("") }
+    var showNewSheet by rememberSaveable { mutableStateOf(false) }
+    var showNewGroupSheet by rememberSaveable { mutableStateOf(false) }
+    var listMenuExpanded by remember { mutableStateOf(false) }
+    var creating by rememberSaveable { mutableStateOf(false) }
+    var newName by rememberSaveable { mutableStateOf("") }
+    var newPersona by rememberSaveable { mutableStateOf("") }
+    var groupName by rememberSaveable { mutableStateOf("") }
+    var selectedGroupMemberIds by rememberSaveable { mutableStateOf(setOf<Long>()) }
+    var createError by remember { mutableStateOf<String?>(null) }
     val latestMessages = remember(revision, characters) {
         characters.associate { it.id to store.messages(it.id).lastOrNull() }
     }
@@ -209,76 +237,417 @@ private fun ChatListScreen(
             compareByDescending<ResidentCharacter> { latestMessages[it.id]?.createdAt ?: 0L }
                 .thenByDescending { it.attentionTier == "special_focus" },
         )
-    val timeFormatter = remember { DateFormat.getTimeInstance(DateFormat.SHORT) }
-
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(
-            start = 20.dp,
-            top = contentPadding.calculateTopPadding() + 24.dp,
-            end = 20.dp,
-            bottom = contentPadding.calculateBottomPadding() + 24.dp,
-        ),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
-    ) {
-        item {
-            Text(
-                stringResource(R.string.chats_eyebrow),
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.primary,
-                fontWeight = FontWeight.Bold,
+    val importFailed = stringResource(R.string.character_card_import_failed)
+    val newGroupNeedName = stringResource(R.string.messenger_new_group_need_name)
+    val newGroupNeedMembers = stringResource(R.string.messenger_new_group_need_members)
+    val completeCharacterFields = stringResource(R.string.messenger_complete_character_fields)
+    val importLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        runCatching {
+            val bytes = context.contentResolver.openInputStream(uri)?.use(CharacterCardV2::read)
+                ?: error("无法读取文件")
+            CharacterCardV2.parse(bytes)
+        }.onSuccess { card ->
+            val id = store.addCharacter(
+                name = card.name,
+                persona = card.persona.ifBlank { card.name },
+                attentionTier = "resident",
+                appearance = "",
+                clothing = "",
+                negativePrompt = "",
+                cardJson = card.rawJson,
             )
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
+            if (card.firstMessage.isNotBlank()) {
+                store.addMessage(id, "assistant", card.firstMessage)
+            }
+            card.lore.forEach { lore -> store.addCharacterCognition(id, lore) }
+            onChanged()
+            onCharacterSelected(id)
+        }.onFailure {
+            createError = "$importFailed：${it.message.orEmpty()}"
+        }
+    }
+
+    if (showNewGroupSheet) {
+        AlertDialog(
+            onDismissRequest = {
+                showNewGroupSheet = false
+                groupName = ""
+                selectedGroupMemberIds = emptySet()
+                createError = null
+            },
+            title = { Text(stringResource(R.string.messenger_new_group_title), color = FancyCream) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        stringResource(R.string.messenger_new_group_summary),
+                        color = FancyCream.copy(alpha = 0.75f),
+                    )
+                    OutlinedTextField(
+                        value = groupName,
+                        onValueChange = { groupName = it },
+                        label = { Text(stringResource(R.string.messenger_new_group_name)) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = messengerFieldColors(),
+                    )
+                    characters.forEach { resident ->
+                        val selected = resident.id in selectedGroupMemberIds
+                        TextButton(
+                            onClick = {
+                                selectedGroupMemberIds = if (selected) {
+                                    selectedGroupMemberIds - resident.id
+                                } else {
+                                    selectedGroupMemberIds + resident.id
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text(
+                                "${if (selected) "✓ " else ""}${resident.name}",
+                                color = if (selected) FancyGold else FancyCream,
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        }
+                    }
+                    createError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        when {
+                            groupName.isBlank() -> createError = newGroupNeedName
+                            selectedGroupMemberIds.size < 2 -> createError = newGroupNeedMembers
+                            else -> {
+                                val memberNames = characters
+                                    .filter { it.id in selectedGroupMemberIds }
+                                    .joinToString(", ") { it.name }
+                                val id = store.addCharacter(
+                                    name = groupName.trim(),
+                                    persona = "Group chat with $memberNames.",
+                                    attentionTier = "resident",
+                                    appearance = "",
+                                    clothing = "",
+                                    negativePrompt = "",
+                                )
+                                showNewGroupSheet = false
+                                groupName = ""
+                                selectedGroupMemberIds = emptySet()
+                                createError = null
+                                onChanged()
+                                onCharacterSelected(id)
+                            }
+                        }
+                    },
+                    modifier = Modifier.testTag("messenger-new-group-confirm"),
+                ) {
+                    Text(stringResource(R.string.messenger_new_group_create), color = FancyGold)
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        showNewGroupSheet = false
+                        groupName = ""
+                        selectedGroupMemberIds = emptySet()
+                        createError = null
+                    },
+                ) {
+                    Text(stringResource(R.string.cancel), color = FancyCream.copy(alpha = 0.7f))
+                }
+            },
+            containerColor = FancyNavyMid,
+        )
+    }
+
+    if (showNewSheet) {
+        AlertDialog(
+            onDismissRequest = {
+                showNewSheet = false
+                creating = false
+                createError = null
+            },
+            title = {
                 Text(
-                    stringResource(R.string.chats_title),
-                    style = MaterialTheme.typography.headlineLarge,
-                    fontWeight = FontWeight.Bold,
+                    if (creating) {
+                        stringResource(R.string.messenger_new_character)
+                    } else {
+                        stringResource(R.string.messenger_new_conversation)
+                    },
+                    color = FancyCream,
                 )
-                TextButton(onClick = onManageCharacters) {
-                    Icon(Icons.Default.Add, contentDescription = null)
-                    Spacer(Modifier.width(6.dp))
-                    Text(stringResource(R.string.manage_characters))
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    if (!creating) {
+                        Text(
+                            stringResource(R.string.messenger_new_conversation_summary),
+                            color = FancyCream.copy(alpha = 0.75f),
+                        )
+                        characters.take(8).forEach { resident ->
+                            TextButton(
+                                onClick = {
+                                    showNewSheet = false
+                                    onCharacterSelected(resident.id)
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                Text(resident.name, color = FancyGold, modifier = Modifier.fillMaxWidth())
+                            }
+                        }
+                        TextButton(
+                            onClick = { creating = true },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text("+ ${stringResource(R.string.messenger_new_character)}", color = FancyGold)
+                        }
+                    } else {
+                        OutlinedTextField(
+                            value = newName,
+                            onValueChange = { newName = it },
+                            label = { Text(stringResource(R.string.character_name)) },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = messengerFieldColors(),
+                        )
+                        OutlinedTextField(
+                            value = newPersona,
+                            onValueChange = { newPersona = it },
+                            label = { Text(stringResource(R.string.character_persona)) },
+                            minLines = 3,
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = messengerFieldColors(),
+                        )
+                        createError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                    }
+                }
+            },
+            confirmButton = {
+                if (creating) {
+                    TextButton(
+                        onClick = {
+                            if (newName.isBlank() || newPersona.isBlank()) {
+                                createError = completeCharacterFields
+                                return@TextButton
+                            }
+                            val id = store.addCharacter(
+                                name = newName.trim(),
+                                persona = newPersona.trim(),
+                                attentionTier = "resident",
+                                appearance = "",
+                                clothing = "",
+                                negativePrompt = "",
+                            )
+                            showNewSheet = false
+                            creating = false
+                            newName = ""
+                            newPersona = ""
+                            onChanged()
+                            onCharacterSelected(id)
+                        },
+                    ) {
+                        Text(stringResource(R.string.messenger_create_and_open), color = FancyGold)
+                    }
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        if (creating) {
+                            creating = false
+                            createError = null
+                        } else {
+                            showNewSheet = false
+                        }
+                    },
+                ) {
+                    Text(stringResource(R.string.cancel), color = FancyCream.copy(alpha = 0.7f))
+                }
+            },
+            containerColor = FancyNavyMid,
+        )
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(FancyInk)
+            .padding(
+                top = contentPadding.calculateTopPadding(),
+                bottom = contentPadding.calculateBottomPadding(),
+            )
+            .testTag("messenger-list"),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 2.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (onBackToDesktop != null) {
+                IconButton(
+                    onClick = onBackToDesktop,
+                    modifier = Modifier.testTag("messenger-back-desktop"),
+                ) {
+                    Icon(
+                        Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = stringResource(R.string.messenger_back_to_desktop),
+                        tint = FancyCream,
+                    )
                 }
             }
             Text(
-                stringResource(R.string.chats_summary),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                stringResource(R.string.messenger_title),
+                color = FancyCream,
+                fontFamily = FontFamily.Serif,
+                fontWeight = FontWeight.Bold,
+                style = MaterialTheme.typography.headlineSmall,
             )
+            Spacer(Modifier.weight(1f))
+            Box {
+                IconButton(
+                    onClick = { listMenuExpanded = true },
+                    modifier = Modifier.testTag("messenger-list-settings"),
+                ) {
+                    Icon(
+                        Icons.Default.Tune,
+                        contentDescription = stringResource(R.string.messenger_list_settings),
+                        tint = FancyCream.copy(alpha = 0.55f),
+                    )
+                }
+                DropdownMenu(
+                    expanded = listMenuExpanded,
+                    onDismissRequest = { listMenuExpanded = false },
+                ) {
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.messenger_import)) },
+                        onClick = {
+                            listMenuExpanded = false
+                            importLauncher.launch(
+                                arrayOf(
+                                    "application/json",
+                                    "image/png",
+                                    "application/xml",
+                                    "text/xml",
+                                    "*/*",
+                                ),
+                            )
+                        },
+                        modifier = Modifier.testTag("messenger-import"),
+                    )
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.messenger_browse)) },
+                        onClick = {
+                            listMenuExpanded = false
+                            onManageCharacters()
+                        },
+                        modifier = Modifier.testTag("messenger-browse"),
+                    )
+                }
+            }
         }
-        item {
-            OutlinedTextField(
-                value = query,
-                onValueChange = { query = it },
-                label = { Text(stringResource(R.string.search_conversations)) },
-                leadingIcon = {
-                    Icon(Icons.Default.Search, contentDescription = null)
-                },
-                singleLine = true,
-                shape = RoundedCornerShape(24.dp),
-                modifier = Modifier.fillMaxWidth(),
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                stringResource(R.string.messenger_recent_chats),
+                color = FancyCream.copy(alpha = 0.62f),
+                fontWeight = FontWeight.SemiBold,
             )
+            TextButton(
+                onClick = { showNewSheet = true },
+                contentPadding = PaddingValues(0.dp),
+                modifier = Modifier.testTag("messenger-new"),
+            ) {
+                Text(
+                    stringResource(R.string.messenger_new_character_action),
+                    color = FancyGold,
+                )
+            }
         }
-        if (visibleCharacters.isEmpty()) {
-            item { StatusCard(stringResource(R.string.no_matching_conversations)) }
-        } else {
-            itemsIndexed(visibleCharacters, key = { _, it -> it.id }) { _, resident ->
-                val latestMessage = latestMessages[resident.id]
-                val unread = unreadCounts[resident.id] ?: 0
-                Column(Modifier.fillMaxWidth()) {
+
+        OutlinedTextField(
+            value = query,
+            onValueChange = { query = it },
+            placeholder = {
+                Text(
+                    stringResource(R.string.messenger_search_placeholder),
+                    color = FancyCream.copy(alpha = 0.42f),
+                )
+            },
+            leadingIcon = {
+                Icon(Icons.Default.Search, contentDescription = null, tint = FancyGold.copy(alpha = 0.85f))
+            },
+            singleLine = true,
+            shape = RoundedCornerShape(28.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 6.dp)
+                .testTag("messenger-search"),
+            colors = messengerSearchFieldColors(),
+        )
+
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp),
+        ) {
+            item {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 10.dp, bottom = 10.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(stringResource(R.string.messenger_groups), color = FancyCream, fontWeight = FontWeight.SemiBold)
+                    TextButton(
+                        onClick = {
+                            showNewGroupSheet = true
+                            createError = null
+                        },
+                        contentPadding = PaddingValues(0.dp),
+                        modifier = Modifier.testTag("messenger-new-group"),
+                    ) {
+                        Text(stringResource(R.string.messenger_new_group), color = FancyGold)
+                    }
+                }
+            }
+            if (visibleCharacters.isEmpty()) {
+                item {
+                    Text(
+                        stringResource(R.string.no_matching_conversations),
+                        color = FancyCream.copy(alpha = 0.6f),
+                        modifier = Modifier.padding(vertical = 20.dp),
+                    )
+                }
+            } else {
+                itemsIndexed(visibleCharacters, key = { _, it -> it.id }) { index, resident ->
+                    val latestMessage = latestMessages[resident.id]
+                    val unread = unreadCounts[resident.id] ?: 0
+                    if (index > 0) {
+                        HorizontalDivider(
+                            color = FancyCream.copy(alpha = 0.12f),
+                            thickness = 1.dp,
+                        )
+                    }
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .testTag("chat-character-${resident.id}")
                             .clickable { onCharacterSelected(resident.id) }
-                            .padding(horizontal = 4.dp, vertical = 14.dp),
+                            .padding(vertical = 14.dp),
                         horizontalArrangement = Arrangement.spacedBy(14.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Avatar(resident.name.take(1).uppercase(), 54.dp)
+                        MessengerCharacterAvatar(resident)
                         Column(Modifier.weight(1f)) {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
@@ -286,31 +655,19 @@ private fun ChatListScreen(
                             ) {
                                 Text(
                                     resident.name,
+                                    color = FancyCream,
                                     style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold,
+                                    fontWeight = FontWeight.SemiBold,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
                                     modifier = Modifier.weight(1f, fill = false),
                                 )
-                                if (resident.attentionTier == "special_focus") {
-                                    Spacer(Modifier.width(5.dp))
-                                    Icon(
-                                        Icons.Default.Star,
-                                        contentDescription = stringResource(R.string.special_focus),
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(14.dp),
-                                    )
-                                }
                                 Spacer(Modifier.weight(1f))
                                 latestMessage?.let {
                                     Text(
                                         chatListTimeLabel(it.createdAt),
                                         style = MaterialTheme.typography.labelMedium,
-                                        color = if (unread > 0) {
-                                            MaterialTheme.colorScheme.primary
-                                        } else {
-                                            MaterialTheme.colorScheme.outline
-                                        },
+                                        color = if (unread > 0) FancyGold else FancyCream.copy(alpha = 0.45f),
                                     )
                                 }
                             }
@@ -325,13 +682,13 @@ private fun ChatListScreen(
                                         streaming -> stringResource(R.string.streaming_reply)
                                         else -> latestMessage?.body
                                             ?.ifBlank { latestMessage.draftBody }
-                                            ?: stringResource(R.string.no_messages_yet)
+                                            ?: stringResource(R.string.messenger_no_messages_yet)
                                     },
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = if (streaming) {
-                                        MaterialTheme.colorScheme.primary
+                                        FancyGold
                                     } else {
-                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                        FancyCream.copy(alpha = 0.55f)
                                     },
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
@@ -341,17 +698,14 @@ private fun ChatListScreen(
                                     Spacer(Modifier.width(8.dp))
                                     Surface(
                                         shape = CircleShape,
-                                        color = MaterialTheme.colorScheme.primary,
+                                        color = FancyGold,
                                     ) {
                                         Text(
                                             if (unread > 99) "99+" else "$unread",
                                             style = MaterialTheme.typography.labelMedium,
                                             fontWeight = FontWeight.Bold,
-                                            color = MaterialTheme.colorScheme.onPrimary,
-                                            modifier = Modifier.padding(
-                                                horizontal = 6.dp,
-                                                vertical = 2.dp,
-                                            ),
+                                            color = FancyInk,
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                                         )
                                     }
                                 }
@@ -363,6 +717,43 @@ private fun ChatListScreen(
         }
     }
 }
+
+@Composable
+private fun MessengerCharacterAvatar(
+    character: ResidentCharacter,
+    size: androidx.compose.ui.unit.Dp = 52.dp,
+) {
+    val avatarPath = remember(character.id, character.cardJson) {
+        CharacterCardV2.profileFields(character).avatarPath
+    }
+    Avatar(character.name.take(1).uppercase(), size, avatarPath)
+}
+
+@Composable
+private fun messengerSearchFieldColors() = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
+    focusedTextColor = FancyCream,
+    unfocusedTextColor = FancyCream,
+    focusedBorderColor = FancyCream.copy(alpha = 0.35f),
+    unfocusedBorderColor = FancyCream.copy(alpha = 0.28f),
+    cursorColor = FancyGold,
+    focusedContainerColor = FancyInk,
+    unfocusedContainerColor = FancyInk,
+    focusedLeadingIconColor = FancyGold,
+    unfocusedLeadingIconColor = FancyGold.copy(alpha = 0.85f),
+)
+
+@Composable
+private fun messengerFieldColors() = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
+    focusedTextColor = FancyCream,
+    unfocusedTextColor = FancyCream,
+    focusedBorderColor = FancyGold,
+    unfocusedBorderColor = FancyGoldDim,
+    cursorColor = FancyGold,
+    focusedContainerColor = FancyNavyMid,
+    unfocusedContainerColor = FancyNavyMid,
+    focusedLabelColor = FancyGold,
+    unfocusedLabelColor = FancyGoldDim,
+)
 
 @Composable
 private fun chatListTimeLabel(timestamp: Long): String {
@@ -617,6 +1008,7 @@ private fun ConversationScreen(
     revision: Int,
     onChanged: () -> Unit,
     onBack: () -> Unit,
+    onManageCharacters: () -> Unit,
 ) {
     val context = LocalContext.current
     val animationsEnabled = remember { systemAnimationsEnabled(context) }
@@ -633,9 +1025,19 @@ private fun ConversationScreen(
     var showContext by rememberSaveable { mutableStateOf(false) }
     var streamingMessageId by remember { mutableStateOf<Long?>(null) }
     var streamingText by remember { mutableStateOf("") }
+    var menuExpanded by remember { mutableStateOf(false) }
+    var confirmClear by remember { mutableStateOf(false) }
+    var selectMessages by rememberSaveable { mutableStateOf(false) }
     var rewritingMessageId by rememberSaveable { mutableStateOf<Long?>(null) }
     var rewriteText by rememberSaveable { mutableStateOf("") }
     var expandedVersionsId by rememberSaveable { mutableStateOf<Long?>(null) }
+    val attachLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickVisualMedia(),
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        store.addMessage(character.id, "user", "[image]")
+        onChanged()
+    }
     val formatter = remember {
         DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT)
     }
@@ -662,6 +1064,8 @@ private fun ConversationScreen(
         streamingMessageId = reply.id
         onChanged()
         var lastPersistedAt = 0L
+        val handle = ProviderStreamHandle()
+        ActiveChatReplies.attachStream(character.id, handle)
         ProviderChatClient.stream(
             config = config,
             character = character,
@@ -685,44 +1089,54 @@ private fun ConversationScreen(
                     lastPersistedAt = now
                 }
             },
-        ) { result ->
-            try {
-                result.fold(
-                    onSuccess = { response ->
-                        runCatching {
-                            WorldStore(context.applicationContext).use {
-                                it.completeAssistantReply(
-                                    reply.id,
-                                    response.text,
-                                    response.config.preset.displayName,
-                                    response.config.model,
-                                )
+            callback = { result ->
+                try {
+                    result.fold(
+                        onSuccess = { response ->
+                            runCatching {
+                                WorldStore(context.applicationContext).use {
+                                    it.completeAssistantReply(
+                                        reply.id,
+                                        response.text,
+                                        response.config.preset.displayName,
+                                        response.config.model,
+                                    )
+                                }
+                            }.onFailure {
+                                runCatching {
+                                    WorldStore(context.applicationContext).use { callbackStore ->
+                                        callbackStore.failAssistantReply(reply.id, it.message.orEmpty())
+                                    }
+                                }
+                                error = it.message.orEmpty()
                             }
-                        }.onFailure {
+                        },
+                        onFailure = { failure ->
                             runCatching {
                                 WorldStore(context.applicationContext).use { callbackStore ->
-                                    callbackStore.failAssistantReply(reply.id, it.message.orEmpty())
+                                    if (failure is ProviderStreamCancelledException || handle.isCancelled()) {
+                                        callbackStore.interruptAssistantReply(reply.id)
+                                    } else {
+                                        callbackStore.failAssistantReply(reply.id, failure.message.orEmpty())
+                                        error = failure.message.orEmpty()
+                                    }
                                 }
                             }
-                            error = it.message.orEmpty()
-                        }
-                    },
-                    onFailure = {
-                        runCatching {
-                            WorldStore(context.applicationContext).use { callbackStore ->
-                                callbackStore.failAssistantReply(reply.id, it.message.orEmpty())
-                            }
-                        }
-                        error = it.message.orEmpty()
-                    },
-                )
-            } finally {
-                ActiveChatReplies.remove(character.id)
-                streamingMessageId = null
-                streamingText = ""
-                onChanged()
-            }
-        }
+                        },
+                    )
+                } finally {
+                    ActiveChatReplies.remove(character.id)
+                    streamingMessageId = null
+                    streamingText = ""
+                    onChanged()
+                }
+            },
+            handle = handle,
+        )
+    }
+
+    fun stopGeneration() {
+        ActiveChatReplies.cancelStream(character.id)
     }
 
     LaunchedEffect(character.id) {
@@ -894,63 +1308,133 @@ private fun ConversationScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .background(FancyInk)
             .padding(
                 top = contentPadding.calculateTopPadding(),
                 bottom = contentPadding.calculateBottomPadding(),
-            ),
+            )
+            .testTag("messenger-conversation"),
     ) {
-        Surface(color = MaterialTheme.colorScheme.surface) {
+        Surface(color = FancyInk) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(start = 2.dp, end = 6.dp, top = 4.dp, bottom = 4.dp),
+                    .padding(start = 2.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 IconButton(onClick = onBack) {
                     Icon(
                         Icons.AutoMirrored.Filled.ArrowBack,
                         contentDescription = stringResource(R.string.back),
+                        tint = FancyCream,
                     )
                 }
-                Avatar(character.name.take(1).uppercase(), 38.dp)
+                MessengerCharacterAvatar(character, size = 40.dp)
                 Spacer(Modifier.width(10.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        character.name,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    Text(
-                        "${relationship.label} · ${stringResource(R.string.private_conversation)}",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
+                Text(
+                    character.name,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontFamily = FontFamily.Serif,
+                    fontWeight = FontWeight.Bold,
+                    color = FancyCream,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+                IconButton(
+                    onClick = onBack,
+                    modifier = Modifier.testTag("messenger-open-chats"),
+                ) {
+                    Icon(
+                        Icons.AutoMirrored.Filled.Chat,
+                        contentDescription = stringResource(R.string.messenger_chats),
+                        tint = FancyCream.copy(alpha = 0.55f),
                     )
                 }
-                IconButton(onClick = { showContext = true }) {
+                IconButton(
+                    onClick = { showContext = true },
+                    modifier = Modifier.testTag("messenger-open-context"),
+                ) {
                     Icon(
-                        Icons.Default.MoreVert,
-                        contentDescription = stringResource(R.string.more_actions),
+                        Icons.Default.Dashboard,
+                        contentDescription = stringResource(R.string.messenger_open_console),
+                        tint = FancyCream.copy(alpha = 0.55f),
                     )
+                }
+                Box {
+                    IconButton(
+                        onClick = { menuExpanded = true },
+                        modifier = Modifier.testTag("messenger-chat-options"),
+                    ) {
+                        Icon(
+                            Icons.Default.MoreVert,
+                            contentDescription = stringResource(R.string.messenger_chat_options),
+                            tint = FancyCream.copy(alpha = 0.55f),
+                        )
+                    }
+                    DropdownMenu(
+                        expanded = menuExpanded,
+                        onDismissRequest = { menuExpanded = false },
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.messenger_view_profile)) },
+                            onClick = {
+                                menuExpanded = false
+                                onManageCharacters()
+                            },
+                            modifier = Modifier.testTag("messenger-view-profile"),
+                        )
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.messenger_select_messages)) },
+                            onClick = {
+                                menuExpanded = false
+                                selectMessages = !selectMessages
+                            },
+                            modifier = Modifier.testTag("messenger-select-messages"),
+                        )
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.messenger_clear_chat)) },
+                            onClick = {
+                                menuExpanded = false
+                                confirmClear = true
+                            },
+                            modifier = Modifier.testTag("messenger-clear-conversation"),
+                        )
+                    }
                 }
             }
         }
-        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+        if (confirmClear) {
+            AlertDialog(
+                onDismissRequest = { confirmClear = false },
+                title = { Text(stringResource(R.string.messenger_clear_conversation)) },
+                text = { Text(stringResource(R.string.messenger_clear_conversation_summary)) },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            stopGeneration()
+                            store.clearConversation(character.id)
+                            confirmClear = false
+                            onChanged()
+                        },
+                        modifier = Modifier.testTag("messenger-clear-confirm"),
+                    ) {
+                        Text(stringResource(R.string.messenger_clear))
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { confirmClear = false }) {
+                        Text(stringResource(R.string.cancel))
+                    }
+                },
+            )
+        }
         LazyColumn(
             modifier = Modifier.weight(1f),
             state = listState,
             contentPadding = PaddingValues(start = 10.dp, top = 8.dp, end = 10.dp, bottom = 10.dp),
             verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
-            if (messages.isEmpty()) {
-                item {
-                    Spacer(Modifier.height(18.dp))
-                    StatusCard(stringResource(R.string.start_conversation))
-                }
-            }
             itemsIndexed(messages, key = { _, it -> it.id }) { index, message ->
                 val previous = messages.getOrNull(index - 1)
                 val next = messages.getOrNull(index + 1)
@@ -1000,36 +1484,64 @@ private fun ConversationScreen(
                 }
             }
         }
-        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
-        Surface(color = MaterialTheme.colorScheme.surface) {
+        Surface(color = FancyInk) {
             Row(
                 modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
+                IconButton(
+                    onClick = {
+                        attachLauncher.launch(
+                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+                        )
+                    },
+                    modifier = Modifier
+                        .size(40.dp)
+                        .testTag("messenger-attach-image"),
+                ) {
+                    Icon(
+                        Icons.Default.Add,
+                        contentDescription = stringResource(R.string.messenger_attach_image),
+                        tint = FancyGold,
+                    )
+                }
                 OutlinedTextField(
                     value = input,
                     onValueChange = { input = it },
-                    label = { Text(stringResource(R.string.message_character, character.name)) },
+                    placeholder = {
+                        Text(
+                            stringResource(R.string.messenger_message_placeholder),
+                            color = FancyCream.copy(alpha = 0.45f),
+                        )
+                    },
                     minLines = 1,
                     maxLines = 4,
                     shape = RoundedCornerShape(26.dp),
                     modifier = Modifier.weight(1f),
+                    colors = messengerSearchFieldColors(),
                 )
-                FilledIconButton(
-                    onClick = ::sendMessage,
-                    enabled = input.isNotBlank() && !sending,
-                    modifier = Modifier.size(48.dp),
-                ) {
-                    if (sending) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(22.dp),
-                            strokeWidth = 2.dp,
+                if (sending) {
+                    IconButton(
+                        onClick = ::stopGeneration,
+                        modifier = Modifier.testTag("messenger-stop-generation"),
+                    ) {
+                        Icon(
+                            Icons.Default.Close,
+                            contentDescription = stringResource(R.string.messenger_stop_generation),
+                            tint = FancyGold,
                         )
-                    } else {
+                    }
+                } else {
+                    IconButton(
+                        onClick = ::sendMessage,
+                        enabled = input.isNotBlank(),
+                        modifier = Modifier.testTag("messenger-send"),
+                    ) {
                         Icon(
                             Icons.AutoMirrored.Filled.Send,
                             contentDescription = stringResource(R.string.send),
+                            tint = FancyGold,
                         )
                     }
                 }

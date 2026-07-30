@@ -224,4 +224,70 @@ class ChatPersistenceSmokeTest {
             }
         }
     }
+
+    @Test
+    fun clearsActiveConversationWhileKeepingRetiredHistory() {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val characterId = WorldStore(context).use {
+            it.addCharacter(
+                name = "Clear test ${System.nanoTime()}",
+                persona = "Test resident",
+                attentionTier = "resident",
+                appearance = "",
+                clothing = "",
+                negativePrompt = "",
+            )
+        }
+        try {
+            WorldStore(context).use { store ->
+                val user = store.addMessage(characterId, "user", "hello clear")
+                store.rememberIfCurrent(characterId, user.id, "user said hello clear")
+                store.clearConversation(characterId)
+                assertTrue(store.messages(characterId).isEmpty())
+                assertTrue(store.retiredMessages(characterId).any { it.body == "hello clear" })
+                assertTrue(store.memories(characterId).isEmpty())
+            }
+        } finally {
+            WorldStore(context).use {
+                it.writableDatabase.execSQL(
+                    "UPDATE characters SET active = 0 WHERE id = ?",
+                    arrayOf(characterId),
+                )
+                it.deleteCharacter(characterId)
+            }
+        }
+    }
+
+    @Test
+    fun interruptAssistantReplyMarksStreamingAsInterrupted() {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val characterId = WorldStore(context).use {
+            it.addCharacter(
+                name = "Stop test ${System.nanoTime()}",
+                persona = "Test resident",
+                attentionTier = "resident",
+                appearance = "",
+                clothing = "",
+                negativePrompt = "",
+            )
+        }
+        try {
+            WorldStore(context).use { store ->
+                val reply = store.beginAssistantReply(characterId, "Test Provider", "test-model")
+                store.updateAssistantDraft(reply.id, "partial")
+                store.interruptAssistantReply(reply.id)
+                val saved = store.messages(characterId).first { it.id == reply.id }
+                assertEquals("interrupted", saved.status)
+                assertEquals("partial", saved.draftBody)
+            }
+        } finally {
+            WorldStore(context).use {
+                it.writableDatabase.execSQL(
+                    "UPDATE characters SET active = 0 WHERE id = ?",
+                    arrayOf(characterId),
+                )
+                it.deleteCharacter(characterId)
+            }
+        }
+    }
 }

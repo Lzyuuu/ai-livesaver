@@ -1704,6 +1704,55 @@ internal class WorldStore(context: Context) :
         )
     }
 
+    fun interruptAssistantReply(messageId: Long) {
+        writableDatabase.update(
+            "messages",
+            ContentValues().apply {
+                put("status", "interrupted")
+                put("error", "")
+            },
+            "id = ? AND sender = 'assistant' AND status = 'streaming' AND active = 1",
+            arrayOf(messageId.toString()),
+        )
+    }
+
+    /**
+     * 清理当前时间线中的会话消息；未固定的记忆与对话回顾一并清除。
+     * 历史消息以 active=0 退出当前时间线，仍可在上下文页追溯。
+     */
+    fun clearConversation(characterId: Long) {
+        writableDatabase.run {
+            beginTransaction()
+            try {
+                update(
+                    "relationship_events",
+                    ContentValues().apply { put("active", 0) },
+                    "character_id = ? AND active = 1",
+                    arrayOf(characterId.toString()),
+                )
+                delete(
+                    "memories",
+                    "character_id = ? AND pinned = 0",
+                    arrayOf(characterId.toString()),
+                )
+                delete(
+                    "conversation_recaps",
+                    "character_id = ? AND pinned = 0",
+                    arrayOf(characterId.toString()),
+                )
+                update(
+                    "messages",
+                    ContentValues().apply { put("active", 0) },
+                    "character_id = ? AND active = 1",
+                    arrayOf(characterId.toString()),
+                )
+                setTransactionSuccessful()
+            } finally {
+                endTransaction()
+            }
+        }
+    }
+
     fun recoverInterruptedReplies(characterId: Long? = null): Int =
         writableDatabase.update(
             "messages",
