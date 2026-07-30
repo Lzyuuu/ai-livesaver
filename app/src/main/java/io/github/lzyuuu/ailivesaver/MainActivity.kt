@@ -838,27 +838,6 @@ private fun AiLivesaverApp(
 }
 
 @Composable
-private fun DesktopBackBar(onBack: () -> Unit, title: String) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(FancyNavy)
-            .padding(horizontal = 4.dp, vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        TextButton(onClick = onBack) {
-            Text("返回桌面", color = FancyGold)
-        }
-        Text(
-            title,
-            color = FancyCream,
-            fontFamily = FontFamily.Serif,
-            fontWeight = FontWeight.Bold,
-        )
-    }
-}
-
-@Composable
 private fun WorldScreen(
     contentPadding: PaddingValues,
     character: ResidentCharacter?,

@@ -34,6 +34,7 @@ import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -378,7 +379,37 @@ internal fun DesktopHubSheet(
                     }
                 }
             }
+            Spacer(modifier = Modifier.height(14.dp))
+            TextButton(
+                onClick = onDismiss,
+                modifier = Modifier
+                    .align(Alignment.CenterHorizontally)
+                    .testTag("desktop-hub-close"),
+            ) {
+                Text("关闭", color = FancyGold)
+            }
         }
+    }
+}
+
+@Composable
+internal fun DesktopBackBar(onBack: () -> Unit, title: String) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(FancyNavy)
+            .padding(horizontal = 4.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        TextButton(onClick = onBack) {
+            Text("返回桌面", color = FancyGold)
+        }
+        Text(
+            title,
+            color = FancyCream,
+            fontFamily = FontFamily.Serif,
+            fontWeight = FontWeight.Bold,
+        )
     }
 }
 
@@ -393,26 +424,15 @@ internal fun PlaceholderAppScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(FancyInk)
-            .padding(contentPadding)
-            .testTag("placeholder-app"),
+            .background(FancyInk),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onBack) {
-                Icon(
-                    Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "返回桌面",
-                    tint = FancyCream,
-                )
-            }
-            Text(
-                title,
-                color = FancyCream,
-                fontFamily = FontFamily.Serif,
-                fontSize = 22.sp,
-                fontWeight = FontWeight.Bold,
-            )
-        }
+        DesktopBackBar(onBack = onBack, title = title)
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(contentPadding)
+                .testTag("placeholder-app"),
+        ) {
         Text(
             summary,
             color = FancyCream.copy(alpha = 0.75f),
@@ -420,6 +440,7 @@ internal fun PlaceholderAppScreen(
         )
         Spacer(modifier = Modifier.height(16.dp))
         extra?.invoke()
+        }
     }
 }
 

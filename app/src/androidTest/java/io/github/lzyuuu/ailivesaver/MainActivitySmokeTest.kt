@@ -23,6 +23,10 @@ class MainActivitySmokeTest {
     fun seedDesktopShell() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         writeWelcomeGuideCompleted(context, true)
+        context.getSharedPreferences("imaging_studio", android.content.Context.MODE_PRIVATE)
+            .edit()
+            .putString("backend", "on_device")
+            .apply()
         WorldStore(context).use { store ->
             DesktopSeed.ensureDesktopWorld(
                 store,
@@ -63,7 +67,7 @@ class MainActivitySmokeTest {
         composeRule.waitForIdle()
         // 从 Ustagram 返回会回到 Social Hub
         composeRule.onNodeWithTag("desktop-hub-sheet").assertIsDisplayed()
-        composeRule.onNodeWithText("关闭", useUnmergedTree = true).performClick()
+        composeRule.onNodeWithTag("desktop-hub-close").performClick()
         composeRule.onNodeWithTag("system-desktop").assertIsDisplayed()
     }
 
@@ -122,9 +126,8 @@ class MainActivitySmokeTest {
 
         composeRule.onNodeWithTag("imaging-backend-local_dream").performClick()
         composeRule.waitForIdle()
+        composeRule.onNodeWithTag("imaging-backend-local_dream").assertIsDisplayed()
         composeRule.onNodeWithTag("imaging-test-connection").assertIsDisplayed()
-        composeRule.onNodeWithText("Local Dream", substring = true, useUnmergedTree = true)
-            .assertIsDisplayed()
         composeRule.onNodeWithTag("imaging-generate").assertIsDisplayed()
         composeRule.onNodeWithTag("imaging-prompt").assertIsDisplayed()
 
