@@ -114,11 +114,7 @@ object DesktopNavigator {
     fun backFrom(route: DesktopRoute): DesktopRoute = when (route) {
         DesktopRoute.Home -> DesktopRoute.Home
         is DesktopRoute.Hub -> DesktopRoute.Home
-        is DesktopRoute.App -> {
-            val hub = DesktopHub.entries.firstOrNull { route.app in it.apps }
-            if (hub != null && route.app !in DesktopDockApps) DesktopRoute.Hub(hub)
-            else DesktopRoute.Home
-        }
+        is DesktopRoute.App -> DesktopRoute.Home
     }
 
     fun isPaywalled(app: DesktopApp): Boolean = false

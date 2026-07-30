@@ -526,17 +526,7 @@ private fun AiLivesaverApp(
                 showIdentity = false
                 showCharacters = false
             }
-            activeDesktopApp != null -> {
-                val route = DesktopNavigator.backFrom(DesktopRoute.App(activeDesktopApp))
-                when (route) {
-                    DesktopRoute.Home -> goDesktopHome()
-                    is DesktopRoute.Hub -> {
-                        desktopRouteKey = "home"
-                        activeHubRoute = route.hub.route
-                    }
-                    is DesktopRoute.App -> desktopRouteKey = route.app.route
-                }
-            }
+            activeDesktopApp != null -> goDesktopHome()
             activeHub != null -> activeHubRoute = null
         }
     }
@@ -659,10 +649,7 @@ private fun AiLivesaverApp(
                     )
                 }
                 DesktopApp.Ustagram -> Column(Modifier.fillMaxSize()) {
-                    DesktopBackBar(onBack = {
-                        desktopRouteKey = "home"
-                        activeHubRoute = DesktopHub.Social.route
-                    }, title = "Ustagram")
+                    DesktopBackBar(onBack = { goDesktopHome() }, title = "Ustagram")
                     SocialScreen(
                         kind = "moment",
                         contentPadding = PaddingValues(bottom = padding.calculateBottomPadding()),
@@ -680,10 +667,7 @@ private fun AiLivesaverApp(
                     )
                 }
                 DesktopApp.Rebbit -> Column(Modifier.fillMaxSize()) {
-                    DesktopBackBar(onBack = {
-                        desktopRouteKey = "home"
-                        activeHubRoute = DesktopHub.Social.route
-                    }, title = "Rebbit")
+                    DesktopBackBar(onBack = { goDesktopHome() }, title = "Rebbit")
                     SocialScreen(
                         kind = "forum",
                         contentPadding = PaddingValues(bottom = padding.calculateBottomPadding()),
@@ -704,48 +688,27 @@ private fun AiLivesaverApp(
                     title = "Y",
                     summary = "短帖流入口已开放。完整发帖与嵌套回复将在后续切片接通。",
                     contentPadding = padding,
-                    onBack = {
-                        desktopRouteKey = "home"
-                        activeHubRoute = DesktopHub.Social.route
-                    },
+                    onBack = { goDesktopHome() },
                 )
                 DesktopApp.Phone -> PhoneContactsScreen(
                     characters = characters,
                     contentPadding = padding,
-                    onBack = {
-                        desktopRouteKey = "home"
-                        activeHubRoute = DesktopHub.Social.route
-                    },
+                    onBack = { goDesktopHome() },
                     onCall = { characterId -> openMessenger(characterId) },
                 )
                 DesktopApp.Games -> GamesHubScreen(
                     contentPadding = padding,
-                    onBack = {
-                        desktopRouteKey = "home"
-                        activeHubRoute = DesktopHub.Entertainment.route
-                    },
+                    onBack = { goDesktopHome() },
                 )
                 DesktopApp.Imaging -> ImagingStudioScreen(
                     contentPadding = PaddingValues(),
-                    onBack = {
-                        if (DesktopApp.Imaging in DesktopDockApps) goDesktopHome()
-                        else {
-                            desktopRouteKey = "home"
-                            activeHubRoute = DesktopHub.CreativeSuite.route
-                        }
-                    },
+                    onBack = { goDesktopHome() },
                 )
                 DesktopApp.Gallery, DesktopApp.AuraSwap -> PlaceholderAppScreen(
                     title = activeDesktopApp.label,
                     summary = "Creative Suite 入口已开放，本切片允许占位；Imaging Studio 已接通出图。",
                     contentPadding = padding,
-                    onBack = {
-                        if (activeDesktopApp in DesktopDockApps) goDesktopHome()
-                        else {
-                            desktopRouteKey = "home"
-                            activeHubRoute = DesktopHub.CreativeSuite.route
-                        }
-                    },
+                    onBack = { goDesktopHome() },
                 ) {
                     TextButton(onClick = { openDesktopApp(DesktopApp.Imaging) }) {
                         Text("打开 Imaging Studio", color = FancyGold)
@@ -755,19 +718,13 @@ private fun AiLivesaverApp(
                     title = "Storage",
                     summary = "应用沙盒存储概览占位。备份与诊断仍可从 Settings 使用。",
                     contentPadding = padding,
-                    onBack = {
-                        desktopRouteKey = "home"
-                        activeHubRoute = DesktopHub.SystemCore.route
-                    },
+                    onBack = { goDesktopHome() },
                 )
                 DesktopApp.Binder -> PlaceholderAppScreen(
                     title = "Binder",
                     summary = "角色匹配入口已开放。完整 Build my first match 将在后续切片接通。",
                     contentPadding = padding,
-                    onBack = {
-                        desktopRouteKey = "home"
-                        activeHubRoute = DesktopHub.Social.route
-                    },
+                    onBack = { goDesktopHome() },
                 )
                 DesktopApp.Settings -> Column(Modifier.fillMaxSize()) {
                     DesktopBackBar(onBack = { goDesktopHome() }, title = "Settings")

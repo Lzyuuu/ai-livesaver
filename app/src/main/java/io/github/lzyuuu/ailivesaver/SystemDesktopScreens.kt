@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -45,6 +46,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -386,7 +388,7 @@ internal fun DesktopHubSheet(
                     .align(Alignment.CenterHorizontally)
                     .testTag("desktop-hub-close"),
             ) {
-                Text("关闭", color = FancyGold)
+                Text(stringResource(R.string.desktop_hub_close), color = FancyGold)
             }
         }
     }
@@ -398,11 +400,13 @@ internal fun DesktopBackBar(onBack: () -> Unit, title: String) {
         modifier = Modifier
             .fillMaxWidth()
             .background(FancyNavy)
+            .statusBarsPadding()
+            .testTag("desktop-back-bar")
             .padding(horizontal = 4.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         TextButton(onClick = onBack) {
-            Text("返回桌面", color = FancyGold)
+            Text(stringResource(R.string.desktop_back_to_home), color = FancyGold)
         }
         Text(
             title,
@@ -430,7 +434,7 @@ internal fun PlaceholderAppScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(contentPadding)
+                .padding(bottom = contentPadding.calculateBottomPadding())
                 .testTag("placeholder-app"),
         ) {
         Text(

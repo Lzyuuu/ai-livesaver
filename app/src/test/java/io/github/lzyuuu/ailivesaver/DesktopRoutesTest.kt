@@ -41,7 +41,7 @@ class DesktopRoutesTest {
 
         val app = DesktopNavigator.openApp(DesktopApp.Ustagram)
         assertEquals(DesktopRoute.App(DesktopApp.Ustagram), app)
-        assertEquals(DesktopRoute.Hub(DesktopHub.Social), DesktopNavigator.backFrom(app))
+        assertEquals(DesktopRoute.Home, DesktopNavigator.backFrom(app))
         assertEquals(DesktopRoute.Home, DesktopNavigator.backFrom(hub))
 
         val dockApp = DesktopNavigator.openApp(DesktopApp.Messenger)

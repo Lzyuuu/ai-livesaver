@@ -2,6 +2,7 @@ package io.github.lzyuuu.ailivesaver
 
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -23,10 +24,7 @@ class MainActivitySmokeTest {
     fun seedDesktopShell() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         writeWelcomeGuideCompleted(context, true)
-        context.getSharedPreferences("imaging_studio", android.content.Context.MODE_PRIVATE)
-            .edit()
-            .putString("backend", "on_device")
-            .apply()
+        resetImagingStudioOnDeviceForSmoke(context)
         WorldStore(context).use { store ->
             DesktopSeed.ensureDesktopWorld(
                 store,
@@ -62,13 +60,16 @@ class MainActivitySmokeTest {
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("hub-app-ustagram").performClick()
         composeRule.waitForIdle()
+        composeRule.onNodeWithTag("desktop-back-bar").assertIsDisplayed()
         composeRule.onNodeWithText("Ustagram", useUnmergedTree = true).assertIsDisplayed()
         composeRule.onNodeWithText("返回桌面", useUnmergedTree = true).performClick()
         composeRule.waitForIdle()
-        // 从 Ustagram 返回会回到 Social Hub
-        composeRule.onNodeWithTag("desktop-hub-sheet").assertIsDisplayed()
-        composeRule.onNodeWithTag("desktop-hub-close").performClick()
         composeRule.onNodeWithTag("system-desktop").assertIsDisplayed()
+        assertTrue(
+            composeRule.onAllNodesWithTag("desktop-hub-sheet", useUnmergedTree = true)
+                .fetchSemanticsNodes()
+                .isEmpty(),
+        )
     }
 
     @Test
@@ -77,6 +78,8 @@ class MainActivitySmokeTest {
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("hub-app-games").performClick()
         composeRule.waitForIdle()
+        composeRule.onNodeWithTag("desktop-back-bar").assertIsDisplayed()
+        composeRule.onNodeWithTag("placeholder-app").assertIsDisplayed()
         composeRule.onNodeWithText("Games", useUnmergedTree = true).assertIsDisplayed()
         composeRule.onNodeWithText("World Adventure", useUnmergedTree = true).assertIsDisplayed()
         assertTrue(
@@ -88,6 +91,13 @@ class MainActivitySmokeTest {
                     .isEmpty(),
         )
         composeRule.onNodeWithText("返回桌面", useUnmergedTree = true).performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("system-desktop").assertIsDisplayed()
+        assertTrue(
+            composeRule.onAllNodesWithTag("desktop-hub-sheet", useUnmergedTree = true)
+                .fetchSemanticsNodes()
+                .isEmpty(),
+        )
     }
 
     @Test
@@ -95,6 +105,7 @@ class MainActivitySmokeTest {
         composeRule.onNodeWithTag("desktop-hub-social_hub").performClick()
         composeRule.onNodeWithTag("hub-app-phone").performClick()
         composeRule.waitForIdle()
+        composeRule.onNodeWithTag("desktop-back-bar").assertIsDisplayed()
         composeRule.onNodeWithText("Phone", useUnmergedTree = true).assertIsDisplayed()
         composeRule.onNodeWithText("Root", useUnmergedTree = true).assertIsDisplayed()
     }
