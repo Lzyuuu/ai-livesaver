@@ -683,24 +683,20 @@ private fun AiLivesaverApp(
                     },
                     onBack = { goDesktopHome() },
                 )
-                DesktopApp.Rebbit -> Column(Modifier.fillMaxSize()) {
-                    DesktopBackBar(onBack = { goDesktopHome() }, title = "Rebbit")
-                    SocialScreen(
-                        kind = "forum",
-                        contentPadding = PaddingValues(bottom = padding.calculateBottomPadding()),
-                        store = worldStore,
-                        revision = worldRevision,
-                        openPostId = pendingSocialPostRoute
-                            ?.takeIf { it.destination == Destination.Commons.name }
-                            ?.postId,
-                        onOpenPostConsumed = { pendingSocialPostRoute = null },
-                        onChanged = { worldRevision++ },
-                        onResumeQueuedResponses = {
-                            WorldEngine.resumeSocialResponses(context) { worldRevision++ }
-                        },
-                        onStartWorld = { openMessenger() },
-                    )
-                }
+                DesktopApp.Rebbit -> RebbitScreen(
+                    contentPadding = padding,
+                    store = worldStore,
+                    revision = worldRevision,
+                    openPostId = pendingSocialPostRoute
+                        ?.takeIf { it.destination == Destination.Commons.name }
+                        ?.postId,
+                    onOpenPostConsumed = { pendingSocialPostRoute = null },
+                    onChanged = { worldRevision++ },
+                    onResumeQueuedResponses = {
+                        WorldEngine.resumeSocialResponses(context) { worldRevision++ }
+                    },
+                    onBack = { goDesktopHome() },
+                )
                 DesktopApp.Y -> YScreen(
                     contentPadding = padding,
                     store = worldStore,

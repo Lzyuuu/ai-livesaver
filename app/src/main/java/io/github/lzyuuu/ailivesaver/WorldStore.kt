@@ -215,7 +215,21 @@ internal data class SocialPost(
     val commentCount: Int = 0,
     val voteScore: Int = 0,
     val userVote: Int = 0,
+    val subreddit: String = "",
 )
+
+internal data class RebbitSubreddit(
+    val name: String,
+    val enabled: Boolean,
+)
+
+internal fun normalizeSubreddit(raw: String): String {
+    return raw.trim()
+        .removePrefix("r/")
+        .removePrefix("R/")
+        .replace(Regex("[^A-Za-z0-9_\\u4e00-\\u9fff-]"), "")
+        .take(48)
+}
 
 internal data class SocialPostVersion(
     val id: Long,
@@ -318,7 +332,7 @@ internal data class MemberWorldContext(
     val timeZone: String,
 )
 
-internal const val WORLD_DATABASE_VERSION = 22
+internal const val WORLD_DATABASE_VERSION = 23
 
 internal class WorldStore(context: Context) :
     SQLiteOpenHelper(context, "world.db", null, WORLD_DATABASE_VERSION),
@@ -491,6 +505,27 @@ internal class WorldStore(context: Context) :
         }
         if (oldVersion < 21) migrateRelationshipDimensions(database)
         if (oldVersion < 22) createInteractionTables(database)
+        if (oldVersion < 23) {
+            addColumnIfMissing(
+                database,
+                "social_posts",
+                "subreddit",
+                "TEXT NOT NULL DEFAULT ''",
+            )
+            createRebbitSubredditTables(database)
+        }
+    }
+
+    private fun createRebbitSubredditTables(database: SQLiteDatabase) {
+        database.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS rebbit_subreddits (
+                name TEXT PRIMARY KEY COLLATE NOCASE,
+                enabled INTEGER NOT NULL DEFAULT 1,
+                created_at INTEGER NOT NULL
+            )
+            """.trimIndent(),
+        )
     }
 
     private fun createInteractionTables(database: SQLiteDatabase) {
@@ -545,10 +580,12 @@ internal class WorldStore(context: Context) :
                 ai_responses_enabled INTEGER NOT NULL DEFAULT 1,
                 hidden INTEGER NOT NULL DEFAULT 0,
                 provider_name TEXT NOT NULL DEFAULT '',
-                model_name TEXT NOT NULL DEFAULT ''
+                model_name TEXT NOT NULL DEFAULT '',
+                subreddit TEXT NOT NULL DEFAULT ''
             )
             """.trimIndent(),
         )
+        createRebbitSubredditTables(database)
         database.execSQL(
             """
             CREATE TABLE social_comments (
@@ -2010,9 +2047,21 @@ internal class WorldStore(context: Context) :
         mediaScheduler: String = "dpm",
         mediaWidth: Int = 512,
         mediaHeight: Int = 512,
+        subreddit: String = "",
+        mediaPath: String? = null,
     ): Long {
         val cleanMediaPrompt = mediaPrompt.orEmpty().trim()
-        return writableDatabase.run {
+        val cleanMediaPath = mediaPath?.trim().orEmpty()
+        val cleanSubreddit = if (kind == "forum") {
+            normalizeSubreddit(subreddit).ifBlank {
+                defaultSubredditFor(authorName, authorKind)
+            }
+        } else {
+            ""
+        }
+        var committed = false
+        return try {
+            writableDatabase.run {
             beginTransaction()
             try {
                 require(
@@ -2020,6 +2069,9 @@ internal class WorldStore(context: Context) :
                         authorCharacterId == null ||
                         isActiveCharacter(authorCharacterId),
                 ) { "Character is no longer active" }
+                if (kind == "forum" && cleanSubreddit.isNotBlank()) {
+                    ensureSubreddit(cleanSubreddit)
+                }
                 val postId = insertOrThrow(
                     "social_posts",
                     null,
@@ -2036,14 +2088,34 @@ internal class WorldStore(context: Context) :
                         put("ai_responses_enabled", if (aiResponsesEnabled) 1 else 0)
                         put("provider_name", providerName)
                         put("model_name", modelName)
-                        put("media_status", if (cleanMediaPrompt.isBlank()) "none" else "pending")
+                        put("subreddit", cleanSubreddit)
+                        put(
+                            "media_status",
+                            when {
+                                cleanMediaPath.isNotBlank() -> "ready"
+                                cleanMediaPrompt.isNotBlank() -> "pending"
+                                else -> "none"
+                            },
+                        )
                         put("media_negative_prompt", mediaNegativePrompt.trim())
                         put("media_steps", mediaSteps.coerceIn(1, 100))
                         put("media_cfg", mediaCfg.coerceIn(0.1, 30.0))
                         put("media_scheduler", mediaScheduler.trim().ifBlank { "dpm" })
                         put("media_width", mediaWidth.coerceIn(8, 2048))
                         put("media_height", mediaHeight.coerceIn(8, 2048))
-                        if (cleanMediaPrompt.isBlank()) {
+                        if (cleanMediaPath.isNotBlank()) {
+                            put("media_path", cleanMediaPath)
+                            put("media_source", "user")
+                            put(
+                                "media_description",
+                                cleanMediaPrompt.ifBlank { body.trim() },
+                            )
+                            if (cleanMediaPrompt.isNotBlank()) {
+                                put("media_prompt", cleanMediaPrompt)
+                            } else {
+                                putNull("media_prompt")
+                            }
+                        } else if (cleanMediaPrompt.isBlank()) {
                             putNull("media_prompt")
                             put("media_description", "")
                             put("media_source", "")
@@ -2054,7 +2126,20 @@ internal class WorldStore(context: Context) :
                         }
                     },
                 )
-                if (cleanMediaPrompt.isBlank()) {
+                if (cleanMediaPath.isNotBlank()) {
+                    insertOrThrow(
+                        "media_versions",
+                        null,
+                        ContentValues().apply {
+                            put("post_id", postId)
+                            put("path", cleanMediaPath)
+                            put("prompt", cleanMediaPrompt)
+                            put("seed", 0L)
+                            put("created_at", System.currentTimeMillis())
+                        },
+                    )
+                }
+                if (cleanMediaPrompt.isBlank() || cleanMediaPath.isNotBlank()) {
                     addWorldEvent(
                         kind = worldEventKind ?: when (kind) {
                             "moment" -> "moment"
@@ -2074,18 +2159,32 @@ internal class WorldStore(context: Context) :
             } finally {
                 endTransaction()
             }
+        }.also { committed = true }
+        } finally {
+            if (!committed && cleanMediaPath.isNotBlank()) {
+                deleteMediaFileIfUnreferenced(cleanMediaPath)
+            }
         }
     }
 
     fun posts(kind: String, sort: String = "latest"): List<SocialPost> {
         val voteScoreSubquery =
             "COALESCE((SELECT SUM(value) FROM social_post_votes WHERE post_id = social_posts.id), 0)"
-        val order = when {
-            kind == "forum" && sort == "active" ->
-                "MAX(social_posts.created_at, COALESCE((SELECT MAX(created_at) FROM social_comments WHERE post_id = social_posts.id), 0)) DESC"
-            kind == "forum" && sort == "top" ->
-                "$voteScoreSubquery DESC, social_posts.created_at DESC"
-            else -> "social_posts.created_at DESC"
+        val order = if (kind == "forum") {
+            forumPostsOrderClause(sort, voteScoreSubquery)
+        } else {
+            "social_posts.created_at DESC"
+        }
+        val enabledSubreddits = if (kind == "forum") {
+            val managed = rebbitSubreddits()
+            if (managed.isEmpty()) null else managed.filter { it.enabled }.map { it.name }.toSet()
+        } else {
+            null
+        }
+        val subredditExpr = if (kind == "forum") {
+            "COALESCE(NULLIF(subreddit, ''), 'general')"
+        } else {
+            "COALESCE(subreddit, '')"
         }
         return readableDatabase.rawQuery(
             """
@@ -2105,7 +2204,8 @@ internal class WorldStore(context: Context) :
                    (SELECT value FROM social_post_votes
                     WHERE post_id = social_posts.id AND actor_name = ?),
                    0
-               )
+               ),
+               $subredditExpr
         FROM social_posts
         WHERE kind = ? AND hidden = 0 AND (
             media_status IN ('none', 'ready') OR
@@ -2117,37 +2217,137 @@ internal class WorldStore(context: Context) :
     ).use { cursor ->
         buildList {
             while (cursor.moveToNext()) {
-                add(
-                    SocialPost(
-                        cursor.getLong(0),
-                        cursor.getString(1),
-                        cursor.getString(2),
-                        cursor.getString(3),
-                        cursor.getString(4),
-                        cursor.getLong(5),
-                        cursor.getString(6),
-                        cursor.getString(7),
-                        if (cursor.isNull(8)) null else cursor.getLong(8),
-                        cursor.getString(9),
-                        cursor.getString(10),
-                        if (cursor.isNull(11)) null else cursor.getLong(11),
-                        cursor.getString(12),
-                        cursor.getString(13),
-                        cursor.getInt(14) == 1,
-                        cursor.getInt(15),
-                        cursor.getInt(16) == 1,
-                        cursor.getString(17),
-                        cursor.getString(18),
-                        cursor.getString(19),
-                        cursor.getString(20),
-                        cursor.getInt(21),
-                        cursor.getInt(22),
-                        cursor.getInt(23),
-                    ),
+                val post = SocialPost(
+                    cursor.getLong(0),
+                    cursor.getString(1),
+                    cursor.getString(2),
+                    cursor.getString(3),
+                    cursor.getString(4),
+                    cursor.getLong(5),
+                    cursor.getString(6),
+                    cursor.getString(7),
+                    if (cursor.isNull(8)) null else cursor.getLong(8),
+                    cursor.getString(9),
+                    cursor.getString(10),
+                    if (cursor.isNull(11)) null else cursor.getLong(11),
+                    cursor.getString(12),
+                    cursor.getString(13),
+                    cursor.getInt(14) == 1,
+                    cursor.getInt(15),
+                    cursor.getInt(16) == 1,
+                    cursor.getString(17),
+                    cursor.getString(18),
+                    cursor.getString(19),
+                    cursor.getString(20),
+                    cursor.getInt(21),
+                    cursor.getInt(22),
+                    cursor.getInt(23),
+                    cursor.getString(24),
                 )
+                if (
+                    kind != "forum" ||
+                    enabledSubreddits == null ||
+                    post.subreddit in enabledSubreddits
+                ) {
+                    add(post)
+                }
             }
         }
     }
+    }
+
+    fun rebbitSubreddits(): List<RebbitSubreddit> = readableDatabase.rawQuery(
+        """
+        SELECT name, enabled FROM rebbit_subreddits
+        ORDER BY created_at, name COLLATE NOCASE
+        """.trimIndent(),
+        emptyArray(),
+    ).use { cursor ->
+        buildList {
+            while (cursor.moveToNext()) {
+                add(RebbitSubreddit(cursor.getString(0), cursor.getInt(1) == 1))
+            }
+        }
+    }
+
+    fun ensureDefaultRebbitSubreddits() {
+        ensureSubreddit("general")
+        val userCommunity = normalizeSubreddit(userName())
+        if (userCommunity.isNotBlank()) ensureSubreddit(userCommunity)
+    }
+
+    fun resolveRebbitPublishSubreddit(): String {
+        ensureDefaultRebbitSubreddits()
+        rebbitSubreddits().firstOrNull { it.enabled }?.name?.let { return it }
+        setRebbitSubredditEnabled("general", true)
+        return "general"
+    }
+
+    fun discardUnreferencedMedia(path: String) {
+        deleteMediaFileIfUnreferenced(path)
+    }
+
+    fun addRebbitSubreddit(rawName: String): String? {
+        val name = normalizeSubreddit(rawName)
+        if (name.isBlank()) return null
+        ensureSubreddit(name, enabled = true)
+        return name
+    }
+
+    fun setRebbitSubredditEnabled(name: String, enabled: Boolean) {
+        val clean = normalizeSubreddit(name)
+        if (clean.isBlank()) return
+        writableDatabase.update(
+            "rebbit_subreddits",
+            ContentValues().apply { put("enabled", if (enabled) 1 else 0) },
+            "name = ? COLLATE NOCASE",
+            arrayOf(clean),
+        )
+    }
+
+    fun setAllRebbitSubredditsEnabled(enabled: Boolean) {
+        ensureDefaultRebbitSubreddits()
+        writableDatabase.update(
+            "rebbit_subreddits",
+            ContentValues().apply { put("enabled", if (enabled) 1 else 0) },
+            null,
+            null,
+        )
+    }
+
+    fun deleteAllForumPosts() {
+        val ids = readableDatabase.rawQuery(
+            "SELECT id FROM social_posts WHERE kind = 'forum'",
+            emptyArray(),
+        ).use { cursor ->
+            buildList { while (cursor.moveToNext()) add(cursor.getLong(0)) }
+        }
+        ids.forEach { postId ->
+            deletePost(postId, "1 = 1")
+        }
+    }
+
+    private fun ensureSubreddit(name: String, enabled: Boolean = true) {
+        val clean = normalizeSubreddit(name)
+        if (clean.isBlank()) return
+        writableDatabase.insertWithOnConflict(
+            "rebbit_subreddits",
+            null,
+            ContentValues().apply {
+                put("name", clean)
+                put("enabled", if (enabled) 1 else 0)
+                put("created_at", System.currentTimeMillis())
+            },
+            SQLiteDatabase.CONFLICT_IGNORE,
+        )
+    }
+
+    private fun defaultSubredditFor(authorName: String, authorKind: String): String {
+        return if (authorKind == "user") {
+            normalizeSubreddit(authorName).ifBlank { "general" }
+        } else {
+            "general"
+        }
     }
 
     fun voteOnPost(postId: Long, value: Int) {

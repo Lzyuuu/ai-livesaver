@@ -890,6 +890,70 @@ internal object WorldEngine {
         return true
     }
 
+    fun generateRebbitPost(
+        context: Context,
+        customPrompt: String,
+        callback: (Boolean) -> Unit,
+    ): Boolean {
+        val store = WorldStore(context)
+        val character = store.primaryCharacter()
+        if (character == null) {
+            store.close()
+            return false
+        }
+        val community = store.resolveRebbitPublishSubreddit()
+        val config = ProviderStore(context).loadFor(ProviderTask.World)
+        val prompt = customPrompt.trim().ifBlank { DEFAULT_REBBIT_PROMPT }
+
+        fun persistGeneratedPost(body: String, providerName: String = "", modelName: String = ""): Boolean {
+            val text = sanitizeRebbitGeneratedBody(body, character.name, community)
+            return runCatching {
+                store.createPost(
+                    kind = "forum",
+                    authorName = character.name,
+                    title = "",
+                    body = text,
+                    authorKind = "resident",
+                    authorCharacterId = character.id,
+                    providerName = providerName,
+                    modelName = modelName,
+                    eventNeedsResponse = false,
+                    subreddit = community,
+                )
+            }.isSuccess
+        }
+
+        if (!config.supports(ProviderCapability.Structured)) {
+            val created = persistGeneratedPost(
+                simulatedRebbitPostBody(character.name, community),
+            )
+            store.close()
+            callback(created)
+            return true
+        }
+        ProviderTextClient.completeStructured(
+            config,
+            "You are ${character.name}. ${character.persona}",
+            "$prompt\nPost to r/$community. Reply with the post body only.",
+        ) { result ->
+            val created = result.fold(
+                onSuccess = { response ->
+                    persistGeneratedPost(
+                        response.text,
+                        providerName = response.config.preset.displayName,
+                        modelName = response.config.model,
+                    )
+                },
+                onFailure = {
+                    persistGeneratedPost(simulatedRebbitPostBody(character.name, community))
+                },
+            )
+            store.close()
+            callback(created)
+        }
+        return true
+    }
+
     fun continuousNotification(context: Context): Notification {
         ensureChannels(context)
         return Notification.Builder(context, CONTINUOUS_CHANNEL)
