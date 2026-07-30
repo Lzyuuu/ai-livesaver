@@ -651,24 +651,23 @@ private fun AiLivesaverApp(
                         onBackToDesktop = { goDesktopHome() },
                     )
                 }
-                DesktopApp.Ustagram -> Column(Modifier.fillMaxSize()) {
-                    DesktopBackBar(onBack = { goDesktopHome() }, title = "Ustagram")
-                    SocialScreen(
-                        kind = "moment",
-                        contentPadding = PaddingValues(bottom = padding.calculateBottomPadding()),
-                        store = worldStore,
-                        revision = worldRevision,
-                        openPostId = pendingSocialPostRoute
-                            ?.takeIf { it.destination == Destination.Moments.name }
-                            ?.postId,
-                        onOpenPostConsumed = { pendingSocialPostRoute = null },
-                        onChanged = { worldRevision++ },
-                        onResumeQueuedResponses = {
-                            WorldEngine.resumeSocialResponses(context) { worldRevision++ }
-                        },
-                        onStartWorld = { openMessenger() },
-                    )
-                }
+                DesktopApp.Ustagram -> UstagramAppScreen(
+                    contentPadding = PaddingValues(
+                        top = padding.calculateTopPadding(),
+                        bottom = padding.calculateBottomPadding(),
+                    ),
+                    store = worldStore,
+                    revision = worldRevision,
+                    openPostId = pendingSocialPostRoute
+                        ?.takeIf { it.destination == Destination.Moments.name }
+                        ?.postId,
+                    onOpenPostConsumed = { pendingSocialPostRoute = null },
+                    onChanged = { worldRevision++ },
+                    onResumeQueuedResponses = {
+                        WorldEngine.resumeSocialResponses(context) { worldRevision++ }
+                    },
+                    onBack = { goDesktopHome() },
+                )
                 DesktopApp.Rebbit -> Column(Modifier.fillMaxSize()) {
                     DesktopBackBar(onBack = { goDesktopHome() }, title = "Rebbit")
                     SocialScreen(

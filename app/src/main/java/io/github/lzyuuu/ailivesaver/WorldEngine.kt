@@ -558,6 +558,119 @@ internal object WorldEngine {
         return true
     }
 
+    /**
+     * Ustagram 顶栏 Generate：强制生成一条角色社交流帖子。
+     * Provider 不可用时写入本地模拟帖，保证入口可用。
+     */
+    fun generateMomentPost(
+        context: Context,
+        callback: (Boolean) -> Unit,
+    ): Boolean {
+        val store = WorldStore(context)
+        val characters = store.characters(includeDeparted = false)
+        val postCharacters = characters.filter { proactivePosts(context, it.id) }
+        val actor = postCharacters.firstOrNull()
+            ?: characters.firstOrNull { !it.name.equals(DesktopSeed.ROOT_NAME, true) }
+            ?: characters.firstOrNull()
+        if (actor == null) {
+            store.close()
+            callback(false)
+            return false
+        }
+        val config = ProviderStore(context).loadFor(ProviderTask.World)
+        val canAi = isEnabled(context) &&
+            hasBudget(context) &&
+            !taskPaused(context) &&
+            config.supports(ProviderCapability.Structured)
+        if (!canAi) {
+            val samples = listOf(
+                "✨",
+                "窗外的光刚好落到桌角，记一下这一秒。",
+                "路过便利店，买了两瓶一样的汽水。",
+                "今晚风有点大，适合走走不说话。",
+            )
+            val body = samples[(System.currentTimeMillis() % samples.size).toInt()]
+            store.createPost(
+                kind = "moment",
+                authorName = actor.name,
+                title = "",
+                body = body,
+                authorKind = "resident",
+                authorCharacterId = actor.id,
+                eventNeedsResponse = false,
+                worldEventKind = "moment",
+            )
+            store.close()
+            callback(true)
+            return true
+        }
+        if (!generationRunning.compareAndSet(false, true)) {
+            store.close()
+            callback(false)
+            return false
+        }
+        val eventCount = preferences(context).getInt("event_count", 0)
+        val system = buildString {
+            append("You are ${actor.name}. ${actor.persona}")
+            store.relationship(actor.id).takeIf { it.createdAt > 0 }?.let {
+                append("\nCurrent relationship with the user: ${it.label}. ${it.summary}")
+            }
+        }
+        val styleHint = globalStyle(context).takeIf { it.isNotBlank() }?.let {
+            "\nVisual / style guidance: $it"
+        }.orEmpty()
+        val prompt =
+            "Write one natural short photo-lifestyle social post for Ustagram. " +
+                "Keep it under 80 Chinese characters and do not address the user directly.$styleHint"
+        val attachWorldImage = shouldAttachWorldImage(eventCount, "post", true)
+        ProviderTextClient.completeStructured(config, system, prompt) { result ->
+            var mediaQueued = false
+            val created = runCatching {
+                result.fold(
+                    onSuccess = { response ->
+                        store.createPost(
+                            kind = "moment",
+                            authorName = actor.name,
+                            title = "",
+                            body = response.text.ifBlank { "✨" },
+                            authorKind = "resident",
+                            authorCharacterId = actor.id,
+                            providerName = response.config.preset.displayName,
+                            modelName = response.config.model,
+                            worldEventKind = "moment",
+                            eventNeedsResponse = false,
+                            mediaPrompt = if (attachWorldImage) {
+                                worldImagePrompt(context, actor, response.text)
+                            } else {
+                                null
+                            },
+                            mediaNegativePrompt = actor.negativePrompt,
+                        ).also { mediaQueued = attachWorldImage }
+                        consumeBudget(context)
+                        recordSuccess(context)
+                        preferences(context).edit {
+                            putInt("event_count", eventCount + 1)
+                            putLong("last_event", System.currentTimeMillis())
+                        }
+                        true
+                    },
+                    onFailure = {
+                        recordFailure(context, it.message.orEmpty())
+                        false
+                    },
+                )
+            }.getOrElse {
+                recordFailure(context, it.message.orEmpty())
+                false
+            }
+            store.close()
+            generationRunning.set(false)
+            if (created && mediaQueued) LocalDreamQueue.resume(context)
+            callback(created)
+        }
+        return true
+    }
+
     private fun worldImagePrompt(context: Context, actor: ResidentCharacter, scene: String): String =
         listOf(actor.appearance, actor.clothing, globalStyle(context), scene)
             .map { it.trim() }

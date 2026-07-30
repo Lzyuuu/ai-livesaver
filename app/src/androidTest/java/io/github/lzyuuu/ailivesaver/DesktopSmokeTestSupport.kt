@@ -25,3 +25,9 @@ internal fun seedDesktopShellForSmoke(context: Context) {
         )
     }
 }
+
+internal fun clearMomentPostsForSmoke(context: Context) {
+    WorldStore(context).use { store ->
+        store.clearPosts("moment")
+    }
+}

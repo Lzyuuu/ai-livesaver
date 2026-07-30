@@ -184,6 +184,12 @@ internal data class ConversationRecap(
     val pinned: Boolean,
 )
 
+internal data class PostDeletionTarget(
+    val id: Long,
+    val authorKind: String,
+    val body: String,
+)
+
 internal data class SocialPost(
     val id: Long,
     val kind: String,
@@ -2245,6 +2251,41 @@ internal class WorldStore(context: Context) :
                 put("reply_to_name", replyToName)
             },
         )
+    }
+
+    fun deleteComment(commentId: Long) {
+        writableDatabase.delete("social_comments", "id = ?", arrayOf(commentId.toString()))
+    }
+
+    /** All rows for a kind, without feed visibility filters used by [posts]. */
+    internal fun postDeletionTargets(kind: String): List<PostDeletionTarget> =
+        readableDatabase.rawQuery(
+            "SELECT id, author_kind, body FROM social_posts WHERE kind = ?",
+            arrayOf(kind),
+        ).use { cursor ->
+            buildList {
+                while (cursor.moveToNext()) {
+                    add(
+                        PostDeletionTarget(
+                            id = cursor.getLong(0),
+                            authorKind = cursor.getString(1),
+                            body = cursor.getString(2),
+                        ),
+                    )
+                }
+            }
+        }
+
+    fun clearPosts(kind: String): Int {
+        val targets = postDeletionTargets(kind)
+        targets.forEach { target ->
+            if (target.authorKind == "user") {
+                deleteUserPost(target.id)
+            } else {
+                deleteAiPost(target.id)
+            }
+        }
+        return targets.size
     }
 
     fun addGeneratedSocialResponse(

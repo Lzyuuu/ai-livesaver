@@ -60,9 +60,9 @@ class MainActivitySmokeTest {
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("hub-app-ustagram").performClick()
         composeRule.waitForIdle()
-        composeRule.onNodeWithTag("desktop-back-bar").assertIsDisplayed()
         composeRule.onNodeWithText("Ustagram", useUnmergedTree = true).assertIsDisplayed()
-        composeRule.onNodeWithText("返回桌面", useUnmergedTree = true).performClick()
+        composeRule.onNodeWithTag("ustagram-screen", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("ustagram-back", useUnmergedTree = true).performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("system-desktop").assertIsDisplayed()
         assertTrue(
