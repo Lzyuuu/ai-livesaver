@@ -368,6 +368,7 @@ private fun AiLivesaverApp(
     var welcomeCompleted by rememberSaveable { mutableStateOf(readWelcomeGuideCompleted(context)) }
     var desktopRouteKey by rememberSaveable { mutableStateOf("home") }
     var activeHubRoute by rememberSaveable { mutableStateOf<String?>(null) }
+    var activeGameId by rememberSaveable { mutableStateOf<String?>(null) }
     var showUpdates by rememberSaveable { mutableStateOf(false) }
     var showProviders by rememberSaveable { mutableStateOf(false) }
     var showWorldSettings by rememberSaveable { mutableStateOf(false) }
@@ -400,9 +401,19 @@ private fun AiLivesaverApp(
     fun goDesktopHome() {
         desktopRouteKey = "home"
         activeHubRoute = null
+        activeGameId = null
+    }
+
+    fun backFromGamePlaceholder() {
+        activeGameId = null
+    }
+
+    fun backFromGamesHub() {
+        goDesktopHome()
     }
 
     fun openDesktopApp(app: DesktopApp) {
+        activeGameId = null
         when (app) {
             DesktopApp.Characters -> {
                 activeHubRoute = null
@@ -512,7 +523,7 @@ private fun AiLivesaverApp(
         showWorldChronicle || showLocalDream ||
         showDiagnostics || showPrivacy || showBackups || showIdentity || showCharacters
 
-    BackHandler(enabled = settingsOpen || activeDesktopApp != null || activeHub != null) {
+    BackHandler(enabled = settingsOpen || activeDesktopApp != null || activeHub != null || activeGameId != null) {
         when {
             settingsOpen -> {
                 if (showProviders) worldRevision++
@@ -528,6 +539,8 @@ private fun AiLivesaverApp(
                 showIdentity = false
                 showCharacters = false
             }
+            activeGameId != null -> backFromGamePlaceholder()
+            activeDesktopApp == DesktopApp.Games -> backFromGamesHub()
             activeDesktopApp != null -> goDesktopHome()
             activeHub != null -> activeHubRoute = null
         }
@@ -709,10 +722,22 @@ private fun AiLivesaverApp(
                     onBack = { goDesktopHome() },
                     onCall = { characterId -> openMessenger(characterId) },
                 )
-                DesktopApp.Games -> GamesHubScreen(
-                    contentPadding = padding,
-                    onBack = { goDesktopHome() },
-                )
+                DesktopApp.Games -> {
+                    val selectedGame = GamesHubEntries.firstOrNull { it.id == activeGameId }
+                    if (selectedGame != null) {
+                        GamePlaceholderScreen(
+                            entry = selectedGame,
+                            contentPadding = padding,
+                            onBack = { backFromGamePlaceholder() },
+                        )
+                    } else {
+                        GamesHubScreen(
+                            contentPadding = padding,
+                            onBack = { backFromGamesHub() },
+                            onOpenGame = { activeGameId = it.id },
+                        )
+                    }
+                }
                 DesktopApp.Imaging -> ImagingStudioScreen(
                     contentPadding = PaddingValues(),
                     onBack = { goDesktopHome() },

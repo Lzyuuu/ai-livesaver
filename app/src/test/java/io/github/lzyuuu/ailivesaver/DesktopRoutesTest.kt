@@ -31,6 +31,22 @@ class DesktopRoutesTest {
     fun `entertainment hub lists games and games hub has six entries`() {
         assertEquals(listOf(DesktopApp.Games), DesktopHub.Entertainment.apps)
         assertEquals(6, GamesHubEntries.size)
+        assertEquals(
+            listOf(
+                "world_adventure",
+                "dice_duel_rpg",
+                "tactical_command",
+                "truth_or_dare",
+                "two_truths_lie",
+                "the_oracle",
+            ),
+            GamesHubEntries.map { it.id },
+        )
+        GamesHubEntries.forEach { entry ->
+            assertTrue(entry.titleRes != 0)
+            assertTrue(entry.descriptionRes != 0)
+            assertTrue(entry.statusNoteRes != 0)
+        }
         assertFalse(DesktopNavigator.isPaywalled(DesktopApp.Games))
     }
 
@@ -46,6 +62,9 @@ class DesktopRoutesTest {
 
         val dockApp = DesktopNavigator.openApp(DesktopApp.Messenger)
         assertEquals(DesktopRoute.Home, DesktopNavigator.backFrom(dockApp))
+
+        val gamesApp = DesktopNavigator.openApp(DesktopApp.Games)
+        assertEquals(DesktopRoute.Home, DesktopNavigator.backFrom(gamesApp))
     }
 
     @Test

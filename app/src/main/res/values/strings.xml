@@ -584,4 +584,26 @@
     <string name="open_link_failed">没有可用于打开下载链接的应用</string>
     <string name="desktop_back_to_home">返回桌面</string>
     <string name="desktop_hub_close">关闭</string>
+
+    <string name="games_hub_title">Games Hub</string>
+    <string name="games_hub_section">Interactive Experiences</string>
+    <string name="game_placeholder_status">状态：玩法占位 · 无 Pro 付费墙</string>
+    <string name="game_world_adventure_title">World Adventure</string>
+    <string name="game_world_adventure_description">Choose-your-own-adventure story.</string>
+    <string name="game_world_adventure_status">叙事冒险玩法尚未接通。本页为明确占位，可安全返回 Games Hub。</string>
+    <string name="game_dice_duel_rpg_title">Dice Duel RPG</string>
+    <string name="game_dice_duel_rpg_description">Narrative combat with AI.</string>
+    <string name="game_dice_duel_rpg_status">骰子对战玩法尚未接通。本页为明确占位，可安全返回 Games Hub。</string>
+    <string name="game_tactical_command_title">Tactical Command</string>
+    <string name="game_tactical_command_description">Narrative chess-like duel.</string>
+    <string name="game_tactical_command_status">战术对决玩法尚未接通。本页为明确占位，可安全返回 Games Hub。</string>
+    <string name="game_truth_or_dare_title">Truth or Dare</string>
+    <string name="game_truth_or_dare_description">Classic game with visual dares.</string>
+    <string name="game_truth_or_dare_status">真心话大冒险玩法尚未接通。本页为明确占位，可安全返回 Games Hub。</string>
+    <string name="game_two_truths_lie_title">Two Truths &amp; A Lie</string>
+    <string name="game_two_truths_lie_description">Spot the lie.</string>
+    <string name="game_two_truths_lie_status">两真一假玩法尚未接通。本页为明确占位，可安全返回 Games Hub。</string>
+    <string name="game_the_oracle_title">The Oracle</string>
+    <string name="game_the_oracle_description">Fortune reading and tarot.</string>
+    <string name="game_the_oracle_status">神谕占卜玩法尚未接通。本页为明确占位，可安全返回 Games Hub。</string>
 </resources>

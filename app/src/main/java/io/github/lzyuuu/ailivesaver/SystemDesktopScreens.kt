@@ -1,5 +1,7 @@
 package io.github.lzyuuu.ailivesaver
 
+import androidx.activity.ComponentActivity
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.Canvas
@@ -37,6 +39,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -45,7 +48,10 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -53,6 +59,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.view.WindowCompat
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -401,11 +408,13 @@ internal fun DesktopBackBar(onBack: () -> Unit, title: String) {
             .fillMaxWidth()
             .background(FancyNavy)
             .statusBarsPadding()
-            .testTag("desktop-back-bar")
             .padding(horizontal = 4.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        TextButton(onClick = onBack) {
+        TextButton(
+            onClick = onBack,
+            modifier = Modifier.testTag("desktop-back-bar"),
+        ) {
             Text(stringResource(R.string.desktop_back_to_home), color = FancyGold)
         }
         Text(
@@ -498,29 +507,179 @@ internal fun PhoneContactsScreen(
 internal fun GamesHubScreen(
     contentPadding: PaddingValues,
     onBack: () -> Unit,
+    onOpenGame: (GamesHubEntry) -> Unit,
 ) {
+    FancyDarkSystemBars()
+
+    val gamesBg = Color(0xFF0D141C)
+    val cardSurface = Color(0xFF35343A)
+    val titleColor = Color(0xFFF2F2F2)
+    val sectionColor = Color(0xFF9AA0A8)
+    val descColor = Color(0xFFA8ADB6)
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(gamesBg)
+            .padding(
+                top = contentPadding.calculateTopPadding(),
+                bottom = contentPadding.calculateBottomPadding(),
+            )
+            .testTag("games-hub"),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 2.dp, end = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            IconButton(onClick = onBack) {
+                Icon(
+                    Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = stringResource(R.string.desktop_back_to_home),
+                    tint = Color.White,
+                )
+            }
+            Text(
+                stringResource(R.string.games_hub_title),
+                color = titleColor,
+                fontFamily = FontFamily.Serif,
+                fontSize = 28.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = (-0.2).sp,
+            )
+        }
+        Text(
+            stringResource(R.string.games_hub_section),
+            color = sectionColor,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Normal,
+            letterSpacing = 0.15.sp,
+            modifier = Modifier.padding(start = 52.dp, end = 20.dp, top = 4.dp, bottom = 16.dp),
+        )
+        LazyColumn(
+            contentPadding = PaddingValues(start = 15.dp, end = 15.dp, bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(15.dp),
+            modifier = Modifier.fillMaxSize(),
+        ) {
+            items(GamesHubEntries, key = { it.id }) { game ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(83.dp)
+                        .clip(RoundedCornerShape(18.dp))
+                        .background(cardSurface)
+                        .clickable { onOpenGame(game) }
+                        .padding(horizontal = 15.dp)
+                        .testTag("games-entry-${game.id}"),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Image(
+                        painter = painterResource(game.iconRes),
+                        contentDescription = stringResource(game.titleRes),
+                        modifier = Modifier
+                            .size(53.dp)
+                            .clip(RoundedCornerShape(12.dp)),
+                        contentScale = ContentScale.Fit,
+                    )
+                    Spacer(modifier = Modifier.width(14.dp))
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(2.dp),
+                    ) {
+                        Text(
+                            stringResource(game.titleRes),
+                            color = titleColor,
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 16.sp,
+                            lineHeight = 20.sp,
+                        )
+                        Text(
+                            stringResource(game.descriptionRes),
+                            color = descColor,
+                            fontWeight = FontWeight.Normal,
+                            fontSize = 13.sp,
+                            lineHeight = 17.sp,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun FancyDarkSystemBars() {
+    val view = LocalView.current
+    val activity = view.context as? ComponentActivity
+    DisposableEffect(activity, view) {
+        if (activity == null) {
+            onDispose { }
+        } else {
+            val window = activity.window
+            val controller = WindowCompat.getInsetsController(window, view)
+            val prevLightStatus = controller.isAppearanceLightStatusBars
+            val prevLightNav = controller.isAppearanceLightNavigationBars
+            @Suppress("DEPRECATION")
+            val prevStatusColor = window.statusBarColor
+            @Suppress("DEPRECATION")
+            val prevNavColor = window.navigationBarColor
+            controller.isAppearanceLightStatusBars = false
+            controller.isAppearanceLightNavigationBars = false
+            @Suppress("DEPRECATION")
+            window.statusBarColor = android.graphics.Color.TRANSPARENT
+            @Suppress("DEPRECATION")
+            window.navigationBarColor = android.graphics.Color.BLACK
+            onDispose {
+                controller.isAppearanceLightStatusBars = prevLightStatus
+                controller.isAppearanceLightNavigationBars = prevLightNav
+                @Suppress("DEPRECATION")
+                window.statusBarColor = prevStatusColor
+                @Suppress("DEPRECATION")
+                window.navigationBarColor = prevNavColor
+            }
+        }
+    }
+}
+
+@Composable
+internal fun GamePlaceholderScreen(
+    entry: GamesHubEntry,
+    contentPadding: PaddingValues,
+    onBack: () -> Unit,
+) {
+    FancyDarkSystemBars()
     PlaceholderAppScreen(
-        title = "Games",
-        summary = "Games Hub 列表可进入；各游戏玩法本切片允许占位。",
+        title = stringResource(entry.titleRes),
+        summary = stringResource(entry.statusNoteRes),
         contentPadding = contentPadding,
         onBack = onBack,
     ) {
         Column(
-            modifier = Modifier.padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = Modifier
+                .padding(horizontal = 20.dp)
+                .testTag("game-placeholder-${entry.id}"),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            GamesHubEntries.forEach { game ->
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(FancyNavyMid)
-                        .padding(16.dp)
-                        .testTag("games-entry"),
-                ) {
-                    Text(game, color = FancyCream)
-                }
-            }
+            Image(
+                painter = painterResource(entry.iconRes),
+                contentDescription = stringResource(entry.titleRes),
+                modifier = Modifier
+                    .size(72.dp)
+                    .clip(RoundedCornerShape(18.dp)),
+                contentScale = ContentScale.Crop,
+            )
+            Text(
+                stringResource(entry.descriptionRes),
+                color = FancyCream.copy(alpha = 0.75f),
+                fontSize = 14.sp,
+            )
+            Text(
+                stringResource(R.string.game_placeholder_status),
+                color = FancyGold,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
+            )
         }
     }
 }

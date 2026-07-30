@@ -4,6 +4,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -74,27 +75,78 @@ class MainActivitySmokeTest {
 
     @Test
     fun opensGamesHubWithoutPaywall() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
         composeRule.onNodeWithTag("desktop-hub-entertainment").performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("hub-app-games").performClick()
         composeRule.waitForIdle()
-        composeRule.onNodeWithTag("desktop-back-bar").assertIsDisplayed()
-        composeRule.onNodeWithTag("placeholder-app").assertIsDisplayed()
-        composeRule.onNodeWithText("Games", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("games-hub").assertIsDisplayed()
+        composeRule.onNodeWithText("Games Hub", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithText("Interactive Experiences", useUnmergedTree = true).assertIsDisplayed()
         composeRule.onNodeWithText("World Adventure", useUnmergedTree = true).assertIsDisplayed()
-        assertTrue(
-            composeRule.onAllNodesWithText("Pro", useUnmergedTree = true)
-                .fetchSemanticsNodes()
-                .isEmpty() ||
-                composeRule.onAllNodesWithText("$14.99", useUnmergedTree = true)
-                    .fetchSemanticsNodes()
-                    .isEmpty(),
-        )
-        composeRule.onNodeWithText("返回桌面", useUnmergedTree = true).performClick()
+        composeRule.onNodeWithText("Choose-your-own-adventure story.", useUnmergedTree = true)
+            .assertIsDisplayed()
+        assertNoPaywall()
+        composeRule.onNodeWithTag("games-entry-world_adventure").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("game-placeholder-world_adventure").assertIsDisplayed()
+        composeRule.onNodeWithText("World Adventure", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithText(
+            context.getString(R.string.game_placeholder_status),
+            useUnmergedTree = true,
+        ).assertIsDisplayed()
+        composeRule.onNodeWithTag("desktop-back-bar", useUnmergedTree = true).performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("games-hub").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription(
+            context.getString(R.string.desktop_back_to_home),
+            useUnmergedTree = true,
+        ).performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("system-desktop").assertIsDisplayed()
         assertTrue(
             composeRule.onAllNodesWithTag("desktop-hub-sheet", useUnmergedTree = true)
+                .fetchSemanticsNodes()
+                .isEmpty(),
+        )
+    }
+
+    @Test
+    fun opensAllSixGamePlaceholdersWithoutPaywall() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        composeRule.onNodeWithTag("desktop-hub-entertainment").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("hub-app-games").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("games-hub").assertIsDisplayed()
+        assertNoPaywall()
+        GamesHubEntries.forEach { game ->
+            composeRule.onNodeWithTag("games-entry-${game.id}").performClick()
+            composeRule.waitForIdle()
+            composeRule.onNodeWithTag("game-placeholder-${game.id}").assertIsDisplayed()
+            composeRule.onNodeWithText(
+                context.getString(game.titleRes),
+                useUnmergedTree = true,
+            ).assertIsDisplayed()
+            composeRule.onNodeWithText(
+                context.getString(R.string.game_placeholder_status),
+                useUnmergedTree = true,
+            ).assertIsDisplayed()
+            assertNoPaywall()
+            composeRule.onNodeWithTag("desktop-back-bar", useUnmergedTree = true).performClick()
+            composeRule.waitForIdle()
+            composeRule.onNodeWithTag("games-hub").assertIsDisplayed()
+        }
+    }
+
+    private fun assertNoPaywall() {
+        assertTrue(
+            composeRule.onAllNodesWithText("Pro", useUnmergedTree = true)
+                .fetchSemanticsNodes()
+                .isEmpty(),
+        )
+        assertTrue(
+            composeRule.onAllNodesWithText("$14.99", useUnmergedTree = true)
                 .fetchSemanticsNodes()
                 .isEmpty(),
         )
