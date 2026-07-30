@@ -11,12 +11,12 @@
 ## 1. 当前交付
 
 - GitHub Release：[AI Livesaver 0.1.0-m110](https://github.com/Lzyuuu/ai-livesaver/releases/tag/v0.1.0-m110)
-- APK：[app-release-unsigned.apk](https://github.com/Lzyuuu/ai-livesaver/releases/download/v0.1.0-m110/app-release-unsigned.apk)
-- APK SHA-256：`33c1b38c261bb6d6cb9d2e5acf5bf03be03b6c5a96724f92a43425d9b1f92d07`
-- 签名证书：本机未提供发布 keystore；该 APK 仅用于构建验收，不能覆盖安装 m109。
+- APK：[app-release.apk](https://github.com/Lzyuuu/ai-livesaver/releases/download/v0.1.0-m110/app-release.apk)
+- APK SHA-256：`4e0f40010f16e0c8f845266c0ce7da78206782f1d59b48f7b4c8e961c0227d82`
+- 签名证书：与 m109 相同的 Android Debug 测试证书，可覆盖安装 m109；正式发布前必须替换为正式发布 keystore。
 - 规格与进度跟踪：[GitHub Issue #1](https://github.com/Lzyuuu/ai-livesaver/issues/1)
 
-`m110` 已完成模拟器验证、UI 交互验收和 GitHub 预发布，签名 Release 仍需使用项目原有 keystore 重新打包后再进行真机覆盖升级。
+`m110` 已完成模拟器验证、UI 交互验收和 GitHub 预发布，并已使用与 m109 相同的测试证书生成可安装 Release。
 
 ## 2. 产品定位与基础架构
 

@@ -25,6 +25,7 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -119,8 +120,29 @@ import java.util.Date
 import java.util.Locale
 
 internal const val APP_PREFERENCES = "app_settings"
+internal const val WELCOME_GUIDE_COMPLETED_KEY = "welcome_guide_completed"
+internal const val OPEN_DESKTOP_APP_EXTRA = "open_desktop_app"
+internal const val ROOT_APPEARANCE_KEY = "root_appearance_id"
 private const val THEME_MODE_KEY = "theme_mode"
 private const val DYNAMIC_COLOR_KEY = "dynamic_color"
+
+internal fun readWelcomeGuideCompleted(context: android.content.Context): Boolean =
+    context.getSharedPreferences(APP_PREFERENCES, android.content.Context.MODE_PRIVATE)
+        .getBoolean(WELCOME_GUIDE_COMPLETED_KEY, false)
+
+internal fun writeWelcomeGuideCompleted(context: android.content.Context, completed: Boolean) {
+    context.getSharedPreferences(APP_PREFERENCES, android.content.Context.MODE_PRIVATE)
+        .edit()
+        .putBoolean(WELCOME_GUIDE_COMPLETED_KEY, completed)
+        .apply()
+}
+
+internal fun writeRootAppearance(context: android.content.Context, appearanceId: String?) {
+    context.getSharedPreferences(APP_PREFERENCES, android.content.Context.MODE_PRIVATE)
+        .edit()
+        .putString(ROOT_APPEARANCE_KEY, appearanceId)
+        .apply()
+}
 
 private enum class ThemeMode {
     System,
@@ -176,6 +198,7 @@ internal fun systemAnimationsEnabled(context: android.content.Context): Boolean 
 
 class MainActivity : ComponentActivity() {
     private var notificationCharacterId by mutableStateOf<Long?>(null)
+    private var openDesktopAppRoute by mutableStateOf<String?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -183,6 +206,7 @@ class MainActivity : ComponentActivity() {
         notificationCharacterId = savedInstanceState?.getLong(OPEN_CHARACTER_ID_EXTRA, -1L)
             ?.takeIf { it > 0L }
             ?: intent.getLongExtra(OPEN_CHARACTER_ID_EXTRA, -1L).takeIf { it > 0L }
+        openDesktopAppRoute = intent.getStringExtra(OPEN_DESKTOP_APP_EXTRA)?.takeIf { it.isNotBlank() }
         enableEdgeToEdge()
         setContent {
             var themeModeName by rememberSaveable { mutableStateOf(readThemeMode(this).name) }
@@ -194,7 +218,9 @@ class MainActivity : ComponentActivity() {
                     themeMode = themeMode,
                     dynamicColor = dynamicColor,
                     notificationCharacterId = notificationCharacterId,
+                    openDesktopAppRoute = openDesktopAppRoute,
                     onNotificationOpened = { notificationCharacterId = null },
+                    onDesktopAppOpened = { openDesktopAppRoute = null },
                     onThemeModeChanged = { next ->
                         writeThemeMode(this, next)
                         themeModeName = next.name
@@ -213,6 +239,7 @@ class MainActivity : ComponentActivity() {
         setIntent(intent)
         notificationCharacterId = intent.getLongExtra(OPEN_CHARACTER_ID_EXTRA, -1L)
             .takeIf { it > 0L }
+        openDesktopAppRoute = intent.getStringExtra(OPEN_DESKTOP_APP_EXTRA)?.takeIf { it.isNotBlank() }
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
@@ -270,25 +297,27 @@ private fun AiLivesaverTheme(
     val scheme: ColorScheme = if (dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
         if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
     } else if (dark) {
+        // Fancy OS：深蓝 / 金色主皮肤（ADR-0061）
         darkColorScheme(
-            primary = Color(0xFFD7F94E),
-            onPrimary = Color(0xFF232A00),
-            primaryContainer = Color(0xFF2C3905),
-            onPrimaryContainer = Color(0xFFEEFFA6),
-            secondary = Color(0xFFAFC1FF),
-            secondaryContainer = Color(0xFF22262E),
-            onSecondaryContainer = Color(0xFFE2E5EC),
-            background = Color(0xFF000000),
-            surface = Color(0xFF0D0E10),
-            surfaceVariant = Color(0xFF1F2126),
-            onSurfaceVariant = Color(0xFFB4B7BE),
-            surfaceContainerLowest = Color(0xFF060708),
-            surfaceContainerLow = Color(0xFF111215),
-            surfaceContainer = Color(0xFF15161A),
-            surfaceContainerHigh = Color(0xFF1C1D22),
-            surfaceContainerHighest = Color(0xFF25262C),
-            outline = Color(0xFF7C7F87),
-            outlineVariant = Color(0xFF33353C),
+            primary = FancyGold,
+            onPrimary = FancyInk,
+            primaryContainer = Color(0xFF3A2F16),
+            onPrimaryContainer = FancyCream,
+            secondary = Color(0xFF9BB0D8),
+            secondaryContainer = FancyNavyMid,
+            onSecondaryContainer = FancyCream,
+            background = FancyInk,
+            surface = FancyNavy,
+            surfaceVariant = Color(0xFF1F2738),
+            onSurface = FancyCream,
+            onSurfaceVariant = FancyCream.copy(alpha = 0.72f),
+            surfaceContainerLowest = Color(0xFF05070D),
+            surfaceContainerLow = Color(0xFF0E1422),
+            surfaceContainer = FancyNavyMid,
+            surfaceContainerHigh = Color(0xFF1C2436),
+            surfaceContainerHighest = Color(0xFF252E42),
+            outline = FancyGoldDim,
+            outlineVariant = Color(0xFF333B4F),
         )
     } else {
         lightColorScheme(
@@ -323,7 +352,9 @@ private fun AiLivesaverApp(
     themeMode: ThemeMode,
     dynamicColor: Boolean,
     notificationCharacterId: Long?,
+    openDesktopAppRoute: String?,
     onNotificationOpened: () -> Unit,
+    onDesktopAppOpened: () -> Unit,
     onThemeModeChanged: (ThemeMode) -> Unit,
     onDynamicColorChanged: (Boolean) -> Unit,
 ) {
@@ -333,7 +364,9 @@ private fun AiLivesaverApp(
         onDispose { worldStore.close() }
     }
     var worldRevision by remember { mutableIntStateOf(0) }
-    var destinationName by rememberSaveable { mutableStateOf(Destination.World.name) }
+    var welcomeCompleted by rememberSaveable { mutableStateOf(readWelcomeGuideCompleted(context)) }
+    var desktopRouteKey by rememberSaveable { mutableStateOf("home") }
+    var activeHubRoute by rememberSaveable { mutableStateOf<String?>(null) }
     var showUpdates by rememberSaveable { mutableStateOf(false) }
     var showProviders by rememberSaveable { mutableStateOf(false) }
     var showWorldSettings by rememberSaveable { mutableStateOf(false) }
@@ -347,26 +380,14 @@ private fun AiLivesaverApp(
     var showCharacters by rememberSaveable { mutableStateOf(false) }
     var requestedChatCharacterId by rememberSaveable { mutableStateOf<Long?>(null) }
     var pendingSocialPostRoute by remember { mutableStateOf<PendingSocialPostRoute?>(null) }
-    val destination = Destination.valueOf(destinationName)
     val identity = remember(worldRevision) { worldStore.identity() }
     val primaryCharacter = remember(worldRevision) { worldStore.primaryCharacter() }
-    val primaryRelationship = remember(worldRevision, primaryCharacter?.id) {
-        primaryCharacter?.let { worldStore.relationship(it.id) }
-    }
     val characters = remember(worldRevision) { worldStore.characters(includeDeparted = false) }
-    val latestMoment = remember(worldRevision) { worldStore.posts("moment").firstOrNull() }
-    val latestForum = remember(worldRevision) { worldStore.posts("forum").firstOrNull() }
-    val latestForumReplyCount = remember(worldRevision, latestForum?.id) {
-        latestForum?.let { worldStore.comments(it.id).size } ?: 0
+    val hasChatProvider = remember(worldRevision) {
+        ProviderStore(context).loadTask(ProviderTask.Chat) != null
     }
-    val worldEvents = remember(worldRevision) { worldStore.worldEvents() }
-    val allWorldEvents = remember(worldRevision) { worldStore.worldEvents(limit = null) }
-    val chronicleEvents = remember(worldEvents) {
-        worldEvents.filterNot { it.needsResponse && !it.seen }
-    }
-    val responseEvents = remember(worldRevision) { worldStore.worldEvents(needsResponseOnly = true) }
-    val queueCount = remember(worldRevision) { worldStore.queueCount() }
-    val budgetExhausted = remember(worldRevision) { WorldEngine.budgetExhausted(context) }
+    val activeDesktopApp = DesktopApp.fromRoute(desktopRouteKey)
+    val activeHub = DesktopHub.fromRoute(activeHubRoute)
 
     fun resumeLocalDreamQueue() {
         LocalDreamQueue.resume(
@@ -375,20 +396,81 @@ private fun AiLivesaverApp(
         )
     }
 
+    fun goDesktopHome() {
+        desktopRouteKey = "home"
+        activeHubRoute = null
+    }
+
+    fun openDesktopApp(app: DesktopApp) {
+        when (app) {
+            DesktopApp.Characters -> {
+                activeHubRoute = null
+                showCharacters = true
+            }
+            DesktopApp.Settings -> {
+                activeHubRoute = null
+                desktopRouteKey = app.route
+            }
+            else -> {
+                activeHubRoute = null
+                desktopRouteKey = app.route
+            }
+        }
+    }
+
+    fun openMessenger(characterId: Long? = null) {
+        requestedChatCharacterId = characterId
+        openDesktopApp(DesktopApp.Messenger)
+    }
+
     LaunchedEffect(Unit) {
         resumeLocalDreamQueue()
+        if (!welcomeCompleted && worldStore.characters(includeDeparted = true).isNotEmpty()) {
+            DesktopSeed.ensureDesktopWorld(
+                store = worldStore,
+                userName = worldStore.userName(),
+                context = context,
+            )
+            writeWelcomeGuideCompleted(context, true)
+            welcomeCompleted = true
+            worldRevision++
+        } else if (welcomeCompleted) {
+            DesktopSeed.ensureDesktopWorld(
+                store = worldStore,
+                userName = worldStore.userName(),
+                context = context,
+            )
+            worldRevision++
+        }
     }
 
     LaunchedEffect(notificationCharacterId) {
-        if (notificationCharacterId != null) destinationName = Destination.Chats.name
+        if (notificationCharacterId != null && welcomeCompleted) {
+            openMessenger(notificationCharacterId)
+        }
+    }
+
+    LaunchedEffect(openDesktopAppRoute, welcomeCompleted) {
+        val route = openDesktopAppRoute ?: return@LaunchedEffect
+        if (!welcomeCompleted) return@LaunchedEffect
+        val app = DesktopApp.entries.firstOrNull { it.route == route }
+        if (app != null) {
+            openDesktopApp(app)
+            onDesktopAppOpened()
+        }
     }
 
     fun openWorldEvent(event: WorldEvent) {
         worldStore.markWorldEventSeen(event.id)
-        val target = routeWorldEvent(event.kind, destinationName)
+        val target = routeWorldEvent(event.kind, Destination.Chats.name)
         pendingSocialPostRoute = event.sourcePostId?.let { PendingSocialPostRoute(target, it) }
         worldRevision++
-        destinationName = target
+        when (target) {
+            Destination.Chats.name -> openDesktopApp(DesktopApp.Messenger)
+            Destination.Moments.name -> openDesktopApp(DesktopApp.Ustagram)
+            Destination.Commons.name -> openDesktopApp(DesktopApp.Rebbit)
+            else -> goDesktopHome()
+        }
     }
 
     val activity = context as? ComponentActivity
@@ -407,54 +489,61 @@ private fun AiLivesaverApp(
         }
     }
 
-    BackHandler(
-        enabled = showUpdates || showProviders || showWorldSettings || showWorldKnowledge ||
-            showWorldChronicle || showLocalDream ||
-            showDiagnostics || showPrivacy || showBackups || showIdentity || showCharacters,
-    ) {
-        if (showProviders) worldRevision++
-        showUpdates = false
-        showProviders = false
-        showWorldSettings = false
-        showWorldKnowledge = false
-        showWorldChronicle = false
-        showLocalDream = false
-        showDiagnostics = false
-        showPrivacy = false
-        showBackups = false
-        showIdentity = false
-        showCharacters = false
+    if (!welcomeCompleted) {
+        WelcomeGuideHost { finished ->
+            writeRootAppearance(context, finished.appearanceId)
+            DesktopSeed.ensureDesktopWorld(
+                store = worldStore,
+                userName = finished.userName,
+                about = finished.about,
+                context = context,
+                rootAppearanceId = finished.appearanceId,
+            )
+            writeWelcomeGuideCompleted(context, true)
+            welcomeCompleted = true
+            worldRevision++
+        }
+        return
+    }
+
+    val settingsOpen = showUpdates || showProviders || showWorldSettings || showWorldKnowledge ||
+        showWorldChronicle || showLocalDream ||
+        showDiagnostics || showPrivacy || showBackups || showIdentity || showCharacters
+
+    BackHandler(enabled = settingsOpen || activeDesktopApp != null || activeHub != null) {
+        when {
+            settingsOpen -> {
+                if (showProviders) worldRevision++
+                showUpdates = false
+                showProviders = false
+                showWorldSettings = false
+                showWorldKnowledge = false
+                showWorldChronicle = false
+                showLocalDream = false
+                showDiagnostics = false
+                showPrivacy = false
+                showBackups = false
+                showIdentity = false
+                showCharacters = false
+            }
+            activeDesktopApp != null -> {
+                val route = DesktopNavigator.backFrom(DesktopRoute.App(activeDesktopApp))
+                when (route) {
+                    DesktopRoute.Home -> goDesktopHome()
+                    is DesktopRoute.Hub -> {
+                        desktopRouteKey = "home"
+                        activeHubRoute = route.hub.route
+                    }
+                    is DesktopRoute.App -> desktopRouteKey = route.app.route
+                }
+            }
+            activeHub != null -> activeHubRoute = null
+        }
     }
 
     Scaffold(
-        bottomBar = {
-            if (
-                !showUpdates && !showProviders && !showWorldSettings && !showWorldKnowledge &&
-                !showWorldChronicle && !showLocalDream && !showDiagnostics && !showPrivacy && !showBackups &&
-                    !showIdentity && !showCharacters
-            ) {
-                NavigationBar(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainer,
-                    tonalElevation = 3.dp,
-                ) {
-                    Destination.entries.forEach { item ->
-                        NavigationBarItem(
-                            selected = item == destination,
-                            onClick = { destinationName = item.name },
-                            icon = {
-                                Icon(item.icon, contentDescription = null)
-                            },
-                            label = { Text(stringResource(item.labelRes)) },
-                            colors = NavigationBarItemDefaults.colors(
-                                selectedIconColor = MaterialTheme.colorScheme.primary,
-                                selectedTextColor = MaterialTheme.colorScheme.primary,
-                                indicatorColor = Color.Transparent,
-                            ),
-                        )
-                    }
-                }
-            }
-        },
+        containerColor = FancyInk,
+        bottomBar = {},
     ) { padding ->
         if (showUpdates) {
             UpdateScreen(
@@ -490,14 +579,14 @@ private fun AiLivesaverApp(
         } else if (showWorldChronicle) {
             WorldChronicleScreen(
                 contentPadding = padding,
-                events = allWorldEvents,
+                events = worldStore.worldEvents(limit = null),
                 onBack = { showWorldChronicle = false },
                 onMarkSeen = { event ->
                     worldStore.markWorldEventSeen(event.id)
                     worldRevision++
                 },
                 onMarkAllSeen = {
-                    allWorldEvents.filter { !it.seen }
+                    worldStore.worldEvents(limit = null).filter { !it.seen }
                         .forEach { worldStore.markWorldEventSeen(it.id) }
                     worldRevision++
                 },
@@ -552,108 +641,220 @@ private fun AiLivesaverApp(
                 onChanged = { worldRevision++ },
             )
         } else {
-            when (destination) {
-                Destination.World -> WorldScreen(
+            when (activeDesktopApp) {
+                DesktopApp.Messenger -> Column(Modifier.fillMaxSize()) {
+                    DesktopBackBar(onBack = { goDesktopHome() }, title = "Messenger")
+                    ChatsScreen(
+                        contentPadding = PaddingValues(bottom = padding.calculateBottomPadding()),
+                        store = worldStore,
+                        revision = worldRevision,
+                        initialCharacterId = requestedChatCharacterId ?: notificationCharacterId,
+                        onInitialCharacterConsumed = {
+                            requestedChatCharacterId = null
+                            onNotificationOpened()
+                        },
+                        onChanged = { worldRevision++ },
+                        onConfigureProvider = { showProviders = true },
+                        onManageCharacters = { showCharacters = true },
+                    )
+                }
+                DesktopApp.Ustagram -> Column(Modifier.fillMaxSize()) {
+                    DesktopBackBar(onBack = {
+                        desktopRouteKey = "home"
+                        activeHubRoute = DesktopHub.Social.route
+                    }, title = "Ustagram")
+                    SocialScreen(
+                        kind = "moment",
+                        contentPadding = PaddingValues(bottom = padding.calculateBottomPadding()),
+                        store = worldStore,
+                        revision = worldRevision,
+                        openPostId = pendingSocialPostRoute
+                            ?.takeIf { it.destination == Destination.Moments.name }
+                            ?.postId,
+                        onOpenPostConsumed = { pendingSocialPostRoute = null },
+                        onChanged = { worldRevision++ },
+                        onResumeQueuedResponses = {
+                            WorldEngine.resumeSocialResponses(context) { worldRevision++ }
+                        },
+                        onStartWorld = { openMessenger() },
+                    )
+                }
+                DesktopApp.Rebbit -> Column(Modifier.fillMaxSize()) {
+                    DesktopBackBar(onBack = {
+                        desktopRouteKey = "home"
+                        activeHubRoute = DesktopHub.Social.route
+                    }, title = "Rebbit")
+                    SocialScreen(
+                        kind = "forum",
+                        contentPadding = PaddingValues(bottom = padding.calculateBottomPadding()),
+                        store = worldStore,
+                        revision = worldRevision,
+                        openPostId = pendingSocialPostRoute
+                            ?.takeIf { it.destination == Destination.Commons.name }
+                            ?.postId,
+                        onOpenPostConsumed = { pendingSocialPostRoute = null },
+                        onChanged = { worldRevision++ },
+                        onResumeQueuedResponses = {
+                            WorldEngine.resumeSocialResponses(context) { worldRevision++ }
+                        },
+                        onStartWorld = { openMessenger() },
+                    )
+                }
+                DesktopApp.Y -> PlaceholderAppScreen(
+                    title = "Y",
+                    summary = "短帖流入口已开放。完整发帖与嵌套回复将在后续切片接通。",
                     contentPadding = padding,
-                    character = primaryCharacter,
-                    identity = identity,
-                    relationship = primaryRelationship,
+                    onBack = {
+                        desktopRouteKey = "home"
+                        activeHubRoute = DesktopHub.Social.route
+                    },
+                )
+                DesktopApp.Phone -> PhoneContactsScreen(
                     characters = characters,
-                    latestMoment = latestMoment,
-                    latestForum = latestForum,
-                    latestForumReplyCount = latestForumReplyCount,
-                    chronicleEvents = chronicleEvents,
-                    responseEvents = responseEvents,
-                    queueCount = queueCount,
-                    budgetExhausted = budgetExhausted,
-                    onOpenChat = {
-                        responseEvents.forEach { worldStore.markWorldEventSeen(it.id) }
-                        worldRevision++
-                        destinationName = Destination.Chats.name
-                    },
-                    onOpenMoments = { destinationName = Destination.Moments.name },
-                    onOpenCommons = { destinationName = Destination.Commons.name },
-                    onOpenQueue = { showLocalDream = true },
-                    onManageCircle = { showCharacters = true },
-                    onOpenCharacter = { characterId ->
-                        requestedChatCharacterId = characterId
-                        destinationName = Destination.Chats.name
-                    },
-                    onOpenChronicle = { showWorldChronicle = true },
-                    onMarkAllEventsSeen = {
-                        unreadWorldEventIds(allWorldEvents)
-                            .forEach(worldStore::markWorldEventSeen)
-                        worldRevision++
-                    },
-                onOpenEvent = ::openWorldEvent,
-                )
-                Destination.Chats -> ChatsScreen(
                     contentPadding = padding,
-                    store = worldStore,
-                    revision = worldRevision,
-                    initialCharacterId = requestedChatCharacterId ?: notificationCharacterId,
-                    onInitialCharacterConsumed = {
-                        requestedChatCharacterId = null
-                        onNotificationOpened()
+                    onBack = {
+                        desktopRouteKey = "home"
+                        activeHubRoute = DesktopHub.Social.route
                     },
-                    onChanged = { worldRevision++ },
-                    onConfigureProvider = { showProviders = true },
-                    onManageCharacters = { showCharacters = true },
+                    onCall = { characterId -> openMessenger(characterId) },
                 )
-                Destination.Moments -> SocialScreen(
-                    kind = "moment",
+                DesktopApp.Games -> GamesHubScreen(
                     contentPadding = padding,
-                    store = worldStore,
-                    revision = worldRevision,
-                    openPostId = pendingSocialPostRoute
-                        ?.takeIf { it.destination == Destination.Moments.name }
-                        ?.postId,
-                    onOpenPostConsumed = { pendingSocialPostRoute = null },
-                    onChanged = { worldRevision++ },
-                    onResumeQueuedResponses = {
-                        WorldEngine.resumeSocialResponses(context) { worldRevision++ }
+                    onBack = {
+                        desktopRouteKey = "home"
+                        activeHubRoute = DesktopHub.Entertainment.route
                     },
-                    onStartWorld = { destinationName = Destination.Chats.name },
                 )
-                Destination.Commons -> SocialScreen(
-                    kind = "forum",
-                    contentPadding = padding,
-                    store = worldStore,
-                    revision = worldRevision,
-                    openPostId = pendingSocialPostRoute
-                        ?.takeIf { it.destination == Destination.Commons.name }
-                        ?.postId,
-                    onOpenPostConsumed = { pendingSocialPostRoute = null },
-                    onChanged = { worldRevision++ },
-                    onResumeQueuedResponses = {
-                        WorldEngine.resumeSocialResponses(context) { worldRevision++ }
+                DesktopApp.Imaging -> ImagingStudioScreen(
+                    contentPadding = PaddingValues(),
+                    onBack = {
+                        if (DesktopApp.Imaging in DesktopDockApps) goDesktopHome()
+                        else {
+                            desktopRouteKey = "home"
+                            activeHubRoute = DesktopHub.CreativeSuite.route
+                        }
                     },
-                    onStartWorld = { destinationName = Destination.Chats.name },
                 )
-                Destination.Me -> MeScreen(
+                DesktopApp.Gallery, DesktopApp.AuraSwap -> PlaceholderAppScreen(
+                    title = activeDesktopApp.label,
+                    summary = "Creative Suite 入口已开放，本切片允许占位；Imaging Studio 已接通出图。",
                     contentPadding = padding,
-                    identity = identity,
-                    store = worldStore,
-                    revision = worldRevision,
-                    themeMode = themeMode,
-                    dynamicColor = dynamicColor,
-                    onThemeModeChanged = onThemeModeChanged,
-                    onDynamicColorChanged = onDynamicColorChanged,
-                    onOpenIdentity = { showIdentity = true },
-                    onOpenCharacters = { showCharacters = true },
-                    onOpenUpdates = { showUpdates = true },
-                    onOpenProviders = { showProviders = true },
-                    onOpenWorldSettings = { showWorldSettings = true },
-                    onOpenWorldKnowledge = { showWorldKnowledge = true },
-                    onOpenLocalDream = { showLocalDream = true },
-                    onOpenDiagnostics = { showDiagnostics = true },
-                    onOpenPrivacy = { showPrivacy = true },
-                    onOpenBackups = { showBackups = true },
-                    onOpenMoments = { destinationName = Destination.Moments.name },
-                    onOpenCommons = { destinationName = Destination.Commons.name },
+                    onBack = {
+                        if (activeDesktopApp in DesktopDockApps) goDesktopHome()
+                        else {
+                            desktopRouteKey = "home"
+                            activeHubRoute = DesktopHub.CreativeSuite.route
+                        }
+                    },
+                ) {
+                    TextButton(onClick = { openDesktopApp(DesktopApp.Imaging) }) {
+                        Text("打开 Imaging Studio", color = FancyGold)
+                    }
+                }
+                DesktopApp.Storage -> PlaceholderAppScreen(
+                    title = "Storage",
+                    summary = "应用沙盒存储概览占位。备份与诊断仍可从 Settings 使用。",
+                    contentPadding = padding,
+                    onBack = {
+                        desktopRouteKey = "home"
+                        activeHubRoute = DesktopHub.SystemCore.route
+                    },
                 )
+                DesktopApp.Binder -> PlaceholderAppScreen(
+                    title = "Binder",
+                    summary = "角色匹配入口已开放。完整 Build my first match 将在后续切片接通。",
+                    contentPadding = padding,
+                    onBack = {
+                        desktopRouteKey = "home"
+                        activeHubRoute = DesktopHub.Social.route
+                    },
+                )
+                DesktopApp.Settings -> Column(Modifier.fillMaxSize()) {
+                    DesktopBackBar(onBack = { goDesktopHome() }, title = "Settings")
+                    MeScreen(
+                        contentPadding = PaddingValues(bottom = padding.calculateBottomPadding()),
+                        identity = identity,
+                        store = worldStore,
+                        revision = worldRevision,
+                        themeMode = themeMode,
+                        dynamicColor = dynamicColor,
+                        onThemeModeChanged = onThemeModeChanged,
+                        onDynamicColorChanged = onDynamicColorChanged,
+                        onOpenIdentity = { showIdentity = true },
+                        onOpenCharacters = { showCharacters = true },
+                        onOpenUpdates = { showUpdates = true },
+                        onOpenProviders = { showProviders = true },
+                        onOpenWorldSettings = { showWorldSettings = true },
+                        onOpenWorldKnowledge = { showWorldKnowledge = true },
+                        onOpenLocalDream = { showLocalDream = true },
+                        onOpenDiagnostics = { showDiagnostics = true },
+                        onOpenPrivacy = { showPrivacy = true },
+                        onOpenBackups = { showBackups = true },
+                        onOpenMoments = { openDesktopApp(DesktopApp.Ustagram) },
+                        onOpenCommons = { openDesktopApp(DesktopApp.Rebbit) },
+                    )
+                }
+                DesktopApp.Characters -> Unit
+                null -> Box(modifier = Modifier.fillMaxSize()) {
+                    SystemDesktopScreen(
+                        contentPadding = padding,
+                        rootAppearance = RootAppearance.fromId(
+                            context.getSharedPreferences(
+                                APP_PREFERENCES,
+                                android.content.Context.MODE_PRIVATE,
+                            ).getString(ROOT_APPEARANCE_KEY, null),
+                        ) ?: RootAppearance.AnimeBlonde,
+                        rootStatus = if (hasChatProvider) {
+                            "管着这里 · 来找我聊聊"
+                        } else {
+                            "我还缺一个大脑。戏剧化，是的。但也很有必要。"
+                        },
+                        rootActionLabel = if (hasChatProvider) {
+                            "打开 Messenger"
+                        } else {
+                            "去把大脑接上"
+                        },
+                        onOpenRoot = {
+                            if (hasChatProvider) {
+                                openMessenger(primaryCharacter?.id)
+                            } else {
+                                showProviders = true
+                            }
+                        },
+                        onOpenHub = { hub -> activeHubRoute = hub.route },
+                        onOpenApp = { app -> openDesktopApp(app) },
+                    )
+                    if (activeHub != null) {
+                        DesktopHubSheet(
+                            hub = activeHub,
+                            onOpenApp = { app -> openDesktopApp(app) },
+                            onDismiss = { activeHubRoute = null },
+                        )
+                    }
+                }
             }
         }
+    }
+}
+
+@Composable
+private fun DesktopBackBar(onBack: () -> Unit, title: String) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(FancyNavy)
+            .padding(horizontal = 4.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        TextButton(onClick = onBack) {
+            Text("返回桌面", color = FancyGold)
+        }
+        Text(
+            title,
+            color = FancyCream,
+            fontFamily = FontFamily.Serif,
+            fontWeight = FontWeight.Bold,
+        )
     }
 }
 

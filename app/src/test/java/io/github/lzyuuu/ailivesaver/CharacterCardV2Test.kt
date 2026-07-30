@@ -43,6 +43,45 @@ class CharacterCardV2Test {
     }
 
     @Test
+    fun parsesXmlCharacterCards() {
+        val xml = """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <character>
+              <name>Lina</name>
+              <description>A quiet librarian</description>
+              <personality>Warm</personality>
+              <scenario>Rainy bookstore</scenario>
+              <first_mes>Welcome in</first_mes>
+              <relationship>mentor</relationship>
+              <handle>lina</handle>
+            </character>
+        """.trimIndent()
+        val parsed = CharacterCardV2.parse(xml.toByteArray())
+        assertEquals("Lina", parsed.name)
+        assertEquals("A quiet librarian\n\nWarm\n\nRainy bookstore", parsed.persona)
+        assertEquals("Welcome in", parsed.firstMessage)
+        assertEquals("mentor", parsed.relationship)
+        assertEquals("lina", parsed.handle)
+        assertTrue(parsed.rawJson.contains("chara_card_v2"))
+    }
+
+    @Test
+    fun parsesLegacyJsonCards() {
+        val legacy = """
+            {
+              "char_name":"Kai",
+              "char_persona":"A courier",
+              "world_scenario":"Night docks",
+              "char_greeting":"Package for you"
+            }
+        """.trimIndent()
+        val parsed = CharacterCardV2.parse(legacy.toByteArray())
+        assertEquals("Kai", parsed.name)
+        assertEquals("A courier\n\nNight docks", parsed.persona)
+        assertEquals("Package for you", parsed.firstMessage)
+    }
+
+    @Test
     fun preservesUnknownExtensionsOnExport() {
         val exported = CharacterCardV2.export(
             ResidentCharacter(

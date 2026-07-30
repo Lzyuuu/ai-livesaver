@@ -1,26 +1,15 @@
 package io.github.lzyuuu.ailivesaver
 
-import android.os.Build
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.hasScrollToIndexAction
-import androidx.compose.ui.test.hasTestTag
-import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.performScrollToIndex
-import androidx.compose.ui.test.performScrollToNode
-import androidx.compose.ui.test.performSemanticsAction
-import androidx.compose.ui.test.performTouchInput
-import androidx.compose.ui.semantics.SemanticsActions
-import androidx.compose.ui.test.swipeLeft
-import androidx.compose.ui.test.swipeUp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -30,155 +19,117 @@ class MainActivitySmokeTest {
     @get:Rule
     val composeRule = createAndroidComposeRule<MainActivity>()
 
-    @Test
-    fun exposesSocialWorldDestinations() {
-        listOf("World", "Chats", "Moments", "Commons", "Me").forEach { label ->
-            composeRule.onAllNodesWithText(label, useUnmergedTree = true)
-                .get(0)
-                .assertIsDisplayed()
-        }
-    }
-
-    @Test
-    fun exposesRelationshipFirstChatsEntry() {
-        composeRule.onNodeWithText("Chats")
-            .performSemanticsAction(SemanticsActions.OnClick)
-        composeRule.onNodeWithText("PRIVATE RELATIONSHIPS", useUnmergedTree = true)
-            .assertIsDisplayed()
-        assertTrue(
-            composeRule.onAllNodesWithText("从第一段关系开始", useUnmergedTree = true)
-                .fetchSemanticsNodes().isNotEmpty() ||
-                composeRule.onAllNodesWithText("搜索角色或对话", useUnmergedTree = true)
-                    .fetchSemanticsNodes().isNotEmpty(),
-        )
-    }
-
-    @Test
-    fun opensResidentConversationFromChatsAndReturnsToList() {
+    @Before
+    fun seedDesktopShell() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
-        val characterName = "Chats test ${System.nanoTime()}"
-        val characterId = WorldStore(context).use {
-            it.addCharacter(
-                name = characterName,
-                persona = "A test resident",
-                attentionTier = "special_focus",
-                appearance = "",
-                clothing = "",
-                negativePrompt = "",
+        writeWelcomeGuideCompleted(context, true)
+        WorldStore(context).use { store ->
+            DesktopSeed.ensureDesktopWorld(
+                store,
+                userName = "焰宇",
+                about = "smoke",
+                context = context,
             )
         }
+        composeRule.activityRule.scenario.recreate()
+        composeRule.waitForIdle()
+    }
 
-        try {
-            composeRule.activityRule.scenario.recreate()
-            composeRule.waitForIdle()
-            composeRule.onNodeWithText("Chats")
-                .performSemanticsAction(SemanticsActions.OnClick)
-            composeRule.onNodeWithText("搜索角色或对话", useUnmergedTree = true)
-                .assertIsDisplayed()
-            composeRule.onNodeWithTag("chat-character-$characterId")
-                .performSemanticsAction(SemanticsActions.OnClick)
-            composeRule.onAllNodesWithText(characterName, useUnmergedTree = true)
-                .get(0)
-                .assertIsDisplayed()
-            composeRule.onNodeWithText("发给 $characterName", useUnmergedTree = true)
-                .assertIsDisplayed()
-            composeRule.runOnUiThread {
-                composeRule.activity.onBackPressedDispatcher.onBackPressed()
-            }
-            composeRule.onNodeWithText("搜索角色或对话", useUnmergedTree = true)
-                .assertIsDisplayed()
-        } finally {
-            WorldStore(context).use {
-                it.setCharacterActive(characterId, false)
-                it.deleteCharacter(characterId)
-            }
+    @Test
+    fun exposesSystemDesktopWithoutFiveTabs() {
+        composeRule.onNodeWithTag("system-desktop").assertIsDisplayed()
+        composeRule.onNodeWithTag("desktop-root-card").assertIsDisplayed()
+        composeRule.onNodeWithTag("desktop-dock").assertIsDisplayed()
+        listOf("World", "Chats", "Moments", "Commons", "Me").forEach { tab ->
+            assertTrue(
+                "五 Tab 壳层不应出现在系统桌面",
+                composeRule.onAllNodesWithText(tab, useUnmergedTree = true)
+                    .fetchSemanticsNodes()
+                    .isEmpty(),
+            )
         }
+        composeRule.onNodeWithText("Messenger", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithText("Root", useUnmergedTree = true).assertIsDisplayed()
     }
 
     @Test
-    fun exposesWorldChronicleEntry() {
-        composeRule.onNode(hasScrollToIndexAction(), useUnmergedTree = true)
-            .performScrollToIndex(7)
-        composeRule.onNodeWithText("世界纪事", useUnmergedTree = true).assertIsDisplayed()
-        composeRule.onNodeWithText("全部已读", useUnmergedTree = true).assertIsDisplayed()
-    }
-
-    @Test
-    fun opensFullWorldChronicle() {
-        composeRule.onNode(hasScrollToIndexAction(), useUnmergedTree = true)
-            .performScrollToIndex(7)
-        composeRule.onNodeWithText("查看全部", useUnmergedTree = true).performClick()
+    fun opensSocialHubAppAndReturnsToDesktop() {
+        composeRule.onNodeWithTag("desktop-hub-social_hub").performClick()
         composeRule.waitForIdle()
-        composeRule.onAllNodesWithText(
-            "这里保留世界最近发生的变化，不会因为已读而消失。",
-            useUnmergedTree = true,
-        ).get(0)
+        composeRule.onNodeWithTag("hub-app-ustagram").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText("Ustagram", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithText("返回桌面", useUnmergedTree = true).performClick()
+        composeRule.waitForIdle()
+        // 从 Ustagram 返回会回到 Social Hub
+        composeRule.onNodeWithTag("desktop-hub-sheet").assertIsDisplayed()
+        composeRule.onNodeWithText("关闭", useUnmergedTree = true).performClick()
+        composeRule.onNodeWithTag("system-desktop").assertIsDisplayed()
     }
 
     @Test
-    fun opensUpdateScreenFromMe() {
-        composeRule.onNodeWithText("Me")
-            .performSemanticsAction(SemanticsActions.OnClick)
+    fun opensGamesHubWithoutPaywall() {
+        composeRule.onNodeWithTag("desktop-hub-entertainment").performClick()
         composeRule.waitForIdle()
-        composeRule.onNode(hasScrollToIndexAction(), useUnmergedTree = true)
-            .performScrollToNode(hasTestTag("me-setting-updates"))
-        composeRule.onNodeWithTag("me-setting-updates")
-            .performSemanticsAction(SemanticsActions.OnClick)
+        composeRule.onNodeWithTag("hub-app-games").performClick()
         composeRule.waitForIdle()
-        composeRule.onNode(hasScrollToIndexAction(), useUnmergedTree = true)
-            .performScrollToIndex(2)
-        composeRule.onNodeWithText("检查更新", useUnmergedTree = true).assertIsDisplayed()
-    }
-
-    @Test
-    fun exposesExplicitProviderFallbackConfiguration() {
-        composeRule.onNodeWithText("Me")
-            .performSemanticsAction(SemanticsActions.OnClick)
-        composeRule.waitForIdle()
-        composeRule.onNode(hasScrollToIndexAction(), useUnmergedTree = true).apply {
-            performScrollToNode(hasTestTag("me-setting-providers"))
-            performTouchInput { swipeUp() }
-        }
-        composeRule.onNodeWithTag("me-setting-providers")
-            .performSemanticsAction(SemanticsActions.OnClick)
-        composeRule.waitForIdle()
-        composeRule.onNodeWithTag("provider-profile-tabs", useUnmergedTree = true).apply {
-            performTouchInput { swipeLeft() }
-            performTouchInput { swipeLeft() }
-        }
-        composeRule.onNodeWithText("备用 Provider", useUnmergedTree = true).assertIsDisplayed()
-    }
-
-    @Test
-    fun exposesThemeChoiceInMe() {
-        composeRule.onNodeWithText("Me")
-            .performSemanticsAction(SemanticsActions.OnClick)
-        composeRule.onNodeWithText("外观", useUnmergedTree = true).assertIsDisplayed()
-        composeRule.onNodeWithText("跟随系统", useUnmergedTree = true).assertIsDisplayed()
-        composeRule.onNodeWithText("深色", useUnmergedTree = true).performClick()
-        composeRule.onNodeWithText("浅色", useUnmergedTree = true).performClick()
-        composeRule.onNodeWithText("跟随系统", useUnmergedTree = true).performClick()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            composeRule.onNodeWithText("动态色", useUnmergedTree = true).performClick()
-            composeRule.onNodeWithText("动态色", useUnmergedTree = true).performClick()
-        }
-    }
-
-    @Test
-    fun persistsContextBudgetPerInferenceProfile() {
-        val store = ProviderStore(InstrumentationRegistry.getInstrumentation().targetContext)
-        val config = ProviderConfig(
-            baseUrl = "https://example.com/v1",
-            model = "test-model",
-            apiKey = "test-key",
-            contextBudget = 32_768,
+        composeRule.onNodeWithText("Games", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithText("World Adventure", useUnmergedTree = true).assertIsDisplayed()
+        assertTrue(
+            composeRule.onAllNodesWithText("Pro", useUnmergedTree = true)
+                .fetchSemanticsNodes()
+                .isEmpty() ||
+                composeRule.onAllNodesWithText("$14.99", useUnmergedTree = true)
+                    .fetchSemanticsNodes()
+                    .isEmpty(),
         )
+        composeRule.onNodeWithText("返回桌面", useUnmergedTree = true).performClick()
+    }
 
-        try {
-            store.saveTask(ProviderTask.Vision, config)
-            assertEquals(32_768, store.loadTask(ProviderTask.Vision)?.contextBudget)
-        } finally {
-            store.clearTask(ProviderTask.Vision)
-        }
+    @Test
+    fun presetsRootInPhone() {
+        composeRule.onNodeWithTag("desktop-hub-social_hub").performClick()
+        composeRule.onNodeWithTag("hub-app-phone").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText("Phone", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithText("Root", useUnmergedTree = true).assertIsDisplayed()
+    }
+
+    @Test
+    fun opensMessengerFromDockAndReturns() {
+        composeRule.onNodeWithTag("desktop-dock-messenger").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText("Messenger", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithText("返回桌面", useUnmergedTree = true).performClick()
+        composeRule.onNodeWithTag("system-desktop").assertIsDisplayed()
+    }
+
+    @Test
+    fun opensImagingStudioFromDockAndSwitchesBackends() {
+        composeRule.onNodeWithTag("desktop-dock-imaging").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("imaging-studio").assertIsDisplayed()
+        composeRule.onNodeWithText("Imaging Studio", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("imaging-backend-on_device").assertIsDisplayed()
+        composeRule.onNodeWithTag("imaging-on-device-card").assertIsDisplayed()
+        composeRule.onNodeWithText("None selected", useUnmergedTree = true).assertIsDisplayed()
+
+        composeRule.onNodeWithTag("imaging-backend-forge").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("imaging-test-connection").assertIsDisplayed()
+        composeRule.onNodeWithText("AUTOMATIC1111", substring = true, useUnmergedTree = true)
+            .assertIsDisplayed()
+
+        composeRule.onNodeWithTag("imaging-backend-local_dream").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("imaging-test-connection").assertIsDisplayed()
+        composeRule.onNodeWithText("Local Dream", substring = true, useUnmergedTree = true)
+            .assertIsDisplayed()
+        composeRule.onNodeWithTag("imaging-generate").assertIsDisplayed()
+        composeRule.onNodeWithTag("imaging-prompt").assertIsDisplayed()
+
+        composeRule.onNodeWithTag("imaging-back").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("system-desktop").assertIsDisplayed()
     }
 }

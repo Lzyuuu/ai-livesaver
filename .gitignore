@@ -7,3 +7,5 @@ local.properties
 keystore.properties
 *.jks
 *.keystore
+.env
+v4.47-github-release.apk

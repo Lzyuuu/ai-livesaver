@@ -24,13 +24,17 @@ android {
     buildTypes {
         release {
             isMinifyEnabled = false
-            providers.environmentVariable("AI_LIVESAVER_KEYSTORE_PATH").orNull?.let { path ->
-                signingConfig = signingConfigs.create("testing") {
-                    storeFile = file(path)
+            val keystorePath = providers.environmentVariable("AI_LIVESAVER_KEYSTORE_PATH").orNull
+            signingConfig = if (keystorePath != null) {
+                signingConfigs.create("testing") {
+                    storeFile = file(keystorePath)
                     storePassword = providers.environmentVariable("AI_LIVESAVER_STORE_PASSWORD").get()
                     keyAlias = providers.environmentVariable("AI_LIVESAVER_KEY_ALIAS").get()
                     keyPassword = providers.environmentVariable("AI_LIVESAVER_KEY_PASSWORD").get()
                 }
+            } else {
+                // 测试版默认复用 debug 证书，避免 assembleRelease 生成无法安装的 unsigned APK。
+                signingConfigs.getByName("debug")
             }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
