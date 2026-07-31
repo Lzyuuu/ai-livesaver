@@ -50,6 +50,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Home
@@ -380,6 +381,8 @@ private fun AiLivesaverApp(
     var showBackups by rememberSaveable { mutableStateOf(false) }
     var showIdentity by rememberSaveable { mutableStateOf(false) }
     var showCharacters by rememberSaveable { mutableStateOf(false) }
+    var showVoiceCalls by rememberSaveable { mutableStateOf(false) }
+    var showStorage by rememberSaveable { mutableStateOf(false) }
     var requestedChatCharacterId by rememberSaveable { mutableStateOf<Long?>(null) }
     var pendingSocialPostRoute by remember { mutableStateOf<PendingSocialPostRoute?>(null) }
     val identity = remember(worldRevision) { worldStore.identity() }
@@ -521,7 +524,8 @@ private fun AiLivesaverApp(
 
     val settingsOpen = showUpdates || showProviders || showWorldSettings || showWorldKnowledge ||
         showWorldChronicle || showLocalDream ||
-        showDiagnostics || showPrivacy || showBackups || showIdentity || showCharacters
+        showDiagnostics || showPrivacy || showBackups || showIdentity || showCharacters ||
+            showVoiceCalls || showStorage
 
     BackHandler(enabled = settingsOpen || activeDesktopApp != null || activeHub != null || activeGameId != null) {
         when {
@@ -538,6 +542,8 @@ private fun AiLivesaverApp(
                 showBackups = false
                 showIdentity = false
                 showCharacters = false
+                showVoiceCalls = false
+                showStorage = false
             }
             activeGameId != null -> backFromGamePlaceholder()
             activeDesktopApp == DesktopApp.Games -> backFromGamesHub()
@@ -645,6 +651,18 @@ private fun AiLivesaverApp(
                 onBack = { showCharacters = false },
                 onChanged = { worldRevision++ },
             )
+        } else if (showVoiceCalls) {
+            VoiceCallsSettingsScreen(
+                contentPadding = padding,
+                onBack = { showVoiceCalls = false },
+            )
+        } else if (showStorage) {
+            StorageScreen(
+                contentPadding = padding,
+                store = worldStore,
+                revision = worldRevision,
+                onBack = { showStorage = false },
+            )
         } else {
             when (activeDesktopApp) {
                 DesktopApp.Messenger -> Column(Modifier.fillMaxSize()) {
@@ -738,22 +756,22 @@ private fun AiLivesaverApp(
                     contentPadding = PaddingValues(),
                     onBack = { goDesktopHome() },
                 )
-                DesktopApp.Gallery, DesktopApp.AuraSwap -> PlaceholderAppScreen(
-                    title = activeDesktopApp.label,
-                    summary = "Creative Suite 入口已开放，本切片允许占位；Imaging Studio 已接通出图。",
+                DesktopApp.Gallery -> GalleryScreen(
                     contentPadding = padding,
+                    store = worldStore,
+                    revision = worldRevision,
                     onBack = { goDesktopHome() },
-                ) {
-                    TextButton(onClick = { openDesktopApp(DesktopApp.Imaging) }) {
-                        Text("打开 Imaging Studio", color = FancyGold)
-                    }
-                }
-                DesktopApp.Storage -> PlaceholderAppScreen(
-                    title = "Storage",
-                    summary = "应用沙盒存储概览占位。备份与诊断仍可从 Settings 使用。",
+                )
+                DesktopApp.AuraSwap -> AuraSwapScreen(
                     contentPadding = padding,
                     onBack = { goDesktopHome() },
                 )
+                DesktopApp.Storage -> PlaceholderAppScreen(
+                    title = "Storage",
+                    summary = "应用沙盒存储概览。备份与诊断也可从 Settings 使用。",
+                    contentPadding = padding,
+                    onBack = { goDesktopHome() },
+                ) { TextButton(onClick = { showStorage = true }) { Text("打开存储详情", color = FancyGold) } }
                 DesktopApp.Binder -> BinderScreen(
                     contentPadding = padding,
                     store = worldStore,
@@ -782,6 +800,8 @@ private fun AiLivesaverApp(
                         onOpenDiagnostics = { showDiagnostics = true },
                         onOpenPrivacy = { showPrivacy = true },
                         onOpenBackups = { showBackups = true },
+                        onOpenVoiceCalls = { showVoiceCalls = true },
+                        onOpenStorage = { showStorage = true },
                         onOpenMoments = { openDesktopApp(DesktopApp.Ustagram) },
                         onOpenCommons = { openDesktopApp(DesktopApp.Rebbit) },
                     )
@@ -1508,6 +1528,8 @@ private fun MeScreen(
     onOpenDiagnostics: () -> Unit,
     onOpenPrivacy: () -> Unit,
     onOpenBackups: () -> Unit,
+    onOpenVoiceCalls: () -> Unit,
+    onOpenStorage: () -> Unit,
     onOpenMoments: () -> Unit,
     onOpenCommons: () -> Unit,
 ) {
@@ -1520,6 +1542,7 @@ private fun MeScreen(
         SettingRow(R.string.user_identity, R.string.user_identity_summary, Icons.Default.Person, "identity"),
         SettingRow(R.string.world_members, R.string.world_members_summary, Icons.Default.Favorite, "characters"),
         SettingRow(R.string.provider_settings, R.string.provider_settings_summary, Icons.Default.Settings, "providers"),
+        SettingRow(R.string.voice_calls_settings, R.string.voice_calls_settings_summary, Icons.Default.Call, "voice"),
         SettingRow(R.string.local_dream_settings, R.string.local_dream_settings_summary, Icons.Default.Star, "dream"),
         SettingRow(R.string.world_settings, R.string.world_settings_summary, Icons.Default.Home, "world"),
         SettingRow(
@@ -1529,6 +1552,7 @@ private fun MeScreen(
             "knowledge",
         ),
         SettingRow(R.string.runtime_status, R.string.runtime_status_summary, Icons.Default.Build, "diagnostics"),
+        SettingRow(R.string.storage_settings, R.string.storage_settings_summary, Icons.Default.Info, "storage"),
         SettingRow(R.string.privacy_settings, R.string.privacy_settings_summary, Icons.Default.Lock, "privacy"),
         SettingRow(R.string.backup_settings, R.string.backup_settings_summary, Icons.Default.Share, "backups"),
         SettingRow(R.string.about_updates, R.string.about_updates_summary, Icons.Default.Info, "updates"),
@@ -1538,6 +1562,8 @@ private fun MeScreen(
             "identity" -> onOpenIdentity()
             "characters" -> onOpenCharacters()
             "providers" -> onOpenProviders()
+            "voice" -> onOpenVoiceCalls()
+            "storage" -> onOpenStorage()
             "dream" -> onOpenLocalDream()
             "world" -> onOpenWorldSettings()
             "knowledge" -> onOpenWorldKnowledge()
@@ -1548,7 +1574,7 @@ private fun MeScreen(
         }
     }
     LazyColumn(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier.fillMaxSize().testTag("me-settings-list"),
         contentPadding = PaddingValues(
             start = 20.dp,
             top = contentPadding.calculateTopPadding() + 24.dp,
