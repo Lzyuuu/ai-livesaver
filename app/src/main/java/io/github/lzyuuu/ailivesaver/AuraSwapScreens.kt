@@ -53,9 +53,10 @@ internal val HfModelCatalog = listOf(
     HfModelEntry("scrfd-10g", "SCRFD 10G face detector", "MNN · ~3 MB", "scrfd_10g.fp16.mnn", "detector", "https://huggingface.co/Mr-J-369/Fancy-AI/resolve/main/scrfd_10g.fp16.mnn"),
     HfModelEntry("arcface-w600k-r50", "ArcFace W600K R50", "MNN · ~166 MB", "arcface_w600k_r50.fp16.mnn", "embedding", "https://huggingface.co/Mr-J-369/Fancy-AI/resolve/main/arcface_w600k_r50.fp16.mnn"),
     HfModelEntry("inswapper-128", "InsightFace inswapper_128", "MNN · ~529 MB", "inswapper_128.fp16.mnn", "swapper", "https://huggingface.co/Mr-J-369/Fancy-AI/resolve/main/inswapper_128.fp16.mnn"),
+    HfModelEntry("codeformer", "CodeFormer face restoration", "MNN · ~350 MB", "codeformer.fp16.mnn", "restore", "https://huggingface.co/Mr-J-369/Fancy-AI/resolve/main/codeformer.fp16.mnn"),
 )
 
-internal data class AuraSwapRequest(val source: File, val target: File, val swapper: File, val detector: File, val embedding: File)
+internal data class AuraSwapRequest(val source: File, val target: File, val swapper: File, val detector: File, val embedding: File, val restore: File)
 
 internal interface AuraSwapBackend {
     fun run(context: Context, request: AuraSwapRequest): File
@@ -68,12 +69,14 @@ internal interface AuraSwapBackend {
 internal object MnnAuraBackend : AuraSwapBackend {
     override fun run(context: Context, request: AuraSwapRequest): File {
         require(request.source.isFile && request.target.isFile) { "Source 和 Target 图片不存在" }
-        require(request.swapper.isFile && request.detector.isFile && request.embedding.isFile) { "Aura 三个模型必须同时安装" }
+        require(request.swapper.isFile && request.detector.isFile && request.embedding.isFile && request.restore.isFile) { "Aura 四个模型必须同时安装" }
         val error = runCatching {
-            MnnNative.nativeLoadModels(
+            MnnNative.nativeLoad(
                 request.detector.absolutePath,
                 request.embedding.absolutePath,
                 request.swapper.absolutePath,
+                request.restore.absolutePath,
+                false,
             )
         }.getOrElse { "MNN JNI 加载失败：${it.message ?: it::class.simpleName}" }
         if (error.isNotEmpty()) throw IllegalStateException("MNN 模型加载失败：$error")
@@ -174,14 +177,15 @@ private fun AuraSwapContent(context: Context) {
             val sourceFile = File(source.trim()); val targetFile = File(target.trim())
             status = when {
                 !sourceFile.isFile || !targetFile.isFile -> "请选择存在的 Source 和 Target 图片。"
-                !HfModelCatalog.all { model -> File(HfModelStore.directory(context), model.file).isFile } -> "请先下载 SCRFD、ArcFace 和 inswapper_128 三个模型。"
+                !HfModelCatalog.all { model -> File(HfModelStore.directory(context), model.file).isFile } -> "请先下载 SCRFD、ArcFace、inswapper_128 和 CodeFormer 四个模型。"
                 else -> runCatching {
                     val models = HfModelStore.installed(context)
                     val swapper = models.first { it.name == "inswapper_128.fp16.mnn" }
                     val detector = models.first { it.name == "scrfd_10g.fp16.mnn" }
                     val embedding = models.first { it.name == "arcface_w600k_r50.fp16.mnn" }
+                    val restore = models.first { it.name == "codeformer.fp16.mnn" }
                     HfModelCatalog.forEach { model -> HfModelStore.validateModel(File(HfModelStore.directory(context), model.file)) }
-                    MnnAuraBackend.run(context, AuraSwapRequest(sourceFile, targetFile, swapper, detector, embedding))
+                    MnnAuraBackend.run(context, AuraSwapRequest(sourceFile, targetFile, swapper, detector, embedding, restore))
                     "Aura Swap 完成"
                 }.getOrElse { "Aura Swap 失败：${it.message}" }
             }
@@ -197,7 +201,7 @@ private fun ModelStoreContent(context: Context) {
     var status by rememberSaveable { mutableStateOf<String?>(null) }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("Model Store", color = FancyCream, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
-        Text("需要 SCRFD + ArcFace + inswapper_128；仅下载已获授权的模型。", color = FancyCream, fontSize = 12.sp)
+        Text("需要 SCRFD + ArcFace + inswapper_128 + CodeFormer；仅下载已获授权的模型。", color = FancyCream, fontSize = 12.sp)
         HfModelCatalog.forEach { model ->
             Row(Modifier.fillMaxWidth().background(FancyNavyMid, RoundedCornerShape(12.dp)).padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) { Text(model.title, color = FancyCream, fontWeight = FontWeight.SemiBold); Text(model.size, color = FancyGoldDim, fontSize = 11.sp) }

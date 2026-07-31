@@ -83,8 +83,9 @@ class AuraSwapSmokeTest {
             val target = File(context.cacheDir, "target.png").apply { writeBytes(byteArrayOf(4, 5, 6)) }
             val detector = File(context.cacheDir, "scrfd_10g.fp16.mnn").apply { writeBytes(byteArrayOf(1, 2, 3)) }
             val embedding = File(context.cacheDir, "arcface_w600k_r50.fp16.mnn").apply { writeBytes(byteArrayOf(1, 2, 3)) }
+            val restore = File(context.cacheDir, "codeformer.fp16.mnn").apply { writeBytes(byteArrayOf(1, 2, 3)) }
             val error = runCatching {
-                MnnAuraBackend.run(context, AuraSwapRequest(source, target, model, detector, embedding))
+                MnnAuraBackend.run(context, AuraSwapRequest(source, target, model, detector, embedding, restore))
             }.exceptionOrNull()
             assertTrue(error?.message.orEmpty().contains("MNN 模型加载失败"))
         }
@@ -95,6 +96,6 @@ class AuraSwapSmokeTest {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val invalid = File(context.cacheDir, "invalid.mnn").apply { writeBytes(byteArrayOf(1, 2, 3, 4)) }
         val error = MnnNative.nativeLoadModels(invalid.absolutePath, invalid.absolutePath, invalid.absolutePath)
-        assertTrue(error.contains("SCRFD detector"))
+        assertTrue(error.contains("SCRFD"))
     }
 }
