@@ -47,31 +47,30 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.security.MessageDigest
 
-internal data class HfModelEntry(val id: String, val title: String, val size: String, val file: String, val role: String)
+internal data class HfModelEntry(val id: String, val title: String, val size: String, val file: String, val role: String, val url: String)
 
 internal val HfModelCatalog = listOf(
-    HfModelEntry("inswapper-128", "InsightFace inswapper_128", "ONNX · ~529 MB", "inswapper_128.onnx", "swapper"),
-    HfModelEntry("buffalo-l", "InsightFace buffalo_l", "ONNX bundle · ~326 MB", "buffalo_l.zip", "detector"),
+    HfModelEntry("scrfd-10g", "SCRFD 10G face detector", "MNN · ~3 MB", "scrfd_10g.fp16.mnn", "detector", "https://huggingface.co/Mr-J-369/Fancy-AI/resolve/main/scrfd_10g.fp16.mnn"),
+    HfModelEntry("arcface-w600k-r50", "ArcFace W600K R50", "MNN · ~166 MB", "arcface_w600k_r50.fp16.mnn", "embedding", "https://huggingface.co/Mr-J-369/Fancy-AI/resolve/main/arcface_w600k_r50.fp16.mnn"),
+    HfModelEntry("inswapper-128", "InsightFace inswapper_128", "MNN · ~529 MB", "inswapper_128.fp16.mnn", "swapper", "https://huggingface.co/Mr-J-369/Fancy-AI/resolve/main/inswapper_128.fp16.mnn"),
 )
 
-internal data class AuraSwapRequest(val source: File, val target: File, val swapper: File, val detector: File)
+internal data class AuraSwapRequest(val source: File, val target: File, val swapper: File, val detector: File, val embedding: File)
 
 internal interface AuraSwapBackend {
     fun run(context: Context, request: AuraSwapRequest): File
 }
 
 /**
- * The Android ONNX adapter boundary. The dependency and licensed model bundle must be supplied
+ * The Android MNN adapter boundary. The dependency and licensed model bundle must be supplied
  * before this can execute; it deliberately refuses to emit a fabricated image.
  */
-internal object OnnxRuntimeAuraBackend : AuraSwapBackend {
+internal object MnnAuraBackend : AuraSwapBackend {
     override fun run(context: Context, request: AuraSwapRequest): File {
         require(request.source.isFile && request.target.isFile) { "Source 和 Target 图片不存在" }
-        require(request.swapper.isFile && request.detector.isFile) { "inswapper_128 和 buffalo_l 模型必须同时安装" }
-        require(request.swapper.extension == "onnx") { "换脸模型必须是 ONNX 格式" }
+        require(request.swapper.isFile && request.detector.isFile && request.embedding.isFile) { "Aura 三个模型必须同时安装" }
         throw UnsupportedOperationException(
-            "真实 Aura 推理未启用：需要 ONNX Runtime Android、InsightFace buffalo_l 与 " +
-                "inswapper_128 的授权模型文件；当前不会生成伪造结果。",
+            "真实 Aura 推理未启用：需要 MNN Android、SCRFD、ArcFace 与 inswapper_128 的授权模型文件；当前不会生成伪造结果。",
         )
     }
 }
@@ -135,15 +134,7 @@ internal object HfModelStore {
         }.start()
     }
 
-    internal fun validateOnnxModel(file: File) {
-        require(file.isFile && file.length() > 8) { "模型文件不存在或为空" }
-        file.inputStream().use { input ->
-            val header = ByteArray(8)
-            require(input.read(header) == 8 && header.copyOfRange(0, 4).contentEquals(byteArrayOf(0x08, 0x00, 0x00, 0x00))) {
-                "模型不是可识别的 ONNX protobuf 文件"
-            }
-        }
-    }
+    internal fun validateModel(file: File) = require(file.isFile && file.length() > 8) { "模型文件不存在或为空" }
 }
 
 @Composable
@@ -177,13 +168,14 @@ private fun AuraSwapContent(context: Context) {
             val sourceFile = File(source.trim()); val targetFile = File(target.trim())
             status = when {
                 !sourceFile.isFile || !targetFile.isFile -> "请选择存在的 Source 和 Target 图片。"
-                HfModelStore.installed(context).size < 2 -> "请先下载 inswapper_128 和 buffalo_l 两个模型。"
+                !HfModelCatalog.all { model -> File(HfModelStore.directory(context), model.file).isFile } -> "请先下载 SCRFD、ArcFace 和 inswapper_128 三个模型。"
                 else -> runCatching {
                     val models = HfModelStore.installed(context)
-                    val swapper = models.first { it.name == "inswapper_128.onnx" }
-                    val detector = models.first { it.name == "buffalo_l.zip" }
-                    HfModelStore.validateOnnxModel(swapper)
-                    OnnxRuntimeAuraBackend.run(context, AuraSwapRequest(sourceFile, targetFile, swapper, detector))
+                    val swapper = models.first { it.name == "inswapper_128.fp16.mnn" }
+                    val detector = models.first { it.name == "scrfd_10g.fp16.mnn" }
+                    val embedding = models.first { it.name == "arcface_w600k_r50.fp16.mnn" }
+                    HfModelCatalog.forEach { model -> HfModelStore.validateModel(File(HfModelStore.directory(context), model.file)) }
+                    MnnAuraBackend.run(context, AuraSwapRequest(sourceFile, targetFile, swapper, detector, embedding))
                     "Aura Swap 完成"
                 }.getOrElse { "Aura Swap 失败：${it.message}" }
             }
@@ -199,15 +191,22 @@ private fun ModelStoreContent(context: Context) {
     var status by rememberSaveable { mutableStateOf<String?>(null) }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("Model Store", color = FancyCream, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
-        Text("需要 inswapper_128 + buffalo_l；仅下载已获授权的模型。", color = FancyCream, fontSize = 12.sp)
+        Text("需要 SCRFD + ArcFace + inswapper_128；仅下载已获授权的模型。", color = FancyCream, fontSize = 12.sp)
         HfModelCatalog.forEach { model ->
             Row(Modifier.fillMaxWidth().background(FancyNavyMid, RoundedCornerShape(12.dp)).padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) { Text(model.title, color = FancyCream, fontWeight = FontWeight.SemiBold); Text(model.size, color = FancyGoldDim, fontSize = 11.sp) }
                 Icon(Icons.Default.Check, null, tint = if (HfModelStore.installed(context).any { it.name == model.file }) FancyGold else FancyGoldDim)
+                Button(onClick = {
+                    downloading = true; status = null
+                    HfModelStore.download(context, model.url, model.file) { result ->
+                        downloading = false
+                        status = result.fold({ "下载完成：${it.name}" }, { "下载失败：${it.message}" })
+                    }
+                }, enabled = !downloading, colors = ButtonDefaults.buttonColors(containerColor = FancyGold, contentColor = FancyInk)) { Text("下载") }
             }
         }
         Spacer(Modifier.height(4.dp))
-        OutlinedTextField(url, { url = it; HfModelStore.saveDownloadUrl(context, it) }, label = { Text("Hugging Face download URL") }, modifier = Modifier.fillMaxWidth().testTag("hf-url"), colors = auraFieldColors())
+        OutlinedTextField(url, { url = it; HfModelStore.saveDownloadUrl(context, it) }, label = { Text("自定义 SCRFD 模型 URL") }, modifier = Modifier.fillMaxWidth().testTag("hf-url"), colors = auraFieldColors())
         Button(onClick = {
             status = null; downloading = true
             HfModelStore.download(context, url, HfModelCatalog.first().file) { result -> downloading = false; status = result.fold({ "下载完成：${it.name}（尚未完成推理配对）" }, { "下载失败：${it.message}" }) }

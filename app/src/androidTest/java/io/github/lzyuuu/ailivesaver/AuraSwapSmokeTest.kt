@@ -43,7 +43,7 @@ class AuraSwapSmokeTest {
     }
 
     @Test
-    fun downloadsWithRetryChecksumAndWritesTraceableOutput() {
+    fun downloadsWithRetryChecksumAndRejectsUnavailableInference() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val payload = "small test model\n".toByteArray()
         val attempts = AtomicInteger(0)
@@ -71,7 +71,7 @@ class AuraSwapSmokeTest {
             val model = HfModelStore.downloadFile(
                 context,
                 "http://127.0.0.1:${server.localPort}/model.bin",
-                "inswapper_128.onnx",
+                "inswapper_128.fp16.mnn",
                 expectedSha256 = HfModelStore.sha256(File(context.cacheDir, "expected").apply { writeBytes(payload) }),
                 maxAttempts = 3,
             )
@@ -81,9 +81,10 @@ class AuraSwapSmokeTest {
 
             val source = File(context.cacheDir, "source.png").apply { writeBytes(byteArrayOf(1, 2, 3)) }
             val target = File(context.cacheDir, "target.png").apply { writeBytes(byteArrayOf(4, 5, 6)) }
-            val detector = File(context.cacheDir, "buffalo_l.zip").apply { writeBytes(byteArrayOf(1, 2, 3)) }
+            val detector = File(context.cacheDir, "scrfd_10g.fp16.mnn").apply { writeBytes(byteArrayOf(1, 2, 3)) }
+            val embedding = File(context.cacheDir, "arcface_w600k_r50.fp16.mnn").apply { writeBytes(byteArrayOf(1, 2, 3)) }
             val error = runCatching {
-                OnnxRuntimeAuraBackend.run(context, AuraSwapRequest(source, target, model, detector))
+                MnnAuraBackend.run(context, AuraSwapRequest(source, target, model, detector, embedding))
             }.exceptionOrNull()
             assertTrue(error?.message.orEmpty().contains("真实 Aura 推理未启用"))
         }
