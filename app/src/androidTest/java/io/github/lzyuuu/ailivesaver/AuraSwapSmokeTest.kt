@@ -7,11 +7,11 @@ import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import java.io.File
 import java.net.ServerSocket
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.concurrent.thread
-import org.json.JSONObject
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -71,7 +71,7 @@ class AuraSwapSmokeTest {
             val model = HfModelStore.downloadFile(
                 context,
                 "http://127.0.0.1:${server.localPort}/model.bin",
-                "retry-model.bin",
+                "inswapper_128.onnx",
                 expectedSha256 = HfModelStore.sha256(File(context.cacheDir, "expected").apply { writeBytes(payload) }),
                 maxAttempts = 3,
             )
@@ -81,11 +81,11 @@ class AuraSwapSmokeTest {
 
             val source = File(context.cacheDir, "source.png").apply { writeBytes(byteArrayOf(1, 2, 3)) }
             val target = File(context.cacheDir, "target.png").apply { writeBytes(byteArrayOf(4, 5, 6)) }
-            val output = HfModelStore.createTraceableOutput(context, source, target, model)
-            assertEquals(target.readBytes().toList(), output.readBytes().toList())
-            val trace = File(output.parentFile, "${output.nameWithoutExtension}.json")
-            assertEquals(false, JSONObject(trace.readText()).getBoolean("deep_learning_swap"))
-            assertEquals(output.absolutePath, JSONObject(trace.readText()).getString("output"))
+            val detector = File(context.cacheDir, "buffalo_l.zip").apply { writeBytes(byteArrayOf(1, 2, 3)) }
+            val error = runCatching {
+                OnnxRuntimeAuraBackend.run(context, AuraSwapRequest(source, target, model, detector))
+            }.exceptionOrNull()
+            assertTrue(error?.message.orEmpty().contains("真实 Aura 推理未启用"))
         }
     }
 }
