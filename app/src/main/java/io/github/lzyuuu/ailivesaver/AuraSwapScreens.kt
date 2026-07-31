@@ -167,7 +167,7 @@ internal object AuraImagePipeline {
         return output
     }
 
-    fun run(source: Bitmap, target: Bitmap): Bitmap {
+    fun run(source: Bitmap, target: Bitmap, useRestore: Boolean = true): Bitmap {
         val targetFace = parseFaces(MnnNative.nativeDetect(bitmapToChw(target, 640)), target.width, target.height).firstOrNull()
             ?: error("SCRFD 未检测到 Target 人脸")
         val sourceFace = parseFaces(MnnNative.nativeDetect(bitmapToChw(source, 640)), source.width, source.height).firstOrNull()
@@ -176,7 +176,11 @@ internal object AuraImagePipeline {
         val embedding = MnnNative.nativeEmbed(bitmapToChw(align(source, sourceFace, 112), 112))
         val swapped = MnnNative.nativeSwap(bitmapToChw(alignedTarget, 128), embedding)
         val swappedBitmap = chwToBitmap(swapped, 128)
-        val restored = chwToBitmap(MnnNative.nativeRestore(bitmapToChw(swappedBitmap, 512), .5f), 512)
+        val restored = if (useRestore) {
+            chwToBitmap(MnnNative.nativeRestore(bitmapToChw(swappedBitmap, 512), .5f), 512)
+        } else {
+            Bitmap.createScaledBitmap(swappedBitmap, 512, 512, true)
+        }
         return fuseRestored(target, targetFace, restored)
     }
 }
@@ -190,13 +194,11 @@ internal object MnnAuraBackend : AuraSwapBackend {
         require(request.source.isFile && request.target.isFile) { "Source 和 Target 图片不存在" }
         require(request.swapper.isFile && request.detector.isFile && request.embedding.isFile && request.restore.isFile) { "Aura 四个模型必须同时安装" }
         val error = runCatching {
-            MnnNative.nativeLoad(
-                request.detector.absolutePath,
-                request.embedding.absolutePath,
-                request.swapper.absolutePath,
-                request.restore.absolutePath,
-                false,
-            )
+            if ((context.getSystemService(android.app.ActivityManager::class.java)?.memoryClass ?: 0) >= 1024) {
+                MnnNative.nativeLoad(request.detector.absolutePath, request.embedding.absolutePath, request.swapper.absolutePath, request.restore.absolutePath, false)
+            } else {
+                MnnNative.nativeLoadWithoutRestore(request.detector.absolutePath, request.embedding.absolutePath, request.swapper.absolutePath)
+            }
         }.getOrElse { "MNN JNI 加载失败：${it.message ?: it::class.simpleName}" }
         if (error.isNotEmpty()) throw IllegalStateException("MNN 模型加载失败：$error")
         val sourceBitmap = android.graphics.BitmapFactory.decodeFile(request.source.absolutePath)
@@ -204,7 +206,7 @@ internal object MnnAuraBackend : AuraSwapBackend {
         val targetBitmap = android.graphics.BitmapFactory.decodeFile(request.target.absolutePath)
             ?: error("Target 图片无法解码")
         val output = try {
-            AuraImagePipeline.run(sourceBitmap, targetBitmap)
+            AuraImagePipeline.run(sourceBitmap, targetBitmap, (context.getSystemService(android.app.ActivityManager::class.java)?.memoryClass ?: 0) >= 1024)
         } finally {
             MnnNative.nativeUnload()
         }

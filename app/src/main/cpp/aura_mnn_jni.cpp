@@ -86,3 +86,10 @@ Java_io_github_lzyuuu_ailivesaver_MnnNative_nativeLoadModels(
     (void) clazz; (void) detector; (void) embedding; (void) swapper;
     return env->NewStringUTF("SCRFD: four model paths are required");
 }
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_io_github_lzyuuu_ailivesaver_MnnNative_nativeLoadWithoutRestore(
+        JNIEnv* env, jclass clazz, jstring detector, jstring embedding, jstring swapper) {
+    return Java_io_github_lzyuuu_ailivesaver_MnnNative_nativeLoad(
+            env, clazz, detector, embedding, swapper, detector, JNI_FALSE);
+}

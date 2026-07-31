@@ -99,13 +99,11 @@ class AuraSwapSmokeTest {
         val dir = File(context.filesDir, "models")
         val files = HfModelCatalog.map { File(dir, it.file) }
         assumeTrue(files.all { it.isFile && it.length() > 8 })
-        val error = MnnNative.nativeLoad(
-            files.first { it.name.startsWith("scrfd") }.absolutePath,
-            files.first { it.name.startsWith("arcface") }.absolutePath,
-            files.first { it.name.startsWith("inswapper") }.absolutePath,
-            files.first { it.name.startsWith("codeformer") }.absolutePath,
-            false,
-        )
+        val error = if ((context.getSystemService(android.app.ActivityManager::class.java)?.memoryClass ?: 0) >= 1024) {
+            MnnNative.nativeLoad(files.first { it.name.startsWith("scrfd") }.absolutePath, files.first { it.name.startsWith("arcface") }.absolutePath, files.first { it.name.startsWith("inswapper") }.absolutePath, files.first { it.name.startsWith("codeformer") }.absolutePath, false)
+        } else {
+            MnnNative.nativeLoadWithoutRestore(files.first { it.name.startsWith("scrfd") }.absolutePath, files.first { it.name.startsWith("arcface") }.absolutePath, files.first { it.name.startsWith("inswapper") }.absolutePath)
+        }
         assertEquals("", error)
     }
 

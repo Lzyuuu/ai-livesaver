@@ -13,4 +13,5 @@ internal object MnnNative {
     external fun nativeRestore(inputChw512: FloatArray, fidelity: Float): FloatArray
     external fun nativeUnload()
     external fun nativeLoadModels(detector: String, embedding: String, swapper: String): String
+    external fun nativeLoadWithoutRestore(detector: String, embedding: String, swapper: String): String
 }
