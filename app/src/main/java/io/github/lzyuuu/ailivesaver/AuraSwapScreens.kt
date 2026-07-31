@@ -62,16 +62,22 @@ internal interface AuraSwapBackend {
 }
 
 /**
- * The Android MNN adapter boundary. The dependency and licensed model bundle must be supplied
- * before this can execute; it deliberately refuses to emit a fabricated image.
+ * Loads the three authorized MNN graphs. Image preprocessing/postprocessing is intentionally
+ * separate: this method never fabricates an output image.
  */
 internal object MnnAuraBackend : AuraSwapBackend {
     override fun run(context: Context, request: AuraSwapRequest): File {
         require(request.source.isFile && request.target.isFile) { "Source 和 Target 图片不存在" }
         require(request.swapper.isFile && request.detector.isFile && request.embedding.isFile) { "Aura 三个模型必须同时安装" }
-        throw UnsupportedOperationException(
-            "真实 Aura 推理未启用：需要 MNN Android、SCRFD、ArcFace 与 inswapper_128 的授权模型文件；当前不会生成伪造结果。",
-        )
+        val error = runCatching {
+            MnnNative.nativeLoadModels(
+                request.detector.absolutePath,
+                request.embedding.absolutePath,
+                request.swapper.absolutePath,
+            )
+        }.getOrElse { "MNN JNI 加载失败：${it.message ?: it::class.simpleName}" }
+        if (error.isNotEmpty()) throw IllegalStateException("MNN 模型加载失败：$error")
+        throw UnsupportedOperationException("MNN 三模型已加载，但 Aura 图像预处理/换脸后处理尚未实现；不会生成伪造结果。")
     }
 }
 

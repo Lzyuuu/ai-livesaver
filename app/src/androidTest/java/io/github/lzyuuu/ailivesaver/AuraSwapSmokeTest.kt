@@ -86,7 +86,15 @@ class AuraSwapSmokeTest {
             val error = runCatching {
                 MnnAuraBackend.run(context, AuraSwapRequest(source, target, model, detector, embedding))
             }.exceptionOrNull()
-            assertTrue(error?.message.orEmpty().contains("真实 Aura 推理未启用"))
+            assertTrue(error?.message.orEmpty().contains("MNN 模型加载失败"))
         }
+    }
+
+    @Test
+    fun nativeMnnLoaderRejectsInvalidModelWithRole() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val invalid = File(context.cacheDir, "invalid.mnn").apply { writeBytes(byteArrayOf(1, 2, 3, 4)) }
+        val error = MnnNative.nativeLoadModels(invalid.absolutePath, invalid.absolutePath, invalid.absolutePath)
+        assertTrue(error.contains("SCRFD detector"))
     }
 }
