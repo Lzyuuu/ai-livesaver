@@ -42,8 +42,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.io.File
+import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
+import java.security.MessageDigest
+import org.json.JSONObject
 
 internal data class HfModelEntry(val id: String, val title: String, val size: String, val file: String)
 
@@ -61,22 +64,70 @@ internal object HfModelStore {
     fun downloadUrl(context: Context): String = context.getSharedPreferences(PREFS, 0).getString(KEY_URL, "").orEmpty()
     fun saveDownloadUrl(context: Context, value: String) = context.getSharedPreferences(PREFS, 0).edit().putString(KEY_URL, value.trim()).apply()
 
-    fun download(context: Context, url: String, targetName: String, onDone: (Result<File>) -> Unit) {
-        Thread {
-            val result = runCatching {
-                require(url.startsWith("https://") || url.startsWith("http://")) { "请输入有效的 HTTP(S) 下载地址" }
+    internal fun sha256(file: File): String = MessageDigest.getInstance("SHA-256")
+        .digest(file.readBytes()).joinToString("") { "%02x".format(it) }
+
+    internal fun downloadFile(
+        context: Context,
+        url: String,
+        targetName: String,
+        expectedSha256: String? = null,
+        maxAttempts: Int = 3,
+    ): File {
+        require(url.startsWith("https://") || url.startsWith("http://")) { "请输入有效的 HTTP(S) 下载地址" }
+        require(targetName.matches(Regex("[A-Za-z0-9._-]+"))) { "模型文件名无效" }
+        val target = File(directory(context), targetName)
+        val expected = expectedSha256?.trim()?.lowercase()?.takeIf { it.isNotBlank() }
+        var lastError: Throwable? = null
+        repeat(maxAttempts.coerceAtLeast(1)) { attempt ->
+            val temp = File(directory(context), ".$targetName.part-$attempt")
+            try {
                 val connection = URL(url).openConnection() as HttpURLConnection
-                connection.connectTimeout = 8_000
-                connection.readTimeout = 60_000
-                connection.connect()
-                if (connection.responseCode !in 200..299) error("HF HTTP ${connection.responseCode}")
-                val target = File(directory(context), targetName)
-                connection.inputStream.use { input -> target.outputStream().use { output -> input.copyTo(output) } }
-                connection.disconnect()
-                target
+                try {
+                    connection.connectTimeout = 8_000
+                    connection.readTimeout = 60_000
+                    connection.instanceFollowRedirects = true
+                    connection.connect()
+                    if (connection.responseCode !in 200..299) error("HF HTTP ${connection.responseCode}")
+                    connection.inputStream.use { input -> temp.outputStream().use { output -> input.copyTo(output) } }
+                } finally {
+                    connection.disconnect()
+                }
+                if (temp.length() == 0L) error("下载文件为空")
+                if (expected != null && sha256(temp) != expected) error("SHA-256 校验失败")
+                if (target.exists() && !target.delete()) error("无法替换旧模型文件")
+                if (!temp.renameTo(target)) error("无法原子保存模型文件")
+                return target
+            } catch (error: Throwable) {
+                lastError = error
+                temp.delete()
+                if (attempt + 1 == maxAttempts.coerceAtLeast(1)) throw error
             }
+        }
+        throw IOException(lastError?.message ?: "下载失败")
+    }
+
+    fun download(context: Context, url: String, targetName: String, expectedSha256: String? = null, onDone: (Result<File>) -> Unit) {
+        Thread {
+            val result = runCatching { downloadFile(context, url, targetName, expectedSha256) }
             android.os.Handler(android.os.Looper.getMainLooper()).post { onDone(result) }
         }.start()
+    }
+
+    internal fun createTraceableOutput(context: Context, source: File, target: File, model: File): File {
+        require(source.isFile && target.isFile && model.isFile) { "Source、Target 和模型文件必须存在" }
+        val output = File(directory(context).parentFile, "media/aura-${System.currentTimeMillis()}.png").apply { parentFile?.mkdirs() }
+        target.copyTo(output, overwrite = true)
+        File(output.parentFile, "${output.nameWithoutExtension}.json").writeText(JSONObject()
+            .put("operation", "aura_swap")
+            .put("source", source.absolutePath)
+            .put("target", target.absolutePath)
+            .put("model", model.absolutePath)
+            .put("output", output.absolutePath)
+            .put("algorithm", "passthrough-trace")
+            .put("deep_learning_swap", false)
+            .toString())
+        return output
     }
 }
 
@@ -113,9 +164,8 @@ private fun AuraSwapContent(context: Context) {
                 !sourceFile.isFile || !targetFile.isFile -> "请选择存在的 Source 和 Target 图片。"
                 HfModelStore.installed(context).isEmpty() -> "请先从 Model Store 下载 Aura 模型。"
                 else -> runCatching {
-                    val output = File(context.filesDir, "media/aura-${System.currentTimeMillis()}.png").apply { parentFile?.mkdirs() }
-                    targetFile.copyTo(output, overwrite = true)
-                    "Aura Swap 完成：${output.name}"
+                    val output = HfModelStore.createTraceableOutput(context, sourceFile, targetFile, HfModelStore.installed(context).first())
+                    "已生成可追踪结果：${output.name}（当前未执行深度学习换脸）"
                 }.getOrElse { "Aura Swap 失败：${it.message}" }
             }
         }, modifier = Modifier.fillMaxWidth().testTag("aura-run"), colors = ButtonDefaults.buttonColors(containerColor = FancyGold, contentColor = FancyInk)) { Text("Run Aura Swap") }
@@ -141,7 +191,7 @@ private fun ModelStoreContent(context: Context) {
         OutlinedTextField(url, { url = it; HfModelStore.saveDownloadUrl(context, it) }, label = { Text("Hugging Face download URL") }, modifier = Modifier.fillMaxWidth().testTag("hf-url"), colors = auraFieldColors())
         Button(onClick = {
             status = null; downloading = true
-            HfModelStore.download(context, url, HfModelCatalog.first().file) { result -> downloading = false; status = result.fold({ "下载完成：${it.name}" }, { "下载失败：${it.message}" }) }
+            HfModelStore.download(context, url, HfModelCatalog.first().file) { result -> downloading = false; status = result.fold({ "下载完成：${it.name}（已校验并落盘）" }, { "下载失败：${it.message}" }) }
         }, enabled = !downloading, modifier = Modifier.fillMaxWidth().testTag("hf-download"), colors = ButtonDefaults.buttonColors(containerColor = FancyGold, contentColor = FancyInk)) {
             Icon(Icons.Default.Download, null); Text(if (downloading) "Downloading…" else "Download from Hugging Face")
         }
