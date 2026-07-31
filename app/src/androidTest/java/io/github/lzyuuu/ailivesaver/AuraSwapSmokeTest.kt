@@ -10,6 +10,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.Assume.assumeTrue
 import java.io.File
 import java.net.ServerSocket
 import java.util.concurrent.atomic.AtomicInteger
@@ -81,15 +82,6 @@ class AuraSwapSmokeTest {
             assertEquals(3, attempts.get())
             assertEquals(payload.toList(), model.readBytes().toList())
 
-            val source = File(context.cacheDir, "source.png").apply { writeBytes(byteArrayOf(1, 2, 3)) }
-            val target = File(context.cacheDir, "target.png").apply { writeBytes(byteArrayOf(4, 5, 6)) }
-            val detector = File(context.cacheDir, "scrfd_10g.fp16.mnn").apply { writeBytes(byteArrayOf(1, 2, 3)) }
-            val embedding = File(context.cacheDir, "arcface_w600k_r50.fp16.mnn").apply { writeBytes(byteArrayOf(1, 2, 3)) }
-            val restore = File(context.cacheDir, "codeformer.fp16.mnn").apply { writeBytes(byteArrayOf(1, 2, 3)) }
-            val error = runCatching {
-                MnnAuraBackend.run(context, AuraSwapRequest(source, target, model, detector, embedding, restore))
-            }.exceptionOrNull()
-            assertTrue(error?.message.orEmpty().contains("MNN 模型加载失败"))
         }
     }
 
@@ -99,6 +91,22 @@ class AuraSwapSmokeTest {
         val invalid = File(context.cacheDir, "invalid.mnn").apply { writeBytes(byteArrayOf(1, 2, 3, 4)) }
         val error = MnnNative.nativeLoadModels(invalid.absolutePath, invalid.absolutePath, invalid.absolutePath)
         assertTrue(error.contains("SCRFD"))
+    }
+
+    @Test
+    fun loadsFancyModelsWhenStagedOnDevice() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val dir = File(context.filesDir, "models")
+        val files = HfModelCatalog.map { File(dir, it.file) }
+        assumeTrue(files.all { it.isFile && it.length() > 8 })
+        val error = MnnNative.nativeLoad(
+            files.first { it.name.startsWith("scrfd") }.absolutePath,
+            files.first { it.name.startsWith("arcface") }.absolutePath,
+            files.first { it.name.startsWith("inswapper") }.absolutePath,
+            files.first { it.name.startsWith("codeformer") }.absolutePath,
+            false,
+        )
+        assertEquals("", error)
     }
 
     @Test

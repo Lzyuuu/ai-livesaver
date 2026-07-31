@@ -203,7 +203,11 @@ internal object MnnAuraBackend : AuraSwapBackend {
             ?: error("Source 图片无法解码")
         val targetBitmap = android.graphics.BitmapFactory.decodeFile(request.target.absolutePath)
             ?: error("Target 图片无法解码")
-        val output = AuraImagePipeline.run(sourceBitmap, targetBitmap)
+        val output = try {
+            AuraImagePipeline.run(sourceBitmap, targetBitmap)
+        } finally {
+            MnnNative.nativeUnload()
+        }
         val result = File(context.cacheDir, "aura-${System.currentTimeMillis()}.png")
         result.outputStream().use { stream -> check(output.compress(Bitmap.CompressFormat.PNG, 100, stream)) { "Aura 输出保存失败" } }
         return result
