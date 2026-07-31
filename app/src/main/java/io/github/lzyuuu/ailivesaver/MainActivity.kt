@@ -754,11 +754,12 @@ private fun AiLivesaverApp(
                     contentPadding = padding,
                     onBack = { goDesktopHome() },
                 )
-                DesktopApp.Binder -> PlaceholderAppScreen(
-                    title = "Binder",
-                    summary = "角色匹配入口已开放。完整 Build my first match 将在后续切片接通。",
+                DesktopApp.Binder -> BinderScreen(
                     contentPadding = padding,
+                    store = worldStore,
                     onBack = { goDesktopHome() },
+                    onChanged = { worldRevision++ },
+                    onOpenMessenger = ::openMessenger,
                 )
                 DesktopApp.Settings -> Column(Modifier.fillMaxSize()) {
                     DesktopBackBar(onBack = { goDesktopHome() }, title = "Settings")

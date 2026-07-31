@@ -479,6 +479,7 @@ internal fun PhoneContactsScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(16.dp))
+                        .clickable { onCall(character.id) }
                         .background(FancyNavyMid)
                         .padding(14.dp)
                         .testTag("phone-contact-${character.id}"),

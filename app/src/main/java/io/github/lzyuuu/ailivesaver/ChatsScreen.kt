@@ -71,6 +71,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -85,6 +87,14 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import java.text.DateFormat
 import java.util.Date
+
+private data class MessengerGroup(val memberIds: List<Long>)
+
+private fun groupFor(character: ResidentCharacter): MessengerGroup? {
+    if (!character.cardJson.startsWith("group:")) return null
+    val ids = character.cardJson.removePrefix("group:").split(',').mapNotNull(String::toLongOrNull)
+    return ids.takeIf { it.size >= 2 }?.let(::MessengerGroup)
+}
 
 internal object ActiveChatReplies {
     private val characterIds = mutableSetOf<Long>()
@@ -173,15 +183,12 @@ internal fun ChatsScreen(
     when {
         character != null -> {
         key(character.id) {
-            ConversationScreen(
-                contentPadding,
-                store,
-                character,
-                revision,
-                onChanged,
-                onBack = { selectedId = null },
-                onManageCharacters = onManageCharacters,
-            )
+            val group = groupFor(character)
+            if (group == null) {
+                ConversationScreen(contentPadding, store, character, revision, onChanged, { selectedId = null }, onManageCharacters)
+            } else {
+                GroupConversationScreen(contentPadding, store, character, group, revision, onChanged, { selectedId = null })
+            }
         }
         }
         else -> {
@@ -223,6 +230,10 @@ private fun ChatListScreen(
     var groupName by rememberSaveable { mutableStateOf("") }
     var selectedGroupMemberIds by rememberSaveable { mutableStateOf(setOf<Long>()) }
     var createError by remember { mutableStateOf<String?>(null) }
+    val groupNameFocusRequester = remember { FocusRequester() }
+    LaunchedEffect(showNewGroupSheet) {
+        if (showNewGroupSheet) groupNameFocusRequester.requestFocus()
+    }
     val latestMessages = remember(revision, characters) {
         characters.associate { it.id to store.messages(it.id).lastOrNull() }
     }
@@ -290,7 +301,11 @@ private fun ChatListScreen(
                         onValueChange = { groupName = it },
                         label = { Text(stringResource(R.string.messenger_new_group_name)) },
                         singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .focusRequester(groupNameFocusRequester)
+                            .testTag("messenger-new-group-name"),
+
                         colors = messengerFieldColors(),
                     )
                     characters.forEach { resident ->
@@ -332,7 +347,11 @@ private fun ChatListScreen(
                                     appearance = "",
                                     clothing = "",
                                     negativePrompt = "",
+                                    cardJson = "group:${selectedGroupMemberIds.joinToString(",")}",
                                 )
+                                selectedGroupMemberIds.forEach { memberId ->
+                                    store.addMessage(id, "character:$memberId", "我加入了这个群组。")
+                                }
                                 showNewGroupSheet = false
                                 groupName = ""
                                 selectedGroupMemberIds = emptySet()
@@ -996,6 +1015,92 @@ private fun FirstRelationshipStep(
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+        }
+    }
+}
+
+@Composable
+private fun GroupConversationScreen(
+    contentPadding: PaddingValues,
+    store: WorldStore,
+    groupCharacter: ResidentCharacter,
+    group: MessengerGroup,
+    revision: Int,
+    onChanged: () -> Unit,
+    onBack: () -> Unit,
+) {
+    val context = LocalContext.current
+    val provider = remember { ProviderStore(context) }
+    val members = remember(revision) { store.characters().filter { it.id in group.memberIds } }
+    val messages = remember(revision) { store.messages(groupCharacter.id) }
+    var input by rememberSaveable { mutableStateOf("") }
+    BackHandler { onBack() }
+    fun send() {
+        val body = input.trim()
+        if (body.isEmpty()) return
+        input = ""
+        store.addMessage(groupCharacter.id, "user", body)
+        val config = provider.loadFor(ProviderTask.Chat)
+        members.forEach { member ->
+            ProviderChatClient.stream(
+                config = config,
+                character = member,
+                messages = store.messages(groupCharacter.id),
+                memories = store.memories(member.id),
+                recap = store.conversationRecap(member.id),
+                worldFacts = store.worldFacts(),
+                cognition = store.characterCognition(member.id),
+                userContext = store.memberWorldContext("user"),
+                characterContext = store.memberWorldContext("character:${member.id}"),
+                relationship = store.relationship(member.id),
+                onDelta = {},
+                callback = { result ->
+                    val reply = result.getOrNull()?.text?.trim().takeUnless { it.isNullOrEmpty() }
+                        ?: "${member.name}：我听到了，我们一起聊聊。"
+                    runCatching {
+                        WorldStore(context.applicationContext).use { callbackStore ->
+                            callbackStore.addMessage(groupCharacter.id, "character:${member.id}", reply)
+                        }
+                    }
+                    onChanged()
+                },
+            )
+        }
+        onChanged()
+    }
+    Column(
+        modifier = Modifier.fillMaxSize().background(FancyInk).padding(
+            top = contentPadding.calculateTopPadding(),
+            bottom = contentPadding.calculateBottomPadding(),
+        ).testTag("messenger-group-conversation"),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(4.dp)) {
+            IconButton(onClick = onBack) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.back), tint = FancyCream)
+            }
+            Column(Modifier.weight(1f)) {
+                Text(groupCharacter.name, color = FancyCream, fontFamily = FontFamily.Serif, fontWeight = FontWeight.Bold)
+                Text(members.joinToString(" · ") { it.name }, color = FancyCream.copy(alpha = 0.6f), style = MaterialTheme.typography.labelSmall)
+            }
+        }
+        LazyColumn(Modifier.weight(1f).fillMaxWidth(), contentPadding = PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            items(messages, key = { it.id }) { message ->
+                val sender = when {
+                    message.sender == "user" -> "我"
+                    message.sender.startsWith("character:") -> members.firstOrNull { it.id == message.sender.removePrefix("character:").toLongOrNull() }?.name ?: "成员"
+                    else -> message.sender
+                }
+                Column(Modifier.fillMaxWidth().testTag("messenger-group-message-${message.id}")) {
+                    Text(sender, color = if (message.sender == "user") FancyGold else FancyCream.copy(alpha = 0.75f), style = MaterialTheme.typography.labelSmall)
+                    Text(message.body, color = FancyCream, modifier = Modifier.padding(top = 2.dp))
+                }
+            }
+        }
+        Row(Modifier.fillMaxWidth().padding(10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedTextField(input, { input = it }, Modifier.weight(1f), placeholder = { Text(stringResource(R.string.messenger_message_placeholder)) }, singleLine = true, colors = messengerSearchFieldColors())
+            IconButton(onClick = ::send, enabled = input.isNotBlank(), modifier = Modifier.testTag("messenger-group-send")) {
+                Icon(Icons.AutoMirrored.Filled.Send, contentDescription = stringResource(R.string.send), tint = FancyGold)
+            }
         }
     }
 }

@@ -4,7 +4,11 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTextInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Before
@@ -20,6 +24,11 @@ class MessengerSmokeTest {
     @Before
     fun seedDesktopShell() {
         seedDesktopShellForSmoke(InstrumentationRegistry.getInstrumentation().targetContext)
+        WorldStore(InstrumentationRegistry.getInstrumentation().targetContext).use { store ->
+            if (store.characters().none { it.name == "Alpha" }) {
+                store.addCharacter("Alpha", "curious", "resident", "", "", "")
+            }
+        }
         composeRule.activityRule.scenario.recreate()
         composeRule.waitForIdle()
     }
@@ -47,6 +56,19 @@ class MessengerSmokeTest {
         composeRule.onNodeWithTag("messenger-new-group").performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("messenger-new-group-confirm").assertIsDisplayed()
+    }
+
+    @Test
+    fun createsGroupWithoutPaywallAndSharesTimelineAcrossMembers() {
+        composeRule.onNodeWithTag("desktop-dock-messenger").performClick()
+        composeRule.onNodeWithTag("messenger-new-group").performClick()
+        composeRule.waitForIdle()
+        composeRule.onAllNodes(hasSetTextAction(), useUnmergedTree = true)[1].performTextInput("Room")
+        composeRule.onAllNodesWithText("Root", useUnmergedTree = true)[1].performClick()
+        composeRule.onAllNodesWithText("Alpha", useUnmergedTree = true)[1].performClick()
+        composeRule.onNodeWithTag("messenger-new-group-confirm").performClick()
+        composeRule.onNodeWithText("Room", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithText("Pro", useUnmergedTree = true).assertDoesNotExist()
     }
 
     @Test
