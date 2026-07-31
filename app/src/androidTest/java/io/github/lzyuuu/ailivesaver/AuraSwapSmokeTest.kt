@@ -110,6 +110,27 @@ class AuraSwapSmokeTest {
     }
 
     @Test
+    fun runsFancyRuntimeOnStagedPortraits() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val modelDir = File(context.filesDir, "models")
+        val source = File(context.filesDir, "test-source.jpg")
+        val target = File(context.filesDir, "test-target.jpg")
+        assumeTrue(HfModelCatalog.all { File(modelDir, it.file).isFile } && source.isFile && target.isFile)
+        val models = HfModelCatalog.associateBy { it.role }.mapValues { File(modelDir, it.value.file) }
+        assertEquals("", MnnNative.nativeLoad(models.getValue("detector").absolutePath, models.getValue("embedding").absolutePath, models.getValue("swapper").absolutePath, models.getValue("restore").absolutePath, false))
+        try {
+            val output = AuraImagePipeline.run(
+                android.graphics.BitmapFactory.decodeFile(source.absolutePath)!!,
+                android.graphics.BitmapFactory.decodeFile(target.absolutePath)!!,
+            )
+            assertEquals(512, output.width)
+            assertEquals(512, output.height)
+        } finally {
+            MnnNative.nativeUnload()
+        }
+    }
+
+    @Test
     fun imagePipelineConvertsChwAndParsesFivePointFace() {
         val bitmap = Bitmap.createBitmap(2, 2, Bitmap.Config.ARGB_8888).apply {
             setPixel(0, 0, Color.RED)
