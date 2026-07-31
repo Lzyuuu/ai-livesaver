@@ -1,5 +1,7 @@
 package io.github.lzyuuu.ailivesaver
 
+import android.graphics.Bitmap
+import android.graphics.Color
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
@@ -97,5 +99,29 @@ class AuraSwapSmokeTest {
         val invalid = File(context.cacheDir, "invalid.mnn").apply { writeBytes(byteArrayOf(1, 2, 3, 4)) }
         val error = MnnNative.nativeLoadModels(invalid.absolutePath, invalid.absolutePath, invalid.absolutePath)
         assertTrue(error.contains("SCRFD"))
+    }
+
+    @Test
+    fun imagePipelineConvertsChwAndParsesFivePointFace() {
+        val bitmap = Bitmap.createBitmap(2, 2, Bitmap.Config.ARGB_8888).apply {
+            setPixel(0, 0, Color.RED)
+            setPixel(1, 0, Color.GREEN)
+            setPixel(0, 1, Color.BLUE)
+            setPixel(1, 1, Color.WHITE)
+        }
+        val chw = AuraImagePipeline.bitmapToChw(bitmap, 2)
+        assertEquals(12, chw.size)
+        assertEquals(1f, chw[0], .01f)
+        assertEquals(-1f, chw[4], .01f)
+        val face = AuraImagePipeline.parseFaces(
+            floatArrayOf(0f, 0f, 100f, 100f, .9f, 20f, 20f, 80f, 20f, 50f, 50f, 25f, 80f, 75f, 80f),
+            100,
+            100,
+        ).single()
+        assertEquals(.9f, face.score, .001f)
+        assertEquals(5, face.points.size)
+        assertEquals(512, AuraImagePipeline.align(bitmap, face, 512).width)
+        val roundTrip = AuraImagePipeline.chwToBitmap(chw, 2)
+        assertEquals(Color.RED, roundTrip.getPixel(0, 0))
     }
 }
