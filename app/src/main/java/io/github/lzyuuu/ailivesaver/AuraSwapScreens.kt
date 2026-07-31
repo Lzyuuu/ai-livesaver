@@ -2,8 +2,10 @@ package io.github.lzyuuu.ailivesaver
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Matrix
+import android.graphics.Paint
 import android.graphics.PointF
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -135,6 +137,36 @@ internal object AuraImagePipeline {
         return bitmap
     }
 
+    /** Maps the restored 512px face back onto the target and blends only its feathered ellipse. */
+    fun fuseRestored(target: Bitmap, face: AuraFace, restored: Bitmap): Bitmap {
+        require(restored.width == 512 && restored.height == 512) { "CodeFormer 输出必须是 512x512" }
+        val masked = restored.copy(Bitmap.Config.ARGB_8888, true)
+        val pixels = IntArray(512 * 512)
+        masked.getPixels(pixels, 0, 512, 0, 0, 512, 512)
+        val cx = 56f * 512f / 112f
+        val cy = 70f * 512f / 112f
+        val rx = 42f * 512f / 112f
+        val ry = 52f * 512f / 112f
+        for (y in 0 until 512) for (x in 0 until 512) {
+            val dx = (x - cx) / rx
+            val dy = (y - cy) / ry
+            val distance = kotlin.math.sqrt(dx * dx + dy * dy)
+            val alpha = ((1f - distance) / .18f).coerceIn(0f, 1f)
+            val old = pixels[y * 512 + x]
+            pixels[y * 512 + x] = Color.argb((Color.alpha(old) * alpha).toInt(), Color.red(old), Color.green(old), Color.blue(old))
+        }
+        masked.setPixels(pixels, 0, 512, 0, 0, 512, 512)
+
+        val source = template112.map { PointF(it.x * 512f / 112f, it.y * 512f / 112f) }
+        val matrix = Matrix()
+        val src = source.take(3).flatMap { listOf(it.x, it.y) }.toFloatArray()
+        val dst = face.points.take(3).flatMap { listOf(it.x, it.y) }.toFloatArray()
+        check(matrix.setPolyToPoly(src, 0, dst, 0, 3)) { "人脸逆仿射变换失败" }
+        val output = target.copy(Bitmap.Config.ARGB_8888, true)
+        Canvas(output).drawBitmap(masked, matrix, Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG))
+        return output
+    }
+
     fun run(source: Bitmap, target: Bitmap): Bitmap {
         val targetFace = parseFaces(MnnNative.nativeDetect(bitmapToChw(target, 640)), target.width, target.height).firstOrNull()
             ?: error("SCRFD 未检测到 Target 人脸")
@@ -144,7 +176,8 @@ internal object AuraImagePipeline {
         val embedding = MnnNative.nativeEmbed(bitmapToChw(align(source, sourceFace, 112), 112))
         val swapped = MnnNative.nativeSwap(bitmapToChw(alignedTarget, 128), embedding)
         val swappedBitmap = chwToBitmap(swapped, 128)
-        return chwToBitmap(MnnNative.nativeRestore(bitmapToChw(swappedBitmap, 512), .5f), 512)
+        val restored = chwToBitmap(MnnNative.nativeRestore(bitmapToChw(swappedBitmap, 512), .5f), 512)
+        return fuseRestored(target, targetFace, restored)
     }
 }
 

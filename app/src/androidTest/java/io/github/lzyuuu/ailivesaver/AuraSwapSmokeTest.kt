@@ -124,4 +124,23 @@ class AuraSwapSmokeTest {
         val roundTrip = AuraImagePipeline.chwToBitmap(chw, 2)
         assertEquals(Color.RED, roundTrip.getPixel(0, 0))
     }
+
+    @Test
+    fun fusesRestoredFaceBackToTargetSize() {
+        val target = Bitmap.createBitmap(80, 60, Bitmap.Config.ARGB_8888).apply { eraseColor(Color.BLUE) }
+        val restored = Bitmap.createBitmap(512, 512, Bitmap.Config.ARGB_8888).apply { eraseColor(Color.RED) }
+        val face = AuraFace(.99f, listOf(
+            android.graphics.PointF(25f, 18f), android.graphics.PointF(55f, 18f),
+            android.graphics.PointF(40f, 32f), android.graphics.PointF(28f, 45f), android.graphics.PointF(52f, 45f),
+        ))
+        val fused = AuraImagePipeline.fuseRestored(target, face, restored)
+        assertEquals(80, fused.width)
+        assertEquals(60, fused.height)
+        assertTrue(fused.getPixelsChangedFrom(target))
+    }
+
+    private fun Bitmap.getPixelsChangedFrom(other: Bitmap): Boolean {
+        for (y in 0 until height) for (x in 0 until width) if (getPixel(x, y) != other.getPixel(x, y)) return true
+        return false
+    }
 }
