@@ -84,7 +84,23 @@ class MessengerRetryHttpSmokeTest {
         val done = CountDownLatch(1)
         var result: Result<ProviderResponse>? = null
         val character = WorldStore(context).use { it.characters().first { c -> c.id == characterId } }
-        ProviderChatClient.stream(config, character, emptyList(), emptyList(), null, emptyList(), emptyList(), MemberWorldContext("user", "", ""), MemberWorldContext("character:${character.id}", "", ""), RelationshipState("new", "", null, 0), {}, { result = it; done.countDown() })
+        ProviderChatClient.stream(
+            config = config,
+            character = character,
+            messages = emptyList(),
+            memories = emptyList(),
+            recap = null,
+            worldFacts = emptyList(),
+            cognition = emptyList(),
+            userContext = MemberWorldContext("user", "", ""),
+            characterContext = MemberWorldContext("character:${character.id}", "", ""),
+            relationship = RelationshipState("new", "", null, 0),
+            onDelta = {},
+            callback = { response ->
+                result = response
+                done.countDown()
+            },
+        )
         assertTrue(done.await(10, TimeUnit.SECONDS))
         result!!.onSuccess { response -> WorldStore(context).use { it.completeAssistantReply(replyId, response.text, response.config.preset.displayName, response.config.model) } }
             .onFailure { failure -> WorldStore(context).use { it.failAssistantReply(replyId, failure.message.orEmpty()) } }

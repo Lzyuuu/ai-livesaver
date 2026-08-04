@@ -816,6 +816,7 @@ private fun AiLivesaverApp(
                         onOpenBackups = { showBackups = true },
                         onOpenVoiceCalls = { showVoiceCalls = true },
                         onOpenStorage = { showStorage = true },
+                        onOpenHelpGuide = { showWelcomeGuide = true },
                         onOpenMoments = { openDesktopApp(DesktopApp.Ustagram) },
                         onOpenCommons = { openDesktopApp(DesktopApp.Rebbit) },
                     )
@@ -1534,6 +1535,7 @@ private fun MeScreen(
     onOpenBackups: () -> Unit,
     onOpenVoiceCalls: () -> Unit,
     onOpenStorage: () -> Unit,
+    onOpenHelpGuide: () -> Unit,
     onOpenMoments: () -> Unit,
     onOpenCommons: () -> Unit,
 ) {
@@ -1568,7 +1570,7 @@ private fun MeScreen(
             SettingsDestination.BACKUPS -> onOpenBackups()
             SettingsDestination.DIAGNOSTICS, SettingsDestination.RUNTIME, SettingsDestination.ABOUT -> onOpenDiagnostics()
             SettingsDestination.STORAGE, SettingsDestination.SYSTEM -> onOpenStorage()
-            SettingsDestination.HELP -> showWelcomeGuide = true
+            SettingsDestination.HELP -> onOpenHelpGuide()
             SettingsDestination.UPDATE -> onOpenUpdates()
             SettingsDestination.APPEARANCE, SettingsDestination.APP -> onOpenWorldSettings()
         }
