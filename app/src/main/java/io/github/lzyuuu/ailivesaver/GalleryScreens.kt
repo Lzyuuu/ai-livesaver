@@ -22,7 +22,14 @@ import androidx.compose.ui.unit.dp
 
 @Composable
 internal fun GalleryScreen(contentPadding: PaddingValues, store: WorldStore, revision: Int, onBack: () -> Unit) {
-    val assets = remember(revision) { store.queryCreativeAssets() }
+    val assets = remember(revision) {
+        val unified = store.queryCreativeAssets().toMutableList()
+        val known = unified.map { it.pathOrUri }.toSet()
+        store.posts("moment").asSequence()
+            .filter { it.mediaStatus == "ready" && !it.mediaPath.isNullOrBlank() && java.io.File(it.mediaPath!!).isFile && it.mediaPath !in known }
+            .forEach { post -> unified += CreativeAsset(0, post.mediaPath!!, "image", "social", post.mediaDescription, post.authorCharacterId, post.authorName, null, null, "ready", "", post.createdAt) }
+        unified
+    }
     var selected by remember { mutableStateOf<CreativeAsset?>(null) }
     Column(Modifier.fillMaxSize().background(FancyInk).padding(contentPadding).testTag("gallery-screen")) {
         Row(Modifier.fillMaxWidth().padding(8.dp)) { IconButton(onBack, Modifier.testTag("gallery-back")) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回") }; Text("Gallery", color=FancyCream, modifier=Modifier.padding(12.dp)) }

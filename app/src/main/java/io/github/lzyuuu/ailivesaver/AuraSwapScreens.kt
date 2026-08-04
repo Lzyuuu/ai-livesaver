@@ -431,8 +431,18 @@ private fun AuraSwapContent(context: Context) {
                     val embedding = models.first { it.name == "arcface_w600k_r50.fp16.mnn" }
                     val restore = models.first { it.name == "codeformer.fp16.mnn" }
                     HfModelCatalog.forEach { model -> HfModelStore.validateModel(context, File(HfModelStore.directory(context), model.file), model.sha256) }
-                    MnnAuraBackend.run(context, AuraSwapRequest(sourceFile, targetFile, swapper, detector, embedding, restore))
-                    "Aura Swap 完成"
+                    val cacheOutput = MnnAuraBackend.run(context, AuraSwapRequest(sourceFile, targetFile, swapper, detector, embedding, restore))
+                    val persistent = File(context.filesDir, "media/aura-${System.currentTimeMillis()}.png").apply {
+                        parentFile?.mkdirs()
+                        cacheOutput.inputStream().use { input -> outputStream().use { output -> input.copyTo(output) } }
+                    }
+                    WorldStore(context).use { store ->
+                        val sourceAsset = store.queryCreativeAssets().firstOrNull { it.pathOrUri == sourceFile.absolutePath }
+                        val targetAsset = store.queryCreativeAssets().firstOrNull { it.pathOrUri == targetFile.absolutePath }
+                        store.saveCreativeAsset(CreativeAsset(0, persistent.absolutePath, "image", "aura_swap", "Aura face swap", null, "", sourceAsset?.id, targetAsset?.id, "ready", "", System.currentTimeMillis()))
+                    }
+                    cacheOutput.delete()
+                    "Aura Swap 完成：已保存到 Gallery"
                 }.getOrElse { "Aura Swap 失败：${it.message}" }
             }
         }, modifier = Modifier.fillMaxWidth().testTag("aura-run"), colors = ButtonDefaults.buttonColors(containerColor = FancyGold, contentColor = FancyInk)) { Text("Run Aura Swap") }
