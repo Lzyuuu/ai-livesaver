@@ -47,7 +47,7 @@ internal fun GalleryScreen(contentPadding: PaddingValues, store: WorldStore, rev
         else LazyVerticalGrid(GridCells.Fixed(2), Modifier.fillMaxSize(), contentPadding=PaddingValues(12.dp), verticalArrangement=Arrangement.spacedBy(10.dp), horizontalArrangement=Arrangement.spacedBy(10.dp)) {
             items(visibleAssets, key={it.id}) { asset ->
                 val bitmap = remember(asset.pathOrUri) { BitmapFactory.decodeFile(asset.pathOrUri)?.asImageBitmap() }
-                Column(Modifier.testTag("gallery-image-${asset.id}").clickable { selected=asset }) { if(bitmap!=null) Image(bitmap, "图片", Modifier.fillMaxWidth().height(150.dp).clip(RoundedCornerShape(10.dp)), contentScale=ContentScale.Crop); Row { Text(asset.backend+" · "+asset.status, color=FancyCream, modifier = Modifier.weight(1f)); TextButton(onClick = { onUseAsAuraSource(asset) }) { Text("Aura Source") }; TextButton(onClick = { onUseAsAuraTarget(asset) }) { Text("Aura Target") }; TextButton(onClick = { deleteCandidate = asset }) { Text("删除") } } }
+                Column(Modifier.testTag("gallery-image-${asset.id.takeIf { it > 0 } ?: asset.pathOrUri.hashCode()}").clickable { selected=asset }) { if(bitmap!=null) Image(bitmap, "图片", Modifier.fillMaxWidth().height(150.dp).clip(RoundedCornerShape(10.dp)), contentScale=ContentScale.Crop); Row { Text(asset.backend+" · "+asset.status, color=FancyCream, modifier = Modifier.weight(1f)); TextButton(onClick = { onUseAsAuraSource(asset) }) { Text("Aura Source") }; TextButton(onClick = { onUseAsAuraTarget(asset) }) { Text("Aura Target") }; TextButton(onClick = { deleteCandidate = asset }) { Text("删除") } } }
             }
         }
     }

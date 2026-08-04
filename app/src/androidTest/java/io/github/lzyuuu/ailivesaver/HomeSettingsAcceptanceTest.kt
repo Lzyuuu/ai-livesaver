@@ -5,7 +5,7 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performTextInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -32,10 +32,14 @@ class HomeSettingsAcceptanceTest {
         rule.waitForIdle()
         rule.onNodeWithTag("me-settings-list").assertIsDisplayed()
         val roots = listOf("chat_brain", "voice_calls", "image_generation", "you_personas", "app", "developer_about", "system_settings", "help_guide", "update")
-        roots.forEach { root ->
-            rule.onNodeWithTag("settings-root-$root").performScrollTo().assertIsDisplayed().performClick()
+        roots.forEachIndexed { index, root ->
+            rule.onNodeWithTag("me-settings-list").performScrollToIndex(index + 2)
+            rule.onNodeWithTag("settings-root-$root").assertIsDisplayed()
         }
+        rule.onNodeWithTag("me-settings-list").performScrollToIndex(2)
+        rule.onNodeWithTag("settings-root-chat_brain").performClick()
         rule.onNodeWithTag("me-setting-provider").assertIsDisplayed()
+        rule.onNodeWithTag("me-settings-list").performScrollToIndex(0)
         rule.onNodeWithTag("settings-search").performTextInput("provider")
         rule.onNodeWithTag("me-setting-provider").assertIsDisplayed()
         rule.onNodeWithTag("settings-search").performTextInput("no-such-setting")

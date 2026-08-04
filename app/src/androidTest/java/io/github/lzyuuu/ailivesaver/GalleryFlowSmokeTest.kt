@@ -18,7 +18,7 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class GalleryFlowSmokeTest {
     @get:Rule val composeRule = createAndroidComposeRule<MainActivity>()
-    private var postId = 0L
+    private var assetId = 0L
 
     @Before
     fun seedGallery() {
@@ -36,13 +36,29 @@ class GalleryFlowSmokeTest {
                     recycle()
                 }
             }
-            postId = store.createImportedMediaPost(
+            store.createImportedMediaPost(
                 body = "gallery smoke",
                 path = image.absolutePath,
                 description = "smoke image",
                 audience = "world",
                 audienceCharacterIds = character.id.toString(),
                 aiResponsesEnabled = false,
+            )
+            assetId = store.saveCreativeAsset(
+                CreativeAsset(
+                    id = 0,
+                    pathOrUri = image.absolutePath,
+                    kind = "image",
+                    backend = "test",
+                    prompt = "gallery smoke",
+                    characterId = character.id,
+                    character = character.name,
+                    sourceId = null,
+                    targetId = null,
+                    status = "ready",
+                    error = "",
+                    createdAt = System.currentTimeMillis(),
+                ),
             )
         }
         composeRule.activityRule.scenario.recreate()
@@ -54,7 +70,7 @@ class GalleryFlowSmokeTest {
         composeRule.onNodeWithTag("desktop-dock-gallery", useUnmergedTree = true).performClick()
         composeRule.onNodeWithTag("gallery-screen", useUnmergedTree = true).assertIsDisplayed()
         composeRule.onNodeWithTag("gallery-filter-all", useUnmergedTree = true).assertIsDisplayed()
-        composeRule.onNodeWithTag("gallery-image-$postId", useUnmergedTree = true).performClick()
+        composeRule.onNodeWithTag("gallery-image-$assetId", useUnmergedTree = true).performClick()
         composeRule.onNodeWithTag("gallery-viewer", useUnmergedTree = true).assertIsDisplayed()
     }
 }
