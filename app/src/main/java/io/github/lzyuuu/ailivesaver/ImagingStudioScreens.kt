@@ -275,6 +275,7 @@ internal fun ImagingStudioScreen(
     var probing by remember { mutableStateOf(false) }
     var resultPath by remember { mutableStateOf<String?>(null) }
     var showAdvanced by remember { mutableStateOf(false) }
+    var showClearConfirm by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     DisposableEffect(Unit) {
@@ -346,6 +347,9 @@ internal fun ImagingStudioScreen(
                             saved.fold(
                                 onSuccess = {
                                     resultPath = it
+                                    WorldStore(context).use { store ->
+                                        store.saveCreativeAsset(CreativeAsset(0, it, "image", settings.backend.route, trimmed, null, "", null, null, "ready", "", System.currentTimeMillis()))
+                                    }
                                     status = "Forge generation ready · seed $seed"
                                 },
                                 onFailure = { status = "Studio generation failed: ${it.message}" },
@@ -385,6 +389,9 @@ internal fun ImagingStudioScreen(
                     result.fold(
                         onSuccess = { image ->
                             resultPath = image.path
+                            WorldStore(context).use { store ->
+                                store.saveCreativeAsset(CreativeAsset(0, image.path, "image", settings.backend.route, trimmed, null, "", null, null, "ready", "", System.currentTimeMillis()))
+                            }
                             status = "Local Dream generation ready · seed ${image.seed}"
                             WorldStore(context).use { store ->
                                 store.createImportedMediaPost(
@@ -453,12 +460,7 @@ internal fun ImagingStudioScreen(
     ) {
         ImagingTopBar(
             onBack = onBack,
-            onRefresh = {
-                resultPath = null
-                status = null
-                progressStep = 0
-                progressTotal = 0
-            },
+            onRefresh = { showClearConfirm = true },
             onAdvanced = { showAdvanced = true },
         )
 
@@ -602,6 +604,16 @@ internal fun ImagingStudioScreen(
                 )
             }
         }
+    }
+
+    if (showClearConfirm) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { showClearConfirm = false },
+            confirmButton = { Button(onClick = { prompt = ""; resultPath = null; status = null; progressStep = 0; progressTotal = 0; showClearConfirm = false }) { Text("Clear") } },
+            dismissButton = { Button(onClick = { showClearConfirm = false }) { Text("Cancel") } },
+            title = { Text("Clear Studio?") },
+            text = { Text("Only clears this studio input, preview, and temporary state. Gallery assets are kept.") },
+        )
     }
 
     if (showAdvanced) {
