@@ -91,5 +91,5 @@ extern "C" JNIEXPORT jstring JNICALL
 Java_io_github_lzyuuu_ailivesaver_MnnNative_nativeLoadWithoutRestore(
         JNIEnv* env, jclass clazz, jstring detector, jstring embedding, jstring swapper) {
     return Java_io_github_lzyuuu_ailivesaver_MnnNative_nativeLoad(
-            env, clazz, detector, embedding, swapper, detector, JNI_FALSE);
+            env, clazz, detector, embedding, swapper, nullptr, JNI_FALSE);
 }
