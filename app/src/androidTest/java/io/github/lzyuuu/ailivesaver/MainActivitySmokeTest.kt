@@ -167,7 +167,9 @@ class MainActivitySmokeTest {
         composeRule.onNodeWithTag("desktop-dock-messenger").performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithText("Messenger", useUnmergedTree = true).assertIsDisplayed()
-        composeRule.onNodeWithText("返回桌面", useUnmergedTree = true).performClick()
+        // Messenger exposes the desktop action as an accessibility description on its icon.
+        // Assert the user-visible external contract instead of requiring an implementation label.
+        composeRule.onNodeWithContentDescription("返回桌面", useUnmergedTree = true).performClick()
         composeRule.onNodeWithTag("system-desktop").assertIsDisplayed()
     }
 

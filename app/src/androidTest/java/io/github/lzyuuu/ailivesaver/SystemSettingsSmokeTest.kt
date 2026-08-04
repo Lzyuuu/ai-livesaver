@@ -30,8 +30,17 @@ class SystemSettingsSmokeTest {
             composeRule.onAllNodesWithText("Voice & Calls", useUnmergedTree = true)
                 .fetchSemanticsNodes().isNotEmpty()
         }
-        composeRule.onNodeWithText("Voice & Calls", useUnmergedTree = true).performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Voice & Calls", useUnmergedTree = true).assertIsDisplayed()
 
+        // The settings screen is a lazy list; verify the actual storage entry is reachable
+        // through the same user-visible settings surface rather than assuming fixed layout.
+        composeRule.onNodeWithText("返回", useUnmergedTree = true).performClick()
+        composeRule.onNodeWithTag("me-setting-storage").performScrollTo().performClick()
+        composeRule.waitUntil(5_000) {
+            composeRule.onAllNodesWithText("Storage", useUnmergedTree = true)
+                .fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onNodeWithText("Storage", useUnmergedTree = true).assertIsDisplayed()
     }
 
 }
