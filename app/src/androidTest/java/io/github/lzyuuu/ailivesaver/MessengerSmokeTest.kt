@@ -4,9 +4,6 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.test.onAllNodesWithText
-import androidx.compose.ui.test.hasSetTextAction
-import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -63,9 +60,17 @@ class MessengerSmokeTest {
         composeRule.onNodeWithTag("desktop-dock-messenger").performClick()
         composeRule.onNodeWithTag("messenger-new-group").performClick()
         composeRule.waitForIdle()
-        composeRule.onAllNodes(hasSetTextAction(), useUnmergedTree = true)[1].performTextInput("Room")
-        composeRule.onAllNodesWithText("Root", useUnmergedTree = true)[1].performClick()
-        composeRule.onAllNodesWithText("Alpha", useUnmergedTree = true)[1].performClick()
+        composeRule.onNodeWithTag("messenger-new-group-name", useUnmergedTree = true)
+            .performTextInput("Room")
+        val members = WorldStore(InstrumentationRegistry.getInstrumentation().targetContext).use { store ->
+            store.characters().filter { it.name == "Root" || it.name == "Alpha" }
+        }
+        members.forEach { member ->
+            composeRule.onNodeWithTag(
+                "messenger-new-group-member-${member.id}",
+                useUnmergedTree = true,
+            ).performClick()
+        }
         composeRule.onNodeWithTag("messenger-new-group-confirm").performClick()
         composeRule.onNodeWithText("Room", useUnmergedTree = true).assertIsDisplayed()
         composeRule.onNodeWithText("Pro", useUnmergedTree = true).assertDoesNotExist()
@@ -75,7 +80,10 @@ class MessengerSmokeTest {
     fun opensMessengerConversationAndExposesEnhancementsMenu() {
         composeRule.onNodeWithTag("desktop-dock-messenger").performClick()
         composeRule.waitForIdle()
-        composeRule.onNodeWithText("Root", useUnmergedTree = true).performClick()
+        val rootId = WorldStore(InstrumentationRegistry.getInstrumentation().targetContext).use { store ->
+            store.characters().first { it.name == "Root" }.id
+        }
+        composeRule.onNodeWithTag("chat-character-$rootId", useUnmergedTree = true).performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("messenger-open-context").assertIsDisplayed()
         composeRule.onNodeWithTag("messenger-send").assertIsDisplayed()

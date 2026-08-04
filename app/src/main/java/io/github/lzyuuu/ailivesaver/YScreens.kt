@@ -355,6 +355,7 @@ internal fun YScreen(
             body,
             "world",
             "",
+            existingStore = store,
         ) { onChanged() }
     }
 
@@ -362,7 +363,7 @@ internal fun YScreen(
         if (character == null || generating) return
         generating = true
         status = yGenerating
-        generateYPost(context, generatePrompt) { created ->
+        generateYPost(context, generatePrompt, existingStore = store) { created ->
             status = if (created) null else yGenerateFailed
             generating = false
             onChanged()
@@ -615,6 +616,7 @@ internal fun YScreen(
                                             body,
                                             post.audience,
                                             post.audienceCharacterIds,
+                                            existingStore = store,
                                         ) { onChanged() }
                                     }
                                 },

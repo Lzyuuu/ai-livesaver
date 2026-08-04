@@ -32,6 +32,8 @@ class UstagramFlowSmokeTest {
     @get:Rule
     val composeRule = createAndroidComposeRule<MainActivity>()
 
+    private var previousWorldPreferences: Map<String, Any?> = emptyMap()
+
     @get:Rule
     val notificationPermissionRule: TestRule = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
         GrantPermissionRule.grant(Manifest.permission.POST_NOTIFICATIONS)
@@ -42,6 +44,9 @@ class UstagramFlowSmokeTest {
     @Before
     fun seedUstagramFlow() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val preferences = context.getSharedPreferences("world_engine", android.content.Context.MODE_PRIVATE)
+        previousWorldPreferences = preferences.all.toMap()
+        preferences.edit().putBoolean("enabled", false).commit()
         seedDesktopShellForSmoke(context)
         clearMomentPostsForSmoke(context)
         composeRule.activityRule.scenario.recreate()
@@ -50,7 +55,21 @@ class UstagramFlowSmokeTest {
 
     @After
     fun cleanupMoments() {
-        clearMomentPostsForSmoke(InstrumentationRegistry.getInstrumentation().targetContext)
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        clearMomentPostsForSmoke(context)
+        val preferences = context.getSharedPreferences("world_engine", android.content.Context.MODE_PRIVATE)
+        val editor = preferences.edit().clear()
+        previousWorldPreferences.forEach { (key, value) ->
+            when (value) {
+                is Boolean -> editor.putBoolean(key, value)
+                is Int -> editor.putInt(key, value)
+                is Long -> editor.putLong(key, value)
+                is Float -> editor.putFloat(key, value)
+                is String -> editor.putString(key, value)
+                is Set<*> -> editor.putStringSet(key, value.filterIsInstance<String>().toSet())
+            }
+        }
+        editor.commit()
     }
 
     @Test

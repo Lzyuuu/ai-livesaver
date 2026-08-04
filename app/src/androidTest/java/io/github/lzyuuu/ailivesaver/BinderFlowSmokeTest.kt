@@ -36,6 +36,8 @@ class BinderFlowSmokeTest {
         composeRule.onNodeWithText("Binder", useUnmergedTree = true).assertIsDisplayed()
         composeRule.onNodeWithTag("binder-field-relationship").performTextInput("长期陪伴")
         composeRule.onNodeWithTag("binder-next").performClick()
-        composeRule.onNodeWithText("人格与沟通", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("binder-field-personality", useUnmergedTree = true)
+            .assertIsDisplayed()
     }
 }

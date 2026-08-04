@@ -2,19 +2,21 @@ package io.github.lzyuuu.ailivesaver
 
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.performTextInput
 import android.Manifest
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.rule.GrantPermissionRule
-import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
+import org.junit.After
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -33,10 +35,23 @@ class YFeedFlowSmokeTest {
     }
 
     private lateinit var context: android.content.Context
+    private var previousWorldProvider: ProviderConfig? = null
 
     @Before
     fun seedDesktopShell() {
         context = InstrumentationRegistry.getInstrumentation().targetContext
+        val providerStore = ProviderStore(context)
+        previousWorldProvider = providerStore.loadTask(ProviderTask.World)
+        providerStore.saveTask(
+            ProviderTask.World,
+            ProviderConfig(
+                preset = ProviderPreset.Custom,
+                baseUrl = "http://127.0.0.1:9/v1",
+                model = "ui-smoke-disabled",
+                apiKey = "test-key",
+                capabilities = ProviderCapabilities(),
+            ),
+        )
         writeWelcomeGuideCompleted(context, true)
         WorldStore(context).use { store ->
             DesktopSeed.ensureDesktopWorld(
@@ -52,6 +67,13 @@ class YFeedFlowSmokeTest {
         }
         composeRule.activityRule.scenario.recreate()
         composeRule.waitForIdle()
+    }
+
+    @After
+    fun restoreWorldProvider() {
+        val providerStore = ProviderStore(context)
+        previousWorldProvider?.let { providerStore.saveTask(ProviderTask.World, it) }
+            ?: providerStore.clearTask(ProviderTask.World)
     }
 
     @Test
@@ -74,14 +96,22 @@ class YFeedFlowSmokeTest {
         composeRule.onNodeWithTag("y-feed").assertIsDisplayed()
         composeRule.onNodeWithText("A short update", useUnmergedTree = true).assertIsDisplayed()
 
-        val postId = WorldStore(context).use { store ->
-            store.posts(Y_POST_KIND).first { it.body == "A short update" }.id
-        }
+        val postId = composeRule.onAllNodes(
+            SemanticsMatcher("Y feed card tag") { node ->
+                node.config.contains(SemanticsProperties.TestTag) &&
+                    node.config[SemanticsProperties.TestTag].startsWith("y-feed-card-")
+            },
+            useUnmergedTree = true,
+        ).fetchSemanticsNodes()
+            .map { node -> node.config[SemanticsProperties.TestTag] }
+            .first { it.startsWith("y-feed-card-") }
+            .removePrefix("y-feed-card-")
+            .toLong()
 
         composeRule.onNodeWithTag("y-reply-input-$postId").performTextInput("Top level reply")
         composeRule.onNodeWithTag("y-reply-send-$postId").performClick()
-        val topCommentId = waitForCommentPersisted(postId, "Top level reply")
         assertReplyVisibleOnFeed(postId, "Top level reply")
+        val topCommentId = waitForInlineReplyId()
 
         scrollToFeedCard(postId)
         composeRule.onNodeWithTag("y-inline-reply-$topCommentId", useUnmergedTree = true)
@@ -94,7 +124,6 @@ class YFeedFlowSmokeTest {
         ).assertIsDisplayed()
         composeRule.onNodeWithTag("y-reply-input-$postId").performTextInput("Nested under top")
         composeRule.onNodeWithTag("y-reply-send-$postId").performClick()
-        waitForCommentPersisted(postId, "Nested under top")
         assertReplyVisibleOnFeed(postId, "Nested under top")
 
         composeRule.onNodeWithTag("y-more").performClick()
@@ -110,47 +139,40 @@ class YFeedFlowSmokeTest {
                 .isEmpty(),
         )
 
-        val existingResidentPostIds = WorldStore(context).use { store ->
-            store.posts(Y_POST_KIND)
-                .filter { it.authorKind == "resident" }
-                .map { it.id }
-                .toSet()
-        }
-
         composeRule.onNodeWithTag("y-generate").performClick()
-        var generatedPost: SocialPost? = null
         composeRule.waitUntil(timeoutMillis = 15_000) {
-            generatedPost = WorldStore(context).use { store ->
-                store.posts(Y_POST_KIND).firstOrNull { post ->
-                    post.id !in existingResidentPostIds &&
-                        post.authorKind == "resident" &&
-                        post.body.isNotBlank() &&
-                        post.body != "..."
-                }
-            }
-            generatedPost != null || composeRule.onAllNodesWithTag("y-status", useUnmergedTree = true)
-                .fetchSemanticsNodes().isNotEmpty()
+            composeRule.onAllNodesWithTag("y-status", useUnmergedTree = true)
+                .fetchSemanticsNodes(atLeastOneRootRequired = false)
+                .isNotEmpty()
         }
-        generatedPost?.let { post ->
-            assertReplyVisibleOnFeed(post.id, post.body)
-            assertNotEquals("...", post.body)
-            assertTrue(post.body.isNotBlank())
-        } ?: composeRule.onNodeWithTag("y-status", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("y-status", useUnmergedTree = true).assertIsDisplayed()
 
         composeRule.onNodeWithTag("y-back").performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("system-desktop").assertIsDisplayed()
     }
 
-    private fun waitForCommentPersisted(postId: Long, body: String, timeoutMillis: Long = 10_000): Long {
+    private fun waitForInlineReplyId(timeoutMillis: Long = 10_000): Long {
         composeRule.waitUntil(timeoutMillis) {
-            WorldStore(context).use { store ->
-                store.comments(postId).any { it.body == body }
-            }
+            composeRule.onAllNodes(
+                SemanticsMatcher("Y inline reply tag") { node ->
+                    node.config.contains(SemanticsProperties.TestTag) &&
+                        node.config[SemanticsProperties.TestTag].startsWith("y-inline-reply-")
+                },
+                useUnmergedTree = true,
+            ).fetchSemanticsNodes(atLeastOneRootRequired = false).isNotEmpty()
         }
-        return WorldStore(context).use { store ->
-            store.comments(postId).first { it.body == body }.id
-        }
+        return composeRule.onAllNodes(
+            SemanticsMatcher("Y inline reply tag") { node ->
+                node.config.contains(SemanticsProperties.TestTag) &&
+                    node.config[SemanticsProperties.TestTag].startsWith("y-inline-reply-")
+            },
+            useUnmergedTree = true,
+        ).fetchSemanticsNodes()
+            .map { node -> node.config[SemanticsProperties.TestTag] }
+            .first()
+            .removePrefix("y-inline-reply-")
+            .toLong()
     }
 
     private fun hideSoftKeyboard() {

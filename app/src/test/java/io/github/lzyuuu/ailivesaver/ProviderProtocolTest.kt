@@ -177,6 +177,62 @@ class ProviderProtocolTest {
     }
 
     @Test
+    fun deepSeekThinkingTuningSurvivesCustomPresetStaging() {
+        val byHost = ProviderConfig(
+            preset = ProviderPreset.Custom,
+            baseUrl = "https://api.deepseek.com",
+            model = "custom-name",
+            apiKey = "test-key",
+        )
+        val byModel = ProviderConfig(
+            preset = ProviderPreset.Custom,
+            baseUrl = "https://provider.example/v1",
+            model = "deepseek-v4-flash",
+            apiKey = "test-key",
+        )
+        val unrelated = ProviderConfig(
+            preset = ProviderPreset.Custom,
+            baseUrl = "https://provider.example/v1",
+            model = "other-model",
+            apiKey = "test-key",
+        )
+
+        assertTrue(byHost.shouldDisableThinking())
+        assertTrue(byModel.shouldDisableThinking())
+        assertFalse(unrelated.shouldDisableThinking())
+        assertEquals(
+            "disabled",
+            ProviderProtocol.structuredRequest(
+                byHost.model,
+                "system",
+                "prompt",
+                disableThinking = byHost.shouldDisableThinking(),
+            ).getJSONObject("thinking").getString("type"),
+        )
+    }
+
+    @Test
+    fun retriesOnlyRecoverableStructuredFormatFailures() {
+        assertTrue(isRetryableStructuredFormatFailure(org.json.JSONException("unterminated")))
+        assertTrue(
+            isRetryableStructuredFormatFailure(
+                IllegalArgumentException("Structured reply must contain only body"),
+            ),
+        )
+        assertTrue(
+            isRetryableStructuredFormatFailure(
+                IllegalArgumentException("Structured reply body must be a string"),
+            ),
+        )
+        assertFalse(
+            isRetryableStructuredFormatFailure(
+                IllegalArgumentException("Structured reply is missing body"),
+            ),
+        )
+        assertFalse(isRetryableStructuredFormatFailure(java.io.IOException("HTTP 401")))
+    }
+
+    @Test
     fun retriesOnlyTransientProviderFailures() {
         assertTrue(isTransientProviderFailure("HTTP 429"))
         assertTrue(isTransientProviderFailure("HTTP 503"))

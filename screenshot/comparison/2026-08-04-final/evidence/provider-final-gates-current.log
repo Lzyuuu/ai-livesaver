@@ -1,0 +1,254 @@
+gate_started_utc=2026-08-04T14:53:04Z
+workspace=/Users/laizhaoyu/Documents/知识工作区/30-个人/项目/fancy-ai-apk
+source=app/src/main/java/io/github/lzyuuu/ailivesaver/ProviderConfig.kt mtime=2026-08-04T22:02:19Z
+source=app/src/test/java/io/github/lzyuuu/ailivesaver/ProviderProtocolTest.kt mtime=2026-08-04T22:02:31Z
+source=app/src/main/java/io/github/lzyuuu/ailivesaver/BinderOrchestrator.kt mtime=2026-08-04T22:51:55Z
+source=app/src/androidTest/java/io/github/lzyuuu/ailivesaver/BinderOrchestratorValidationTest.kt mtime=2026-08-04T22:52:19Z
+source=app/src/androidTest/java/io/github/lzyuuu/ailivesaver/MessengerRetryHttpSmokeTest.kt mtime=2026-08-04T22:46:53Z
+c319bd3a43754f84d8931b34dcf97ed7323fa28a78c6ffab8c3edf865f1d9a09  app/src/main/java/io/github/lzyuuu/ailivesaver/ProviderConfig.kt
+30a682f74c5921a797edc3950026592d7e00015d8067f08da4b4834cbb93ba05  app/src/test/java/io/github/lzyuuu/ailivesaver/ProviderProtocolTest.kt
+4555449663ba8c66c43368f457bb9a65e6cb2f289193f6a25bd19c64b2086186  app/src/main/java/io/github/lzyuuu/ailivesaver/BinderOrchestrator.kt
+25cd364f745026cdcc6bd7f6d62f3480a4489073d41f7530631a294e32220955  app/src/androidTest/java/io/github/lzyuuu/ailivesaver/BinderOrchestratorValidationTest.kt
+aed20ecad1b4ba11cfe69326d66c5c0863bc57be98f6ca7da28ee4f51b02d9ab  app/src/androidTest/java/io/github/lzyuuu/ailivesaver/MessengerRetryHttpSmokeTest.kt
+provider_staged_api28=true provider_staged_api36=true transport=stdin private_file=true
+command=./gradlew --rerun-tasks :app:testDebugUnitTest :app:lintDebug :app:assembleDebug :app:assembleDebugAndroidTest :app:connectedDebugAndroidTest
+Reusing configuration cache.
+> Task :app:generateDebugAndroidTestAssets UP-TO-DATE
+> Task :app:generateDebugAssets UP-TO-DATE
+> Task :app:preBuild UP-TO-DATE
+> Task :app:preDebugBuild UP-TO-DATE
+> Task :app:preDebugUnitTestBuild UP-TO-DATE
+> Task :app:preDebugAndroidTestBuild SKIPPED
+> Task :app:extractDeepLinksDebug
+> Task :app:createDebugCompatibleScreenManifests
+> Task :app:generateDebugResources
+> Task :app:javaPreCompileDebug
+> Task :app:mapDebugSourceSetPaths
+> Task :app:javaPreCompileDebugUnitTest
+> Task :app:extractProguardFiles
+> Task :app:mergeDebugNativeDebugMetadata NO-SOURCE
+> Task :app:generateDebugBuildConfig
+> Task :app:desugarDebugFileDependencies
+> Task :app:mergeDebugAssets
+> Task :app:compressDebugAssets
+> Task :app:mergeDebugJniLibFolders
+> Task :app:validateSigningDebug
+> Task :app:writeDebugAppMetadata
+> Task :app:writeDebugSigningConfigVersions
+> Task :app:generateDebugAndroidTestResources
+> Task :app:configureCMakeDebug[arm64-v8a]
+> Task :app:checkDebugAarMetadata
+> Task :app:processDebugAndroidTestNavigationResources
+> Task :app:processDebugNavigationResources
+> Task :app:mergeDebugAndroidTestManifest
+> Task :app:packageDebugAndroidTestResources
+> Task :app:javaPreCompileDebugAndroidTest
+> Task :app:processDebugAndroidTestManifest
+> Task :app:compileDebugNavigationResources
+> Task :app:mergeDebugAndroidTestAssets
+> Task :app:compressDebugAndroidTestAssets
+> Task :app:buildCMakeDebug[arm64-v8a]
+> Task :app:parseDebugAndroidTestLocalResources
+> Task :app:generateDebugAndroidTestBuildConfig
+> Task :app:desugarDebugAndroidTestFileDependencies
+> Task :app:checkDebugDuplicateClasses
+> Task :app:checkDebugAndroidTestDuplicateClasses
+> Task :app:generateDebugAndroidTestRFile
+> Task :app:checkDebugAndroidTestAarMetadata
+> Task :app:packageDebugResources
+> Task :app:mergeLibDexDebug
+> Task :app:processDebugMainManifest
+> Task :app:mapDebugAndroidTestSourceSetPaths
+> Task :app:compileDebugAndroidTestNavigationResources
+> Task :app:processDebugManifest
+> Task :app:processDebugManifestForPackage
+> Task :app:mergeLibDexDebugAndroidTest
+> Task :app:mergeDebugAndroidTestJniLibFolders
+> Task :app:validateSigningDebugAndroidTest
+> Task :app:writeDebugAndroidTestSigningConfigVersions
+> Task :app:parseDebugLocalResources
+> Task :app:generateDebugRFile
+> Task :app:mergeDebugNativeLibs
+> Task :app:mergeDebugAndroidTestNativeLibs NO-SOURCE
+> Task :app:stripDebugAndroidTestDebugSymbols NO-SOURCE
+> Task :app:stripDebugDebugSymbols
+> Task :app:generateDebugAndroidTestGlobalSynthetics
+> Task :app:generateDebugGlobalSynthetics
+> Task :app:mergeExtDexDebugAndroidTest
+> Task :app:mergeDebugAndroidTestResources
+> Task :app:mergeDebugResources
+> Task :app:processDebugAndroidTestResources
+> Task :app:processDebugResources
+> Task :app:mergeExtDexDebug
+
+> Task :app:compileDebugKotlin
+w: file:///Users/laizhaoyu/Documents/%E7%9F%A5%E8%AF%86%E5%B7%A5%E4%BD%9C%E5%8C%BA/30-%E4%B8%AA%E4%BA%BA/%E9%A1%B9%E7%9B%AE/fancy-ai-apk/app/src/main/java/io/github/lzyuuu/ailivesaver/ChatsScreen.kt:1786:28 'val LocalClipboardManager: ProvidableCompositionLocal<ClipboardManager>' is deprecated. Use LocalClipboard instead which supports suspend functions.
+w: file:///Users/laizhaoyu/Documents/%E7%9F%A5%E8%AF%86%E5%B7%A5%E4%BD%9C%E5%8C%BA/30-%E4%B8%AA%E4%BA%BA/%E9%A1%B9%E7%9B%AE/fancy-ai-apk/app/src/main/java/io/github/lzyuuu/ailivesaver/DesktopRoutes.kt:99:5 This annotation is currently applied to the value parameter only, but in the future it will also be applied to field.
+- To opt in to applying to both value parameter and field, add '-Xannotation-default-target=param-property' to your compiler arguments.
+- To keep applying to the value parameter only, use the '@param:' annotation target.
+
+See https://youtrack.jetbrains.com/issue/KT-73255 for more details.
+w: file:///Users/laizhaoyu/Documents/%E7%9F%A5%E8%AF%86%E5%B7%A5%E4%BD%9C%E5%8C%BA/30-%E4%B8%AA%E4%BA%BA/%E9%A1%B9%E7%9B%AE/fancy-ai-apk/app/src/main/java/io/github/lzyuuu/ailivesaver/DesktopRoutes.kt:100:5 This annotation is currently applied to the value parameter only, but in the future it will also be applied to field.
+- To opt in to applying to both value parameter and field, add '-Xannotation-default-target=param-property' to your compiler arguments.
+- To keep applying to the value parameter only, use the '@param:' annotation target.
+
+See https://youtrack.jetbrains.com/issue/KT-73255 for more details.
+w: file:///Users/laizhaoyu/Documents/%E7%9F%A5%E8%AF%86%E5%B7%A5%E4%BD%9C%E5%8C%BA/30-%E4%B8%AA%E4%BA%BA/%E9%A1%B9%E7%9B%AE/fancy-ai-apk/app/src/main/java/io/github/lzyuuu/ailivesaver/DesktopRoutes.kt:101:5 This annotation is currently applied to the value parameter only, but in the future it will also be applied to field.
+- To opt in to applying to both value parameter and field, add '-Xannotation-default-target=param-property' to your compiler arguments.
+- To keep applying to the value parameter only, use the '@param:' annotation target.
+
+See https://youtrack.jetbrains.com/issue/KT-73255 for more details.
+w: file:///Users/laizhaoyu/Documents/%E7%9F%A5%E8%AF%86%E5%B7%A5%E4%BD%9C%E5%8C%BA/30-%E4%B8%AA%E4%BA%BA/%E9%A1%B9%E7%9B%AE/fancy-ai-apk/app/src/main/java/io/github/lzyuuu/ailivesaver/DesktopRoutes.kt:102:5 This annotation is currently applied to the value parameter only, but in the future it will also be applied to field.
+- To opt in to applying to both value parameter and field, add '-Xannotation-default-target=param-property' to your compiler arguments.
+- To keep applying to the value parameter only, use the '@param:' annotation target.
+
+See https://youtrack.jetbrains.com/issue/KT-73255 for more details.
+w: file:///Users/laizhaoyu/Documents/%E7%9F%A5%E8%AF%86%E5%B7%A5%E4%BD%9C%E5%8C%BA/30-%E4%B8%AA%E4%BA%BA/%E9%A1%B9%E7%9B%AE/fancy-ai-apk/app/src/main/java/io/github/lzyuuu/ailivesaver/GalleryScreens.kt:30:110 Unnecessary non-null assertion (!!) on a non-null receiver of type 'String'.
+w: file:///Users/laizhaoyu/Documents/%E7%9F%A5%E8%AF%86%E5%B7%A5%E4%BD%9C%E5%8C%BA/30-%E4%B8%AA%E4%BA%BA/%E9%A1%B9%E7%9B%AE/fancy-ai-apk/app/src/main/java/io/github/lzyuuu/ailivesaver/ImagingStudioScreens.kt:286:17 'var statusBarColor: Int' is deprecated. Deprecated in Java.
+w: file:///Users/laizhaoyu/Documents/%E7%9F%A5%E8%AF%86%E5%B7%A5%E4%BD%9C%E5%8C%BA/30-%E4%B8%AA%E4%BA%BA/%E9%A1%B9%E7%9B%AE/fancy-ai-apk/app/src/main/java/io/github/lzyuuu/ailivesaver/ImagingStudioScreens.kt:287:17 'var navigationBarColor: Int' is deprecated. Deprecated in Java.
+w: file:///Users/laizhaoyu/Documents/%E7%9F%A5%E8%AF%86%E5%B7%A5%E4%BD%9C%E5%8C%BA/30-%E4%B8%AA%E4%BA%BA/%E9%A1%B9%E7%9B%AE/fancy-ai-apk/app/src/main/java/io/github/lzyuuu/ailivesaver/ImagingStudioScreens.kt:294:45 Unnecessary safe call on a non-null receiver of type 'WindowInsetsControllerCompat'.
+w: file:///Users/laizhaoyu/Documents/%E7%9F%A5%E8%AF%86%E5%B7%A5%E4%BD%9C%E5%8C%BA/30-%E4%B8%AA%E4%BA%BA/%E9%A1%B9%E7%9B%AE/fancy-ai-apk/app/src/main/java/io/github/lzyuuu/ailivesaver/ImagingStudioScreens.kt:295:42 Unnecessary safe call on a non-null receiver of type 'WindowInsetsControllerCompat'.
+w: file:///Users/laizhaoyu/Documents/%E7%9F%A5%E8%AF%86%E5%B7%A5%E4%BD%9C%E5%8C%BA/30-%E4%B8%AA%E4%BA%BA/%E9%A1%B9%E7%9B%AE/fancy-ai-apk/app/src/main/java/io/github/lzyuuu/ailivesaver/RebbitScreens.kt:343:43 'var statusBarColor: Int' is deprecated. Deprecated in Java.
+w: file:///Users/laizhaoyu/Documents/%E7%9F%A5%E8%AF%86%E5%B7%A5%E4%BD%9C%E5%8C%BA/30-%E4%B8%AA%E4%BA%BA/%E9%A1%B9%E7%9B%AE/fancy-ai-apk/app/src/main/java/io/github/lzyuuu/ailivesaver/RebbitScreens.kt:344:40 'var navigationBarColor: Int' is deprecated. Deprecated in Java.
+w: file:///Users/laizhaoyu/Documents/%E7%9F%A5%E8%AF%86%E5%B7%A5%E4%BD%9C%E5%8C%BA/30-%E4%B8%AA%E4%BA%BA/%E9%A1%B9%E7%9B%AE/fancy-ai-apk/app/src/main/java/io/github/lzyuuu/ailivesaver/RebbitScreens.kt:345:17 'var statusBarColor: Int' is deprecated. Deprecated in Java.
+w: file:///Users/laizhaoyu/Documents/%E7%9F%A5%E8%AF%86%E5%B7%A5%E4%BD%9C%E5%8C%BA/30-%E4%B8%AA%E4%BA%BA/%E9%A1%B9%E7%9B%AE/fancy-ai-apk/app/src/main/java/io/github/lzyuuu/ailivesaver/RebbitScreens.kt:346:17 'var navigationBarColor: Int' is deprecated. Deprecated in Java.
+w: file:///Users/laizhaoyu/Documents/%E7%9F%A5%E8%AF%86%E5%B7%A5%E4%BD%9C%E5%8C%BA/30-%E4%B8%AA%E4%BA%BA/%E9%A1%B9%E7%9B%AE/fancy-ai-apk/app/src/main/java/io/github/lzyuuu/ailivesaver/RebbitScreens.kt:350:45 Unnecessary safe call on a non-null receiver of type 'WindowInsetsControllerCompat'.
+w: file:///Users/laizhaoyu/Documents/%E7%9F%A5%E8%AF%86%E5%B7%A5%E4%BD%9C%E5%8C%BA/30-%E4%B8%AA%E4%BA%BA/%E9%A1%B9%E7%9B%AE/fancy-ai-apk/app/src/main/java/io/github/lzyuuu/ailivesaver/RebbitScreens.kt:351:42 Unnecessary safe call on a non-null receiver of type 'WindowInsetsControllerCompat'.
+w: file:///Users/laizhaoyu/Documents/%E7%9F%A5%E8%AF%86%E5%B7%A5%E4%BD%9C%E5%8C%BA/30-%E4%B8%AA%E4%BA%BA/%E9%A1%B9%E7%9B%AE/fancy-ai-apk/app/src/main/java/io/github/lzyuuu/ailivesaver/RebbitScreens.kt:352:46 Unnecessary safe call on a non-null receiver of type 'Window'.
+w: file:///Users/laizhaoyu/Documents/%E7%9F%A5%E8%AF%86%E5%B7%A5%E4%BD%9C%E5%8C%BA/30-%E4%B8%AA%E4%BA%BA/%E9%A1%B9%E7%9B%AE/fancy-ai-apk/app/src/main/java/io/github/lzyuuu/ailivesaver/RebbitScreens.kt:352:48 'var statusBarColor: Int' is deprecated. Deprecated in Java.
+w: file:///Users/laizhaoyu/Documents/%E7%9F%A5%E8%AF%86%E5%B7%A5%E4%BD%9C%E5%8C%BA/30-%E4%B8%AA%E4%BA%BA/%E9%A1%B9%E7%9B%AE/fancy-ai-apk/app/src/main/java/io/github/lzyuuu/ailivesaver/RebbitScreens.kt:353:43 Unnecessary safe call on a non-null receiver of type 'Window'.
+w: file:///Users/laizhaoyu/Documents/%E7%9F%A5%E8%AF%86%E5%B7%A5%E4%BD%9C%E5%8C%BA/30-%E4%B8%AA%E4%BA%BA/%E9%A1%B9%E7%9B%AE/fancy-ai-apk/app/src/main/java/io/github/lzyuuu/ailivesaver/RebbitScreens.kt:353:45 'var navigationBarColor: Int' is deprecated. Deprecated in Java.
+w: file:///Users/laizhaoyu/Documents/%E7%9F%A5%E8%AF%86%E5%B7%A5%E4%BD%9C%E5%8C%BA/30-%E4%B8%AA%E4%BA%BA/%E9%A1%B9%E7%9B%AE/fancy-ai-apk/app/src/main/java/io/github/lzyuuu/ailivesaver/UstagramScreens.kt:246:43 'var statusBarColor: Int' is deprecated. Deprecated in Java.
+w: file:///Users/laizhaoyu/Documents/%E7%9F%A5%E8%AF%86%E5%B7%A5%E4%BD%9C%E5%8C%BA/30-%E4%B8%AA%E4%BA%BA/%E9%A1%B9%E7%9B%AE/fancy-ai-apk/app/src/main/java/io/github/lzyuuu/ailivesaver/UstagramScreens.kt:247:40 'var navigationBarColor: Int' is deprecated. Deprecated in Java.
+w: file:///Users/laizhaoyu/Documents/%E7%9F%A5%E8%AF%86%E5%B7%A5%E4%BD%9C%E5%8C%BA/30-%E4%B8%AA%E4%BA%BA/%E9%A1%B9%E7%9B%AE/fancy-ai-apk/app/src/main/java/io/github/lzyuuu/ailivesaver/UstagramScreens.kt:248:17 'var statusBarColor: Int' is deprecated. Deprecated in Java.
+w: file:///Users/laizhaoyu/Documents/%E7%9F%A5%E8%AF%86%E5%B7%A5%E4%BD%9C%E5%8C%BA/30-%E4%B8%AA%E4%BA%BA/%E9%A1%B9%E7%9B%AE/fancy-ai-apk/app/src/main/java/io/github/lzyuuu/ailivesaver/UstagramScreens.kt:249:17 'var navigationBarColor: Int' is deprecated. Deprecated in Java.
+w: file:///Users/laizhaoyu/Documents/%E7%9F%A5%E8%AF%86%E5%B7%A5%E4%BD%9C%E5%8C%BA/30-%E4%B8%AA%E4%BA%BA/%E9%A1%B9%E7%9B%AE/fancy-ai-apk/app/src/main/java/io/github/lzyuuu/ailivesaver/UstagramScreens.kt:253:45 Unnecessary safe call on a non-null receiver of type 'WindowInsetsControllerCompat'.
+w: file:///Users/laizhaoyu/Documents/%E7%9F%A5%E8%AF%86%E5%B7%A5%E4%BD%9C%E5%8C%BA/30-%E4%B8%AA%E4%BA%BA/%E9%A1%B9%E7%9B%AE/fancy-ai-apk/app/src/main/java/io/github/lzyuuu/ailivesaver/UstagramScreens.kt:254:42 Unnecessary safe call on a non-null receiver of type 'WindowInsetsControllerCompat'.
+w: file:///Users/laizhaoyu/Documents/%E7%9F%A5%E8%AF%86%E5%B7%A5%E4%BD%9C%E5%8C%BA/30-%E4%B8%AA%E4%BA%BA/%E9%A1%B9%E7%9B%AE/fancy-ai-apk/app/src/main/java/io/github/lzyuuu/ailivesaver/UstagramScreens.kt:255:46 Unnecessary safe call on a non-null receiver of type 'Window'.
+w: file:///Users/laizhaoyu/Documents/%E7%9F%A5%E8%AF%86%E5%B7%A5%E4%BD%9C%E5%8C%BA/30-%E4%B8%AA%E4%BA%BA/%E9%A1%B9%E7%9B%AE/fancy-ai-apk/app/src/main/java/io/github/lzyuuu/ailivesaver/UstagramScreens.kt:255:48 'var statusBarColor: Int' is deprecated. Deprecated in Java.
+w: file:///Users/laizhaoyu/Documents/%E7%9F%A5%E8%AF%86%E5%B7%A5%E4%BD%9C%E5%8C%BA/30-%E4%B8%AA%E4%BA%BA/%E9%A1%B9%E7%9B%AE/fancy-ai-apk/app/src/main/java/io/github/lzyuuu/ailivesaver/UstagramScreens.kt:256:43 Unnecessary safe call on a non-null receiver of type 'Window'.
+w: file:///Users/laizhaoyu/Documents/%E7%9F%A5%E8%AF%86%E5%B7%A5%E4%BD%9C%E5%8C%BA/30-%E4%B8%AA%E4%BA%BA/%E9%A1%B9%E7%9B%AE/fancy-ai-apk/app/src/main/java/io/github/lzyuuu/ailivesaver/UstagramScreens.kt:256:45 'var navigationBarColor: Int' is deprecated. Deprecated in Java.
+w: file:///Users/laizhaoyu/Documents/%E7%9F%A5%E8%AF%86%E5%B7%A5%E4%BD%9C%E5%8C%BA/30-%E4%B8%AA%E4%BA%BA/%E9%A1%B9%E7%9B%AE/fancy-ai-apk/app/src/main/java/io/github/lzyuuu/ailivesaver/YScreens.kt:253:39 'var statusBarColor: Int' is deprecated. Deprecated in Java.
+w: file:///Users/laizhaoyu/Documents/%E7%9F%A5%E8%AF%86%E5%B7%A5%E4%BD%9C%E5%8C%BA/30-%E4%B8%AA%E4%BA%BA/%E9%A1%B9%E7%9B%AE/fancy-ai-apk/app/src/main/java/io/github/lzyuuu/ailivesaver/YScreens.kt:254:36 'var navigationBarColor: Int' is deprecated. Deprecated in Java.
+w: file:///Users/laizhaoyu/Documents/%E7%9F%A5%E8%AF%86%E5%B7%A5%E4%BD%9C%E5%8C%BA/30-%E4%B8%AA%E4%BA%BA/%E9%A1%B9%E7%9B%AE/fancy-ai-apk/app/src/main/java/io/github/lzyuuu/ailivesaver/YScreens.kt:266:20 'var statusBarColor: Int' is deprecated. Deprecated in Java.
+w: file:///Users/laizhaoyu/Documents/%E7%9F%A5%E8%AF%86%E5%B7%A5%E4%BD%9C%E5%8C%BA/30-%E4%B8%AA%E4%BA%BA/%E9%A1%B9%E7%9B%AE/fancy-ai-apk/app/src/main/java/io/github/lzyuuu/ailivesaver/YScreens.kt:267:20 'var navigationBarColor: Int' is deprecated. Deprecated in Java.
+w: file:///Users/laizhaoyu/Documents/%E7%9F%A5%E8%AF%86%E5%B7%A5%E4%BD%9C%E5%8C%BA/30-%E4%B8%AA%E4%BA%BA/%E9%A1%B9%E7%9B%AE/fancy-ai-apk/app/src/main/java/io/github/lzyuuu/ailivesaver/YScreens.kt:273:46 Unnecessary safe call on a non-null receiver of type 'WindowInsetsControllerCompat'.
+w: file:///Users/laizhaoyu/Documents/%E7%9F%A5%E8%AF%86%E5%B7%A5%E4%BD%9C%E5%8C%BA/30-%E4%B8%AA%E4%BA%BA/%E9%A1%B9%E7%9B%AE/fancy-ai-apk/app/src/main/java/io/github/lzyuuu/ailivesaver/YScreens.kt:274:43 Unnecessary safe call on a non-null receiver of type 'WindowInsetsControllerCompat'.
+w: file:///Users/laizhaoyu/Documents/%E7%9F%A5%E8%AF%86%E5%B7%A5%E4%BD%9C%E5%8C%BA/30-%E4%B8%AA%E4%BA%BA/%E9%A1%B9%E7%9B%AE/fancy-ai-apk/app/src/main/java/io/github/lzyuuu/ailivesaver/YScreens.kt:275:42 Unnecessary safe call on a non-null receiver of type 'Window'.
+w: file:///Users/laizhaoyu/Documents/%E7%9F%A5%E8%AF%86%E5%B7%A5%E4%BD%9C%E5%8C%BA/30-%E4%B8%AA%E4%BA%BA/%E9%A1%B9%E7%9B%AE/fancy-ai-apk/app/src/main/java/io/github/lzyuuu/ailivesaver/YScreens.kt:275:44 'var statusBarColor: Int' is deprecated. Deprecated in Java.
+w: file:///Users/laizhaoyu/Documents/%E7%9F%A5%E8%AF%86%E5%B7%A5%E4%BD%9C%E5%8C%BA/30-%E4%B8%AA%E4%BA%BA/%E9%A1%B9%E7%9B%AE/fancy-ai-apk/app/src/main/java/io/github/lzyuuu/ailivesaver/YScreens.kt:276:39 Unnecessary safe call on a non-null receiver of type 'Window'.
+w: file:///Users/laizhaoyu/Documents/%E7%9F%A5%E8%AF%86%E5%B7%A5%E4%BD%9C%E5%8C%BA/30-%E4%B8%AA%E4%BA%BA/%E9%A1%B9%E7%9B%AE/fancy-ai-apk/app/src/main/java/io/github/lzyuuu/ailivesaver/YScreens.kt:276:41 'var navigationBarColor: Int' is deprecated. Deprecated in Java.
+w: file:///Users/laizhaoyu/Documents/%E7%9F%A5%E8%AF%86%E5%B7%A5%E4%BD%9C%E5%8C%BA/30-%E4%B8%AA%E4%BA%BA/%E9%A1%B9%E7%9B%AE/fancy-ai-apk/app/src/main/java/io/github/lzyuuu/ailivesaver/YScreens.kt:277:53 Unnecessary safe call on a non-null receiver of type 'WindowInsetsControllerCompat'.
+
+> Task :app:processDebugJavaRes
+> Task :app:compileDebugJavaWithJavac
+> Task :app:generateDebugLintReportModel
+> Task :app:bundleDebugClassesToRuntimeJar
+> Task :app:bundleDebugClassesToCompileJar
+> Task :app:generateDebugAndroidTestLintModel
+> Task :app:generateDebugUnitTestLintModel
+> Task :app:mergeDebugJavaResource
+> Task :app:compileDebugUnitTestKotlin
+> Task :app:compileDebugUnitTestJavaWithJavac NO-SOURCE
+> Task :app:processDebugUnitTestJavaRes
+> Task :app:testDebugUnitTest
+
+> Task :app:compileDebugAndroidTestKotlin
+w: file:///Users/laizhaoyu/Documents/%E7%9F%A5%E8%AF%86%E5%B7%A5%E4%BD%9C%E5%8C%BA/30-%E4%B8%AA%E4%BA%BA/%E9%A1%B9%E7%9B%AE/fancy-ai-apk/app/src/androidTest/java/io/github/lzyuuu/ailivesaver/AuraSwapSmokeTest.kt:28:33 'fun <reified A : ComponentActivity> createAndroidComposeRule(effectContext: CoroutineContext = ...): AndroidComposeTestRule<ActivityScenarioRule<A>, A>' is deprecated. Use `androidx.compose.ui.test.junit4.v2.createAndroidComposeRule` instead. The v2 APIs use StandardTestDispatcher instead of UnconfinedTestDispatcher, which aligns with standard coroutine behavior by queuing tasks rather than executing them immediately. Tests relying on immediate execution may require explicit synchronization. Please refer to the migration guide for more details.
+w: file:///Users/laizhaoyu/Documents/%E7%9F%A5%E8%AF%86%E5%B7%A5%E4%BD%9C%E5%8C%BA/30-%E4%B8%AA%E4%BA%BA/%E9%A1%B9%E7%9B%AE/fancy-ai-apk/app/src/androidTest/java/io/github/lzyuuu/ailivesaver/BinderFlowSmokeTest.kt:19:23 'fun <reified A : ComponentActivity> createAndroidComposeRule(effectContext: CoroutineContext = ...): AndroidComposeTestRule<ActivityScenarioRule<A>, A>' is deprecated. Use `androidx.compose.ui.test.junit4.v2.createAndroidComposeRule` instead. The v2 APIs use StandardTestDispatcher instead of UnconfinedTestDispatcher, which aligns with standard coroutine behavior by queuing tasks rather than executing them immediately. Tests relying on immediate execution may require explicit synchronization. Please refer to the migration guide for more details.
+w: file:///Users/laizhaoyu/Documents/%E7%9F%A5%E8%AF%86%E5%B7%A5%E4%BD%9C%E5%8C%BA/30-%E4%B8%AA%E4%BA%BA/%E9%A1%B9%E7%9B%AE/fancy-ai-apk/app/src/androidTest/java/io/github/lzyuuu/ailivesaver/CharactersImportPersistenceSmokeTest.kt:25:31 'fun <reified A : ComponentActivity> createAndroidComposeRule(effectContext: CoroutineContext = ...): AndroidComposeTestRule<ActivityScenarioRule<A>, A>' is deprecated. Use `androidx.compose.ui.test.junit4.v2.createAndroidComposeRule` instead. The v2 APIs use StandardTestDispatcher instead of UnconfinedTestDispatcher, which aligns with standard coroutine behavior by queuing tasks rather than executing them immediately. Tests relying on immediate execution may require explicit synchronization. Please refer to the migration guide for more details.
+w: file:///Users/laizhaoyu/Documents/%E7%9F%A5%E8%AF%86%E5%B7%A5%E4%BD%9C%E5%8C%BA/30-%E4%B8%AA%E4%BA%BA/%E9%A1%B9%E7%9B%AE/fancy-ai-apk/app/src/androidTest/java/io/github/lzyuuu/ailivesaver/GalleryFlowSmokeTest.kt:20:33 'fun <reified A : ComponentActivity> createAndroidComposeRule(effectContext: CoroutineContext = ...): AndroidComposeTestRule<ActivityScenarioRule<A>, A>' is deprecated. Use `androidx.compose.ui.test.junit4.v2.createAndroidComposeRule` instead. The v2 APIs use StandardTestDispatcher instead of UnconfinedTestDispatcher, which aligns with standard coroutine behavior by queuing tasks rather than executing them immediately. Tests relying on immediate execution may require explicit synchronization. Please refer to the migration guide for more details.
+w: file:///Users/laizhaoyu/Documents/%E7%9F%A5%E8%AF%86%E5%B7%A5%E4%BD%9C%E5%8C%BA/30-%E4%B8%AA%E4%BA%BA/%E9%A1%B9%E7%9B%AE/fancy-ai-apk/app/src/androidTest/java/io/github/lzyuuu/ailivesaver/HomeSettingsAcceptanceTest.kt:21:26 'fun <reified A : ComponentActivity> createAndroidComposeRule(effectContext: CoroutineContext = ...): AndroidComposeTestRule<ActivityScenarioRule<A>, A>' is deprecated. Use `androidx.compose.ui.test.junit4.v2.createAndroidComposeRule` instead. The v2 APIs use StandardTestDispatcher instead of UnconfinedTestDispatcher, which aligns with standard coroutine behavior by queuing tasks rather than executing them immediately. Tests relying on immediate execution may require explicit synchronization. Please refer to the migration guide for more details.
+w: file:///Users/laizhaoyu/Documents/%E7%9F%A5%E8%AF%86%E5%B7%A5%E4%BD%9C%E5%8C%BA/30-%E4%B8%AA%E4%BA%BA/%E9%A1%B9%E7%9B%AE/fancy-ai-apk/app/src/androidTest/java/io/github/lzyuuu/ailivesaver/ImagingLocalDreamSuccessTest.kt:34:31 'fun <reified A : ComponentActivity> createAndroidComposeRule(effectContext: CoroutineContext = ...): AndroidComposeTestRule<ActivityScenarioRule<A>, A>' is deprecated. Use `androidx.compose.ui.test.junit4.v2.createAndroidComposeRule` instead. The v2 APIs use StandardTestDispatcher instead of UnconfinedTestDispatcher, which aligns with standard coroutine behavior by queuing tasks rather than executing them immediately. Tests relying on immediate execution may require explicit synchronization. Please refer to the migration guide for more details.
+w: file:///Users/laizhaoyu/Documents/%E7%9F%A5%E8%AF%86%E5%B7%A5%E4%BD%9C%E5%8C%BA/30-%E4%B8%AA%E4%BA%BA/%E9%A1%B9%E7%9B%AE/fancy-ai-apk/app/src/androidTest/java/io/github/lzyuuu/ailivesaver/MainActivitySmokeTest.kt:25:23 'fun <reified A : ComponentActivity> createAndroidComposeRule(effectContext: CoroutineContext = ...): AndroidComposeTestRule<ActivityScenarioRule<A>, A>' is deprecated. Use `androidx.compose.ui.test.junit4.v2.createAndroidComposeRule` instead. The v2 APIs use StandardTestDispatcher instead of UnconfinedTestDispatcher, which aligns with standard coroutine behavior by queuing tasks rather than executing them immediately. Tests relying on immediate execution may require explicit synchronization. Please refer to the migration guide for more details.
+w: file:///Users/laizhaoyu/Documents/%E7%9F%A5%E8%AF%86%E5%B7%A5%E4%BD%9C%E5%8C%BA/30-%E4%B8%AA%E4%BA%BA/%E9%A1%B9%E7%9B%AE/fancy-ai-apk/app/src/androidTest/java/io/github/lzyuuu/ailivesaver/MessengerRetryHttpSmokeTest.kt:113:22 Unnecessary non-null assertion (!!) on a non-null receiver of type 'Result<ProviderResponse>'.
+w: file:///Users/laizhaoyu/Documents/%E7%9F%A5%E8%AF%86%E5%B7%A5%E4%BD%9C%E5%8C%BA/30-%E4%B8%AA%E4%BA%BA/%E9%A1%B9%E7%9B%AE/fancy-ai-apk/app/src/androidTest/java/io/github/lzyuuu/ailivesaver/MessengerSmokeTest.kt:19:23 'fun <reified A : ComponentActivity> createAndroidComposeRule(effectContext: CoroutineContext = ...): AndroidComposeTestRule<ActivityScenarioRule<A>, A>' is deprecated. Use `androidx.compose.ui.test.junit4.v2.createAndroidComposeRule` instead. The v2 APIs use StandardTestDispatcher instead of UnconfinedTestDispatcher, which aligns with standard coroutine behavior by queuing tasks rather than executing them immediately. Tests relying on immediate execution may require explicit synchronization. Please refer to the migration guide for more details.
+w: file:///Users/laizhaoyu/Documents/%E7%9F%A5%E8%AF%86%E5%B7%A5%E4%BD%9C%E5%8C%BA/30-%E4%B8%AA%E4%BA%BA/%E9%A1%B9%E7%9B%AE/fancy-ai-apk/app/src/androidTest/java/io/github/lzyuuu/ailivesaver/PhoneContactsSmokeTest.kt:22:23 'fun <reified A : ComponentActivity> createAndroidComposeRule(effectContext: CoroutineContext = ...): AndroidComposeTestRule<ActivityScenarioRule<A>, A>' is deprecated. Use `androidx.compose.ui.test.junit4.v2.createAndroidComposeRule` instead. The v2 APIs use StandardTestDispatcher instead of UnconfinedTestDispatcher, which aligns with standard coroutine behavior by queuing tasks rather than executing them immediately. Tests relying on immediate execution may require explicit synchronization. Please refer to the migration guide for more details.
+w: file:///Users/laizhaoyu/Documents/%E7%9F%A5%E8%AF%86%E5%B7%A5%E4%BD%9C%E5%8C%BA/30-%E4%B8%AA%E4%BA%BA/%E9%A1%B9%E7%9B%AE/fancy-ai-apk/app/src/androidTest/java/io/github/lzyuuu/ailivesaver/RebbitFlowSmokeTest.kt:29:23 'fun <reified A : ComponentActivity> createAndroidComposeRule(effectContext: CoroutineContext = ...): AndroidComposeTestRule<ActivityScenarioRule<A>, A>' is deprecated. Use `androidx.compose.ui.test.junit4.v2.createAndroidComposeRule` instead. The v2 APIs use StandardTestDispatcher instead of UnconfinedTestDispatcher, which aligns with standard coroutine behavior by queuing tasks rather than executing them immediately. Tests relying on immediate execution may require explicit synchronization. Please refer to the migration guide for more details.
+w: file:///Users/laizhaoyu/Documents/%E7%9F%A5%E8%AF%86%E5%B7%A5%E4%BD%9C%E5%8C%BA/30-%E4%B8%AA%E4%BA%BA/%E9%A1%B9%E7%9B%AE/fancy-ai-apk/app/src/androidTest/java/io/github/lzyuuu/ailivesaver/SystemSettingsSmokeTest.kt:19:23 'fun <reified A : ComponentActivity> createAndroidComposeRule(effectContext: CoroutineContext = ...): AndroidComposeTestRule<ActivityScenarioRule<A>, A>' is deprecated. Use `androidx.compose.ui.test.junit4.v2.createAndroidComposeRule` instead. The v2 APIs use StandardTestDispatcher instead of UnconfinedTestDispatcher, which aligns with standard coroutine behavior by queuing tasks rather than executing them immediately. Tests relying on immediate execution may require explicit synchronization. Please refer to the migration guide for more details.
+w: file:///Users/laizhaoyu/Documents/%E7%9F%A5%E8%AF%86%E5%B7%A5%E4%BD%9C%E5%8C%BA/30-%E4%B8%AA%E4%BA%BA/%E9%A1%B9%E7%9B%AE/fancy-ai-apk/app/src/androidTest/java/io/github/lzyuuu/ailivesaver/UstagramFlowSmokeTest.kt:33:23 'fun <reified A : ComponentActivity> createAndroidComposeRule(effectContext: CoroutineContext = ...): AndroidComposeTestRule<ActivityScenarioRule<A>, A>' is deprecated. Use `androidx.compose.ui.test.junit4.v2.createAndroidComposeRule` instead. The v2 APIs use StandardTestDispatcher instead of UnconfinedTestDispatcher, which aligns with standard coroutine behavior by queuing tasks rather than executing them immediately. Tests relying on immediate execution may require explicit synchronization. Please refer to the migration guide for more details.
+w: file:///Users/laizhaoyu/Documents/%E7%9F%A5%E8%AF%86%E5%B7%A5%E4%BD%9C%E5%8C%BA/30-%E4%B8%AA%E4%BA%BA/%E9%A1%B9%E7%9B%AE/fancy-ai-apk/app/src/androidTest/java/io/github/lzyuuu/ailivesaver/YFeedFlowSmokeTest.kt:28:23 'fun <reified A : ComponentActivity> createAndroidComposeRule(effectContext: CoroutineContext = ...): AndroidComposeTestRule<ActivityScenarioRule<A>, A>' is deprecated. Use `androidx.compose.ui.test.junit4.v2.createAndroidComposeRule` instead. The v2 APIs use StandardTestDispatcher instead of UnconfinedTestDispatcher, which aligns with standard coroutine behavior by queuing tasks rather than executing them immediately. Tests relying on immediate execution may require explicit synchronization. Please refer to the migration guide for more details.
+
+> Task :app:dexBuilderDebug
+> Task :app:processDebugAndroidTestJavaRes
+> Task :app:mergeDebugAndroidTestJavaResource
+> Task :app:compileDebugAndroidTestJavaWithJavac
+> Task :app:mergeProjectDexDebug
+> Task :app:dexBuilderDebugAndroidTest
+> Task :app:mergeProjectDexDebugAndroidTest
+> Task :app:packageDebug
+> Task :app:assembleDebug
+> Task :app:createDebugApkListingFileRedirect
+> Task :app:packageDebugAndroidTest
+> Task :app:assembleDebugAndroidTest
+> Task :app:createDebugAndroidTestApkListingFileRedirect
+> Task :app:lintAnalyzeDebugUnitTest
+Starting 73 tests on ai_livesaver_api36(AVD) - 16
+
+io.github.lzyuuu.ailivesaver.AuraRuntimeE2eTest > runsFancyRuntimeWithoutActivity[ai_livesaver_api36(AVD) - 16] [33mSKIPPED [0m
+Starting 73 tests on ai_livesaver_api28(AVD) - 9
+
+io.github.lzyuuu.ailivesaver.AuraRuntimeE2eTest > runsFancyRuntimeWithoutActivity[ai_livesaver_api28(AVD) - 9] [33mSKIPPED [0m
+
+io.github.lzyuuu.ailivesaver.AuraSwapSmokeTest > runsFancyRuntimeOnStagedPortraits[ai_livesaver_api36(AVD) - 16] [33mSKIPPED [0m
+
+io.github.lzyuuu.ailivesaver.AuraSwapSmokeTest > runsFancyRuntimeOnStagedPortraits[ai_livesaver_api28(AVD) - 9] [33mSKIPPED [0m
+> Task :app:lintAnalyzeDebugAndroidTest
+ai_livesaver_api36(AVD) - 16 Tests 4/73 completed. (2 skipped) (0 failed)
+ai_livesaver_api28(AVD) - 9 Tests 5/73 completed. (2 skipped) (0 failed)
+> Task :app:lintAnalyzeDebug
+
+
+io.github.lzyuuu.ailivesaver.AuraSwapSmokeTest > loadsFancyModelsWhenStagedOnDevice[ai_livesaver_api28(AVD) - 9] [33mSKIPPED [0m
+
+io.github.lzyuuu.ailivesaver.AuraSwapSmokeTest > loadsFancyModelsWhenStagedOnDevice[ai_livesaver_api36(AVD) - 16] [33mSKIPPED [0m
+ai_livesaver_api36(AVD) - 16 Tests 8/73 completed. (3 skipped) (0 failed)
+ai_livesaver_api28(AVD) - 9 Tests 9/73 completed. (3 skipped) (0 failed)
+
+> Task :app:connectedDebugAndroidTest
+
+ai_livesaver_api36(AVD) - 16 Tests 10/73 completed. (3 skipped) (0 failed)
+ai_livesaver_api28(AVD) - 9 Tests 16/73 completed. (3 skipped) (0 failed)
+ai_livesaver_api36(AVD) - 16 Tests 16/73 completed. (3 skipped) (0 failed)
+ai_livesaver_api28(AVD) - 9 Tests 18/73 completed. (3 skipped) (0 failed)
+ai_livesaver_api36(AVD) - 16 Tests 18/73 completed. (3 skipped) (0 failed)
+ai_livesaver_api28(AVD) - 9 Tests 25/73 completed. (3 skipped) (0 failed)
+
+io.github.lzyuuu.ailivesaver.ImagingLocalDreamSuccessTest > testConnectionAndGeneratePersistsResult[ai_livesaver_api28(AVD) - 9] [33mSKIPPED [0m
+ai_livesaver_api36(AVD) - 16 Tests 24/73 completed. (3 skipped) (0 failed)
+ai_livesaver_api28(AVD) - 9 Tests 30/73 completed. (4 skipped) (0 failed)
+ai_livesaver_api36(AVD) - 16 Tests 26/73 completed. (3 skipped) (0 failed)
+
+io.github.lzyuuu.ailivesaver.ImagingLocalDreamSuccessTest > testConnectionAndGeneratePersistsResult[ai_livesaver_api36(AVD) - 16] [33mSKIPPED [0m
+ai_livesaver_api28(AVD) - 9 Tests 32/73 completed. (4 skipped) (0 failed)
+ai_livesaver_api36(AVD) - 16 Tests 30/73 completed. (4 skipped) (0 failed)
+ai_livesaver_api28(AVD) - 9 Tests 34/73 completed. (4 skipped) (0 failed)
+ai_livesaver_api36(AVD) - 16 Tests 32/73 completed. (4 skipped) (0 failed)
+ai_livesaver_api28(AVD) - 9 Tests 38/73 completed. (4 skipped) (0 failed)
+ai_livesaver_api36(AVD) - 16 Tests 33/73 completed. (4 skipped) (0 failed)
+ai_livesaver_api28(AVD) - 9 Tests 41/73 completed. (4 skipped) (0 failed)
+
+> Task :app:lintReportDebug
+Wrote HTML report to file:///Users/laizhaoyu/Documents/知识工作区/30-个人/项目/fancy-ai-apk/app/build/reports/lint-results-debug.html
+Wrote SARIF report to file:///Users/laizhaoyu/Documents/知识工作区/30-个人/项目/fancy-ai-apk/app/build/reports/lint-results-debug.sarif
+
+> Task :app:lintDebug
+ai_livesaver_api36(AVD) - 16 Tests 38/73 completed. (4 skipped) (0 failed)
+ai_livesaver_api28(AVD) - 9 Tests 46/73 completed. (4 skipped) (0 failed)
+ai_livesaver_api36(AVD) - 16 Tests 41/73 completed. (4 skipped) (0 failed)
+ai_livesaver_api28(AVD) - 9 Tests 47/73 completed. (4 skipped) (0 failed)
+ai_livesaver_api36(AVD) - 16 Tests 46/73 completed. (4 skipped) (0 failed)
+ai_livesaver_api28(AVD) - 9 Tests 48/73 completed. (4 skipped) (0 failed)
+ai_livesaver_api36(AVD) - 16 Tests 47/73 completed. (4 skipped) (0 failed)
+ai_livesaver_api28(AVD) - 9 Tests 77/73 completed. (4 skipped) (0 failed)
+Finished 77 tests on ai_livesaver_api28(AVD) - 9
+ai_livesaver_api36(AVD) - 16 Tests 48/73 completed. (4 skipped) (0 failed)
+ai_livesaver_api36(AVD) - 16 Tests 59/73 completed. (4 skipped) (0 failed)
+ai_livesaver_api36(AVD) - 16 Tests 76/73 completed. (4 skipped) (0 failed)
+Finished 77 tests on ai_livesaver_api36(AVD) - 16
+
+BUILD SUCCESSFUL in 3m 20s
+88 actionable tasks: 88 executed
+Configuration cache entry reused.
+gradle_exit_code=0
+gate_finished_utc=2026-08-04T14:56:26Z

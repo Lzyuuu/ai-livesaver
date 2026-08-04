@@ -612,11 +612,16 @@ internal object WorldEngine {
             val created = runCatching {
                 result.fold(
                     onSuccess = { response ->
+                        val generatedBody = response.text.trim()
+                        if (generatedBody.isEmpty() || generatedBody == "...") {
+                            recordFailure(context, "Provider returned an empty social post")
+                            return@fold false
+                        }
                         store.createPost(
                             kind = "moment",
                             authorName = actor.name,
                             title = "",
-                            body = response.text.ifBlank { "✨" },
+                            body = generatedBody,
                             authorKind = "resident",
                             authorCharacterId = actor.id,
                             providerName = response.config.preset.displayName,
@@ -669,9 +674,13 @@ internal object WorldEngine {
         audience: String,
         audienceCharacterIds: String,
         queuedJobId: Long? = null,
+        existingStore: WorldStore? = null,
         callback: (Boolean) -> Unit,
     ): Boolean {
-        val store = WorldStore(context)
+        val store = existingStore ?: WorldStore(context)
+        fun closeOwnedStore() {
+            if (existingStore == null) store.close()
+        }
         val allowedIds = audienceCharacterIds
             .split(",")
             .mapNotNull(String::toLongOrNull)
@@ -688,7 +697,7 @@ internal object WorldEngine {
         )
         if (character == null) {
             queuedJobId?.let(store::removeSocialResponse)
-            store.close()
+            closeOwnedStore()
             callback(false)
             return true
         }
@@ -702,7 +711,7 @@ internal object WorldEngine {
                     audienceCharacterIds,
                 )
             }
-            store.close()
+            closeOwnedStore()
             callback(false)
             return true
         }
@@ -757,7 +766,7 @@ internal object WorldEngine {
                     if (failure is java.io.IOException &&
                         isTransientProviderFailure(failure.message.orEmpty())
                     ) {
-                        WorldStore(context).use { queuedStore ->
+                        val queueFailure: (WorldStore) -> Unit = { queuedStore ->
                             if (queuedJobId == null) {
                                 queuedStore.enqueueSocialResponse(
                                     postId,
@@ -770,11 +779,16 @@ internal object WorldEngine {
                                 queuedStore.incrementSocialResponseAttempts(queuedJobId)
                             }
                         }
+                        if (existingStore == null) {
+                            WorldStore(context).use(queueFailure)
+                        } else {
+                            queueFailure(store)
+                        }
                     }
                     false
                 },
             )
-            store.close()
+            closeOwnedStore()
             callback(created)
         }
         return true
@@ -889,8 +903,17 @@ internal object WorldEngine {
         val config = ProviderStore(context).loadFor(ProviderTask.World)
         val prompt = customPrompt.trim().ifBlank { DEFAULT_REBBIT_PROMPT }
 
-        fun persistGeneratedPost(body: String, providerName: String = "", modelName: String = ""): Boolean {
-            val text = sanitizeRebbitGeneratedBody(body, character.name, community)
+        fun persistGeneratedPost(
+            body: String,
+            providerName: String = "",
+            modelName: String = "",
+            allowSimulation: Boolean = providerName.isBlank(),
+        ): Boolean {
+            val text = if (allowSimulation) {
+                sanitizeRebbitGeneratedBody(body, character.name, community)
+            } else {
+                body.trim().takeIf(::isValidRebbitGeneratedBody) ?: return false
+            }
             return runCatching {
                 store.createPost(
                     kind = "forum",
@@ -926,6 +949,7 @@ internal object WorldEngine {
                         response.text,
                         providerName = response.config.preset.displayName,
                         modelName = response.config.model,
+                        allowSimulation = false,
                     )
                 },
                 onFailure = {

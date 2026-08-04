@@ -11,19 +11,23 @@ import android.content.Context
 internal fun generateYPost(
     context: Context,
     customPrompt: String,
+    existingStore: WorldStore? = null,
     callback: (Boolean) -> Unit,
 ): Boolean {
-    val store = WorldStore(context)
+    val store = existingStore ?: WorldStore(context)
+    fun closeOwnedStore() {
+        if (existingStore == null) store.close()
+    }
     val actor = store.characters(includeDeparted = false).firstOrNull()
         ?: store.primaryCharacter()
     if (actor == null) {
-        store.close()
+        closeOwnedStore()
         callback(false)
         return false
     }
     val config = ProviderStore(context).loadFor(ProviderTask.World)
     if (!config.supports(ProviderCapability.Structured)) {
-        store.close()
+        closeOwnedStore()
         callback(false)
         return false
     }
@@ -58,12 +62,12 @@ internal fun generateYPost(
                 },
                 onFailure = { false },
             )
-            store.close()
+            closeOwnedStore()
             callback(created)
         }
         true
     }.getOrElse {
-        store.close()
+        closeOwnedStore()
         callback(false)
         false
     }

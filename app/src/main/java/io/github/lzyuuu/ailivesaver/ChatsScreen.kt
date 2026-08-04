@@ -88,20 +88,18 @@ import androidx.compose.ui.unit.dp
 import java.text.DateFormat
 import java.util.Date
 
-private data class MessengerGroup(val id: Long, val memberIds: List<Long>, val prompt: String)
-
-private fun groupFor(store: WorldStore, character: ResidentCharacter): MessengerGroup? {
+private fun groupFor(store: WorldStore, character: ResidentCharacter): MessengerGroupSpec? {
     if (!character.cardJson.startsWith("group:")) return null
     val token = character.cardJson.removePrefix("group:")
     val persistedId = token.toLongOrNull()
     if (persistedId != null) {
         return store.loadPersistedMessengerGroup(persistedId)?.let {
-            MessengerGroup(it.id, it.memberIds, it.prompt)
+            MessengerGroupSpec(it.id, it.memberIds, it.prompt)
         }
     }
     // Compatibility with pre-contract group rows.
     val ids = token.split(',').mapNotNull(String::toLongOrNull)
-    return ids.takeIf { it.size >= 2 }?.let { MessengerGroup(0L, it, "") }
+    return ids.takeIf { it.size >= 2 }?.let { MessengerGroupSpec(0L, it, "") }
 }
 
 internal object ActiveChatReplies {
@@ -360,7 +358,9 @@ private fun ChatListScreen(
                                     selectedGroupMemberIds + resident.id
                                 }
                             },
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("messenger-new-group-member-${resident.id}"),
                         ) {
                             Text(
                                 "${if (selected) "✓ " else ""}${resident.name}",
@@ -1083,13 +1083,12 @@ private fun GroupConversationScreen(
     contentPadding: PaddingValues,
     store: WorldStore,
     groupCharacter: ResidentCharacter,
-    group: MessengerGroup,
+    group: MessengerGroupSpec,
     revision: Int,
     onChanged: () -> Unit,
     onBack: () -> Unit,
 ) {
     val context = LocalContext.current
-    val provider = remember { ProviderStore(context) }
     val allCharacters = remember(revision) { store.characters() }
     var memberIds by remember(group.id, revision) { mutableStateOf(group.memberIds.toSet()) }
     var prompt by remember(group.id, revision) { mutableStateOf(group.prompt) }
@@ -1114,63 +1113,21 @@ private fun GroupConversationScreen(
         val body = input.trim()
         if (body.isEmpty()) return
         input = ""
-        store.addMessage(groupCharacter.id, "user", body)
-        val config = provider.loadFor(ProviderTask.Chat)
-        members.forEach { member ->
-            val pendingReply = runCatching {
-                store.beginAssistantReply(
-                    groupCharacter.id,
-                    config.preset.displayName,
-                    config.model,
-                )
-            }.getOrElse { failure ->
-                error = failure.message.orEmpty()
-                return@forEach
-            }
-            val handle = ProviderStreamHandle()
-            groupHandles = groupHandles + (member.id to handle)
-            ProviderChatClient.stream(
-                config = config,
-                character = member,
-                messages = store.messages(groupCharacter.id),
-                memories = store.memories(member.id),
-                recap = store.conversationRecap(member.id),
-                worldFacts = store.worldFacts(),
-                cognition = store.characterCognition(member.id),
-                userContext = store.memberWorldContext("user"),
-                characterContext = store.memberWorldContext("character:${member.id}"),
-                relationship = store.relationship(member.id),
-                systemPromptAppendix = group.prompt,
-                onDelta = {},
-                handle = handle,
-                callback = { result ->
-                    groupHandles = groupHandles - member.id
-                    runCatching {
-                        WorldStore(context.applicationContext).use { callbackStore ->
-                            result.fold(
-                                onSuccess = { response ->
-                                    val reply = response.text.trim()
-                                    if (reply.isEmpty()) {
-                                        callbackStore.failAssistantReply(pendingReply.id, "Provider returned an empty reply")
-                                    } else {
-                                        callbackStore.completeAssistantReply(
-                                            pendingReply.id,
-                                            reply,
-                                            response.config.preset.displayName,
-                                            response.config.model,
-                                            finalSender = "character:${member.id}",
-                                        )
-                                    }
-                                },
-                                onFailure = { failure ->
-                                    callbackStore.failAssistantReply(pendingReply.id, failure.message.orEmpty())
-                                },
-                            )
-                        }
-                    }
-                    onChanged()
-                },
-            )
+        MessengerGroupOrchestrator.send(
+            context = context,
+            groupCharacterId = groupCharacter.id,
+            group = group,
+            body = body,
+            onHandlesChanged = { handles ->
+                groupHandles = handles
+                onChanged()
+            },
+            onMemberFinished = { _, _, result ->
+                result.exceptionOrNull()?.message?.takeIf(String::isNotBlank)?.let { error = it }
+                onChanged()
+            },
+        ).onFailure { failure ->
+            error = failure.message.orEmpty()
         }
         onChanged()
     }

@@ -169,28 +169,30 @@ class RealProviderInstrumentationTest {
                 "",
                 "",
                 "group:$groupRecordId",
-            ).also { groupId ->
-                store.addMessage(groupId, "user", "Follow the group scene instruction now.")
-            }
+            )
         }
 
-        memberIds.forEach { memberId ->
-            val pending = WorldStore(context).use {
-                it.beginAssistantReply(
-                    groupCharacterId,
-                    config.preset.displayName,
-                    config.model,
-                )
-            }
-            val response = stream(
-                config = config,
-                context = context,
-                characterId = memberId,
-                messagesCharacterId = groupCharacterId,
-                replyId = pending.id,
-                appendix = prompt,
-                finalSender = "character:$memberId",
-            )
+        val finished = CountDownLatch(memberIds.size)
+        val results = mutableMapOf<Long, Result<ProviderResponse>>()
+        val dispatch = MessengerGroupOrchestrator.send(
+            context = context,
+            groupCharacterId = groupCharacterId,
+            group = MessengerGroupSpec(groupRecordId, memberIds, prompt),
+            body = "Follow the group scene instruction now.",
+            onMemberFinished = { memberId, _, result ->
+                synchronized(results) { results[memberId] = result }
+                finished.countDown()
+            },
+        ).getOrThrow()
+        assertEquals(memberIds.toSet(), dispatch.handles.keys)
+        assertTrue(
+            "production group orchestration timed out",
+            finished.await(timeoutSeconds, TimeUnit.SECONDS),
+        )
+        val completed = synchronized(results) { results.toMap() }
+        assertEquals(memberIds.toSet(), completed.keys)
+        completed.values.forEach { result ->
+            val response = result.getOrThrow()
             assertTrue("group prompt marker was not followed", response.text.contains("GROUP_MARKER_804"))
         }
 
@@ -199,9 +201,13 @@ class RealProviderInstrumentationTest {
         assertEquals(prompt, reopenedGroup!!.prompt)
         assertEquals(memberIds.toSet(), reopenedGroup.memberIds.toSet())
         WorldStore(context).use { store ->
-            val replies = store.messages(groupCharacterId).filter {
+            val timeline = store.messages(groupCharacterId)
+            val userMessages = timeline.filter { it.sender == "user" }
+            val replies = timeline.filter {
                 it.status == "complete" && it.sender.startsWith("character:")
             }
+            assertEquals(1, userMessages.size)
+            assertEquals("Follow the group scene instruction now.", userMessages.single().body)
             assertEquals(2, replies.size)
             assertEquals(memberIds.map { "character:$it" }.toSet(), replies.map { it.sender }.toSet())
             assertTrue(replies.all { it.body.contains("GROUP_MARKER_804") })
@@ -211,40 +217,29 @@ class RealProviderInstrumentationTest {
     }
 
     private fun verifyBinder(context: Context, config: ProviderConfig) {
-        val response = awaitResult<ProviderResponse> { done ->
-            ProviderTextClient.completeStructured(
-                config,
-                "Generate fictional companion candidates. The body string itself must be JSON matching " +
-                    "{candidates:[{name,persona,relationship,reasons:[string]}]}.",
-                "Create exactly two concise, distinct candidates. Keep every field short.",
-                done,
-            )
-        }
-        val candidates = validateBinderCandidateList(response.text)
-        assertTrue(candidates.size >= 2)
         val draftId = "real-binder-${System.nanoTime()}"
+        val answers = BinderAnswers(
+            relationship = "real Provider acceptance",
+            preferences = "Create two concise and distinct candidates.",
+            personality = "Keep every field short.",
+        )
+        val generation = awaitResult<BinderGeneration> { done ->
+            BinderOrchestrator.generate(context, draftId, answers, done)
+        }
+        assertTrue(
+            "production Binder orchestration accepted fewer than two candidates",
+            generation.candidates.size >= 2,
+        )
+        assertEquals(config.preset.displayName, generation.providerName)
+        assertEquals(config.model, generation.modelName)
+
         val candidateId = "$draftId-0"
+        val first = BinderOrchestrator.confirm(context, draftId, 0, generation.candidates.first())
+        val second = BinderOrchestrator.confirm(context, draftId, 0, generation.candidates.first())
+        assertTrue(first > 0)
+        assertEquals(first, second)
         WorldStore(context).use { store ->
-            store.putBinderDraft(
-                BinderDraft(
-                    id = draftId,
-                    step = 5,
-                    payload = BinderAnswers(relationship = "real Provider acceptance").toJson(),
-                    updatedAt = System.currentTimeMillis(),
-                ),
-            )
-            val first = store.confirmBinderCandidateIdempotently(
-                candidateId,
-                draftId,
-                candidates.first(),
-            )
-            val second = store.confirmBinderCandidateIdempotently(
-                candidateId,
-                draftId,
-                candidates.first(),
-            )
-            assertTrue(first > 0)
-            assertEquals(first, second)
+            assertEquals(5, store.getBinderDraft(draftId)?.step)
             assertEquals(candidateId, store.getConfirmedBinderCandidate(draftId)?.id)
             assertTrue(store.characters().any { it.id == first })
             store.deleteCharacter(first)
@@ -254,15 +249,15 @@ class RealProviderInstrumentationTest {
     private fun verifySocialGeneration(context: Context, config: ProviderConfig) {
         seedDesktopShellForSmoke(context)
         val worldPreferences = context.getSharedPreferences("world_engine", Context.MODE_PRIVATE)
-        val previousEnabled = WorldEngine.isEnabled(context)
-        val previousBudget = WorldEngine.dailyBudget(context)
-        // Avoid racing the direct acceptance call with the scheduled world job that
-        // setEnabled(true) would enqueue. Configure the same persisted runtime state directly.
+        val previousWorldPreferences = worldPreferences.all.toMap()
+        // Avoid racing the direct acceptance call with a scheduled world job and make
+        // Ustagram persistence deterministic: event_count=0 never queues attached media.
         WorldEngine.setEnabled(context, false)
         worldPreferences.edit()
             .putBoolean("enabled", true)
             .putBoolean("task_paused", false)
             .putInt("daily_budget", 0)
+            .putInt("event_count", 0)
             .putInt("failure_count", 0)
             .remove("last_failure")
             .commit()
@@ -305,7 +300,7 @@ class RealProviderInstrumentationTest {
                 generateYPost(
                     context,
                     "Write one original short public update for this real integration test.",
-                    done,
+                    callback = done,
                 ),
             )
         }
@@ -320,10 +315,25 @@ class RealProviderInstrumentationTest {
             store.deleteAiPost(forum.id)
             store.deleteAiPost(yPost.id)
         }
-        worldPreferences.edit()
-            .putBoolean("enabled", previousEnabled)
-            .putInt("daily_budget", previousBudget)
-            .apply()
+        restorePreferences(worldPreferences, previousWorldPreferences)
+    }
+
+    private fun restorePreferences(
+        preferences: android.content.SharedPreferences,
+        values: Map<String, *>,
+    ) {
+        val editor = preferences.edit().clear()
+        values.forEach { (key, value) ->
+            when (value) {
+                is Boolean -> editor.putBoolean(key, value)
+                is Int -> editor.putInt(key, value)
+                is Long -> editor.putLong(key, value)
+                is Float -> editor.putFloat(key, value)
+                is String -> editor.putString(key, value)
+                is Set<*> -> editor.putStringSet(key, value.filterIsInstance<String>().toSet())
+            }
+        }
+        editor.commit()
     }
 
     private fun assertRealProviderPost(post: SocialPost, config: ProviderConfig, kind: String) {
@@ -381,21 +391,26 @@ class RealProviderInstrumentationTest {
     private fun target() = InstrumentationRegistry.getInstrumentation().targetContext
 
     private fun readStagedConfig(context: Context): ProviderConfig {
-        val file = File(context.filesDir, ".real-provider-test.json")
-        assumeTrue("real Provider credentials were not staged", file.isFile)
-        val raw = try {
-            file.readText()
-        } finally {
-            assertTrue("staged Provider credentials were not deleted", file.delete() || !file.exists())
-        }
-        val json = JSONObject(raw)
-        return ProviderConfig(
-            preset = ProviderPreset.Custom,
-            baseUrl = json.getString("baseUrl"),
-            model = json.getString("model"),
-            apiKey = json.getString("apiKey"),
-        ).also {
-            assertTrue("staged Provider configuration is invalid", it.isValid())
+        stagedConfig?.let { return it }
+        synchronized(stagedConfigLock) {
+            stagedConfig?.let { return it }
+            val file = File(context.filesDir, ".real-provider-test.json")
+            assumeTrue("real Provider credentials were not staged", file.isFile)
+            val raw = try {
+                file.readText()
+            } finally {
+                assertTrue("staged Provider credentials were not deleted", file.delete() || !file.exists())
+            }
+            val json = JSONObject(raw)
+            return ProviderConfig(
+                preset = ProviderPreset.Custom,
+                baseUrl = json.getString("baseUrl"),
+                model = json.getString("model"),
+                apiKey = json.getString("apiKey"),
+            ).also {
+                assertTrue("staged Provider configuration is invalid", it.isValid())
+                stagedConfig = it
+            }
         }
     }
 
@@ -423,4 +438,11 @@ class RealProviderInstrumentationTest {
 
     private fun <T> awaitResult(block: ((Result<T>) -> Unit) -> Unit): T =
         awaitRawResult(block).getOrThrow()
+
+    private companion object {
+        val stagedConfigLock = Any()
+
+        @Volatile
+        var stagedConfig: ProviderConfig? = null
+    }
 }

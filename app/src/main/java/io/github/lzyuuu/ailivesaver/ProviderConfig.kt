@@ -140,6 +140,17 @@ internal fun providerCandidates(config: ProviderConfig): List<ProviderConfig> =
         config.fallback?.takeIf(ProviderConfig::isValid)?.copy(fallback = null),
     ).distinctBy { "${it.baseUrl}\u0000${it.model}\u0000${it.apiKey}" }
 
+/** DeepSeek tuning also applies when the same endpoint is saved as a Custom Provider. */
+internal fun ProviderConfig.shouldDisableThinking(): Boolean =
+    preset == ProviderPreset.DeepSeek ||
+        baseUrl.contains("api.deepseek.com", ignoreCase = true) ||
+        model.startsWith("deepseek-", ignoreCase = true)
+
+internal fun isRetryableStructuredFormatFailure(failure: Throwable): Boolean =
+    failure is org.json.JSONException ||
+        failure.message.orEmpty().contains("must contain only body", ignoreCase = true) ||
+        failure.message.orEmpty().contains("body must be a string", ignoreCase = true)
+
 internal object ProviderProtocol {
     fun chatCompletionsUrl(baseUrl: String) =
         "${baseUrl.trim().trimEnd('/')}/chat/completions"
@@ -465,7 +476,7 @@ internal object ProviderConnectionTester {
                     .put("model", config.model)
                     .put("max_tokens", 16)
                     .apply {
-                        if (config.preset == ProviderPreset.DeepSeek) {
+                        if (config.shouldDisableThinking()) {
                             put("thinking", JSONObject().put("type", "disabled"))
                         }
                     }
@@ -512,6 +523,7 @@ internal object ProviderCapabilityTester {
                                             config.model,
                                             "Return JSON only with a single string field named body.",
                                             "Return body equal to OK.",
+                                            disableThinking = config.shouldDisableThinking(),
                                         ),
                                     ),
                                 )
@@ -523,6 +535,7 @@ internal object ProviderCapabilityTester {
                                         ProviderProtocol.visionRequest(
                                             config.model,
                                             ONE_PIXEL_DATA_URL,
+                                            disableThinking = config.shouldDisableThinking(),
                                         ),
                                     ),
                                 ).ifBlank { throw IOException("empty vision description") }
@@ -782,23 +795,31 @@ internal object ProviderTextClient {
             val result = runCatching {
                 var lastFailure: Throwable? = null
                 for (candidate in providerCandidates(config)) {
-                    try {
-                        if (!candidate.capabilities.supports(ProviderCapability.Structured)) {
-                            throw IOException("Provider structured JSON capability is not qualified")
-                        }
-                        val text = ProviderProtocol.parseStructuredBody(
-                            ProviderHttp.post(
-                                candidate,
-                                ProviderProtocol.structuredRequest(
-                                    candidate.model,
-                                    "$system\nReturn a JSON object with only one string field named body.",
-                                    "$prompt\nReturn only the JSON object; put the response text in body.",
+                    if (!candidate.capabilities.supports(ProviderCapability.Structured)) {
+                        lastFailure = IOException("Provider structured JSON capability is not qualified")
+                        continue
+                    }
+                    for (formatAttempt in 0..1) {
+                        try {
+                            val text = ProviderProtocol.parseStructuredBody(
+                                ProviderHttp.post(
+                                    candidate,
+                                    ProviderProtocol.structuredRequest(
+                                        candidate.model,
+                                        "$system\nReturn a JSON object with only one string field named body.",
+                                        "$prompt\nReturn only the JSON object; put the response text in body.",
+                                        disableThinking = candidate.shouldDisableThinking(),
+                                    ),
                                 ),
-                            ),
-                        )
-                        return@runCatching ProviderResponse(text, candidate)
-                    } catch (failure: Throwable) {
-                        lastFailure = failure
+                            )
+                            return@runCatching ProviderResponse(text, candidate)
+                        } catch (failure: Throwable) {
+                            lastFailure = failure
+                            // A successful HTTP response can still violate the strict structured
+                            // envelope. Retry once with the same shipped prompt; transport retries
+                            // remain owned by ProviderHttp and non-format failures are not duplicated.
+                            if (!isRetryableStructuredFormatFailure(failure) || formatAttempt == 1) break
+                        }
                     }
                 }
                 throw lastFailure ?: IOException("No valid Provider is configured")
@@ -826,7 +847,11 @@ internal object ProviderVisionClient {
                         val text = ProviderProtocol.parseReply(
                             ProviderHttp.post(
                                 candidate,
-                                ProviderProtocol.visionRequest(candidate.model, dataUrl),
+                                ProviderProtocol.visionRequest(
+                                candidate.model,
+                                dataUrl,
+                                disableThinking = candidate.shouldDisableThinking(),
+                            ),
                             ),
                         ).ifBlank { throw IOException("Vision Provider returned an empty description") }
                         return@runCatching ProviderResponse(text, candidate)
@@ -921,7 +946,7 @@ private object ProviderHttp {
         // DeepSeek v4 是推理模型：不关闭 thinking 时推理段会耗尽短 max_tokens
         // （能力检测拿不到 content），长对话也要先静默推理很久才有可见输出。
         // 陪伴聊天优先响应速度，因此对 DeepSeek 预设统一关闭 thinking。
-        if (config.preset == ProviderPreset.DeepSeek && !body.has("thinking")) {
+        if (config.shouldDisableThinking() && !body.has("thinking")) {
             body.put("thinking", JSONObject().put("type", "disabled"))
         }
         return body
