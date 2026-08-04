@@ -16,7 +16,7 @@ internal data class BinderAnswers(
 
 internal data class BinderCandidatePayload(val name: String, val persona: String, val relationship: String, val reasons: List<String>) {
     fun toJson() = JSONObject().put("name",name).put("persona",persona).put("relationship",relationship).put("reasons",JSONArray(reasons)).toString()
-    companion object { fun parse(raw: String): BinderCandidatePayload { val o=JSONObject(raw); val n=o.optString("name").trim(); val p=o.optString("persona").trim(); require(n.isNotEmpty() && p.isNotEmpty()) { "候选缺少 name/persona" }; val a=o.optJSONArray("reasons") ?: JSONArray(); return BinderCandidatePayload(n,p,o.optString("relationship"),buildList { for(i in 0 until a.length()) a.optString(i).trim().takeIf(String::isNotEmpty)?.let(::add) }) } }
+    companion object { fun parse(raw: String): BinderCandidatePayload { val o=JSONObject(raw); val n=o.optString("name").trim(); val p=o.optString("persona").trim(); require(n.isNotEmpty() && p.isNotEmpty()) { "候选缺少 name/persona" }; val a=o.optJSONArray("reasons") ?: throw IllegalArgumentException("候选缺少 reasons"); require(a.length() in 1..8) { "匹配理由数量无效" }; require(o.has("relationship")) { "候选缺少 relationship" }; return BinderCandidatePayload(n,p,o.optString("relationship"),buildList { for(i in 0 until a.length()) a.optString(i).trim().takeIf(String::isNotEmpty)?.let(::add) }) } }
 }
 
 internal fun validateBinderCandidateList(raw: String): List<BinderCandidatePayload> {
