@@ -1,7 +1,7 @@
 # Final acceptance test summary
 
 - Date: 2026-08-04
-- Verified implementation HEAD: `31f736dce993c4b196499c6c83aa759eb2ba4d31` (evidence-only commit follows)
+- Verified implementation HEAD: `34866d3` (external-condition test correction); evidence-only commits follow
 - Current APK: `app/build/outputs/apk/debug/app-debug.apk`
 - Current APK SHA-256 at final verification: `d0554e0058f5e327940e76fed3fd24fc4f32c63cd7b9cb87d3c60b2fd4bfcd81`
 - Reference APK: `v4.47-github-release.apk`
