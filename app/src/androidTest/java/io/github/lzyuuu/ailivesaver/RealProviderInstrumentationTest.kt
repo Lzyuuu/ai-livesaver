@@ -199,7 +199,9 @@ class RealProviderInstrumentationTest {
         assertEquals(prompt, reopenedGroup!!.prompt)
         assertEquals(memberIds.toSet(), reopenedGroup.memberIds.toSet())
         WorldStore(context).use { store ->
-            val replies = store.messages(groupCharacterId).filter { it.status == "complete" }
+            val replies = store.messages(groupCharacterId).filter {
+                it.status == "complete" && it.sender.startsWith("character:")
+            }
             assertEquals(2, replies.size)
             assertEquals(memberIds.map { "character:$it" }.toSet(), replies.map { it.sender }.toSet())
             assertTrue(replies.all { it.body.contains("GROUP_MARKER_804") })
