@@ -583,26 +583,10 @@ internal object WorldEngine {
             !taskPaused(context) &&
             config.supports(ProviderCapability.Structured)
         if (!canAi) {
-            val samples = listOf(
-                "✨",
-                "窗外的光刚好落到桌角，记一下这一秒。",
-                "路过便利店，买了两瓶一样的汽水。",
-                "今晚风有点大，适合走走不说话。",
-            )
-            val body = samples[(System.currentTimeMillis() % samples.size).toInt()]
-            store.createPost(
-                kind = "moment",
-                authorName = actor.name,
-                title = "",
-                body = body,
-                authorKind = "resident",
-                authorCharacterId = actor.id,
-                eventNeedsResponse = false,
-                worldEventKind = "moment",
-            )
+            // Provider 不可用时只报告失败；绝不把本地模板伪装成角色生成内容。
             store.close()
-            callback(true)
-            return true
+            callback(false)
+            return false
         }
         if (!generationRunning.compareAndSet(false, true)) {
             store.close()
@@ -945,7 +929,8 @@ internal object WorldEngine {
                     )
                 },
                 onFailure = {
-                    persistGeneratedPost(simulatedRebbitPostBody(character.name, community))
+                    // Provider 失败时不写入未标识的模板内容，保留历史并报告失败。
+                    false
                 },
             )
             store.close()

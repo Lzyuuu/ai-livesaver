@@ -380,18 +380,8 @@ internal fun YScreen(
                 )
                 status = null
             }.onFailure {
-                val body = ySimulatedGeneratedPost(actor.name)
-                store.createPost(
-                    kind = Y_POST_KIND,
-                    authorName = actor.name,
-                    title = "",
-                    body = body,
-                    authorKind = "resident",
-                    authorCharacterId = actor.id,
-                    worldEventKind = Y_POST_KIND,
-                    eventNeedsResponse = false,
-                )
-                status = null
+                // Provider 失败不能产生未标识的 AI 帖子；保留离线历史并展示失败状态。
+                status = context.getString(R.string.y_generate_failed)
             }
             generating = false
             onChanged()
