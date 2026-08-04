@@ -52,13 +52,19 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.security.MessageDigest
 
-internal data class HfModelEntry(val id: String, val title: String, val size: String, val file: String, val role: String, val url: String)
+internal data class HfModelEntry(val id: String, val title: String, val size: String, val file: String, val role: String, val url: String, val sha256: String)
 
+/**
+ * 目录模型必须携带可信 SHA-256。取值来源：Hugging Face LFS 元数据
+ * （huggingface.co/api/models/Mr-J-369/Fancy-AI/tree/main 的 lfs.oid，与 resolve URL 的
+ * X-Linked-Etag 完全一致，2026-08-04 核对）。生产下载与"是否可用"的判断一律以该哈希为准，
+ * 不编造、不放过任何校验失败的文件。
+ */
 internal val HfModelCatalog = listOf(
-    HfModelEntry("scrfd-10g", "SCRFD 10G face detector", "MNN · ~3 MB", "scrfd_10g.fp16.mnn", "detector", "https://huggingface.co/Mr-J-369/Fancy-AI/resolve/main/scrfd_10g.fp16.mnn"),
-    HfModelEntry("arcface-w600k-r50", "ArcFace W600K R50", "MNN · ~166 MB", "arcface_w600k_r50.fp16.mnn", "embedding", "https://huggingface.co/Mr-J-369/Fancy-AI/resolve/main/arcface_w600k_r50.fp16.mnn"),
-    HfModelEntry("inswapper-128", "InsightFace inswapper_128", "MNN · ~529 MB", "inswapper_128.fp16.mnn", "swapper", "https://huggingface.co/Mr-J-369/Fancy-AI/resolve/main/inswapper_128.fp16.mnn"),
-    HfModelEntry("codeformer", "CodeFormer face restoration", "MNN · ~350 MB", "codeformer.fp16.mnn", "restore", "https://huggingface.co/Mr-J-369/Fancy-AI/resolve/main/codeformer.fp16.mnn"),
+    HfModelEntry("scrfd-10g", "SCRFD 10G face detector", "MNN · ~8 MB", "scrfd_10g.fp16.mnn", "detector", "https://huggingface.co/Mr-J-369/Fancy-AI/resolve/main/scrfd_10g.fp16.mnn", "a799477ec3eb87f09b380f31452adf5f26f837e07aacfc6b75474f9f1b6056d1"),
+    HfModelEntry("arcface-w600k-r50", "ArcFace W600K R50", "MNN · ~83 MB", "arcface_w600k_r50.fp16.mnn", "embedding", "https://huggingface.co/Mr-J-369/Fancy-AI/resolve/main/arcface_w600k_r50.fp16.mnn", "09a0e01fb942cb237c5204d166a48e163d4a6d601b7b5c33eec7c210c36e918b"),
+    HfModelEntry("inswapper-128", "InsightFace inswapper_128", "MNN · ~264 MB", "inswapper_128.fp16.mnn", "swapper", "https://huggingface.co/Mr-J-369/Fancy-AI/resolve/main/inswapper_128.fp16.mnn", "b4bde7d0ea7ca949cd90384ea2520bc7bacba464dccd4c887a98b987b9328058"),
+    HfModelEntry("codeformer", "CodeFormer face restoration", "MNN · ~180 MB", "codeformer.fp16.mnn", "restore", "https://huggingface.co/Mr-J-369/Fancy-AI/resolve/main/codeformer.fp16.mnn", "676632af278ed6db02894b239bd17e7008e3c562f876def3fe98753981d6ebd9"),
 )
 
 internal data class AuraSwapRequest(val source: File, val target: File, val swapper: File, val detector: File, val embedding: File, val restore: File)
@@ -216,32 +222,120 @@ internal object MnnAuraBackend : AuraSwapBackend {
     }
 }
 
+/** 从 Hugging Face LFS 元数据解析官方 SHA-256；无法可信获得时返回 null（调用方必须阻断，禁止无校验安装）。 */
+internal fun interface HfShaResolver {
+    fun resolveSha256(url: String): String?
+}
+
+/**
+ * HEAD 请求 HF resolve URL 读取 LFS 元数据：302 响应的 X-Linked-Etag 就是 LFS 对象的官方
+ * SHA-256（与 tree API 的 lfs.oid 一致），无需下载整模型。旧版 CDN 的 Location 里也嵌有 OID，
+ * 作为回退。
+ */
+internal object HfHttpShaResolver : HfShaResolver {
+    private val sha256Hex = Regex("[0-9a-f]{64}")
+
+    override fun resolveSha256(url: String): String? {
+        val connection = try {
+            (URL(url).openConnection() as HttpURLConnection).apply {
+                requestMethod = "HEAD"
+                instanceFollowRedirects = false
+                connectTimeout = 8_000
+                readTimeout = 8_000
+            }
+        } catch (_: Throwable) {
+            return null
+        }
+        return try {
+            connection.connect()
+            if (connection.responseCode !in 300..399) return null
+            val etag = connection.getHeaderField("X-Linked-Etag")?.trim()?.trim('"')?.lowercase()
+            if (etag != null && sha256Hex.matches(etag)) etag
+            else locationOid(connection.getHeaderField("Location"))
+        } catch (_: Throwable) {
+            null
+        } finally {
+            connection.disconnect()
+        }
+    }
+
+    /** 旧版 CDN Location（形如 cdn-lfs.huggingface.co/repos/…/{oid}/{file}）中解析 LFS OID。 */
+    private fun locationOid(location: String?): String? = location
+        ?.substringBefore('?')
+        ?.split('/')
+        ?.firstOrNull { sha256Hex.matches(it) }
+        ?.lowercase()
+}
+
 internal object HfModelStore {
     private const val PREFS = "hf_model_store"
     private const val KEY_URL = "download_url"
+    private const val KEY_VERIFIED_PREFIX = "verified_"
+    private val SHA256_HEX = Regex("[0-9a-f]{64}")
 
     fun directory(context: Context) = File(context.filesDir, "models").apply { mkdirs() }
-    fun installed(context: Context): List<File> = directory(context).listFiles()?.filter { it.isFile } ?: emptyList()
+
+    /** 只返回内容通过可信 SHA-256 校验的文件；损坏或不可校验的文件一律不算已安装、不可用于推理。 */
+    fun installed(context: Context): List<File> =
+        directory(context).listFiles()?.filter { it.isFile && isVerified(context, it) } ?: emptyList()
+
+    /** 目录模型可用 = 文件存在且内容与目录钉住的官方 SHA-256 一致。 */
+    fun isUsable(context: Context, model: HfModelEntry): Boolean =
+        isVerified(context, File(directory(context), model.file))
+
+    /** 可信 SHA-256：目录模型取钉住的官方值；不在目录中的文件无可信哈希，视为不可校验。 */
+    fun trustedSha256(context: Context, fileName: String): String? =
+        HfModelCatalog.firstOrNull { it.file == fileName }?.sha256
+
     fun downloadUrl(context: Context): String = context.getSharedPreferences(PREFS, 0).getString(KEY_URL, "").orEmpty()
     fun saveDownloadUrl(context: Context, value: String) = context.getSharedPreferences(PREFS, 0).edit().putString(KEY_URL, value.trim()).apply()
 
-    internal fun sha256(file: File): String = MessageDigest.getInstance("SHA-256")
-        .digest(file.readBytes()).joinToString("") { "%02x".format(it) }
+    internal fun sha256(file: File): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        file.inputStream().use { input ->
+            val buffer = ByteArray(8192)
+            while (true) {
+                val read = input.read(buffer)
+                if (read < 0) break
+                digest.update(buffer, 0, read)
+            }
+        }
+        return digest.digest().joinToString("") { "%02x".format(it) }
+    }
 
-    internal fun downloadFile(
-        context: Context,
-        url: String,
-        targetName: String,
-        expectedSha256: String? = null,
-        maxAttempts: Int = 3,
-    ): File {
+    internal fun matchesTrustedSha(file: File, expectedSha256: String): Boolean =
+        file.isFile && file.length() > 0L && sha256(file) == expectedSha256
+
+    /**
+     * 文件内容与可信 SHA-256 是否一致。校验通过后以 (sha, size, mtime) 指纹写入偏好设置，
+     * 避免每次 UI 组合都对数百 MB 模型重算；文件被替换或官方哈希变化时指纹失效会重新校验。
+     */
+    internal fun isVerified(context: Context, file: File): Boolean {
+        if (!file.isFile) return false
+        val expected = trustedSha256(context, file.name) ?: return false
+        val prefs = context.getSharedPreferences(PREFS, 0)
+        val fingerprint = "${file.length()}-${file.lastModified()}"
+        if (prefs.getString(KEY_VERIFIED_PREFIX + file.name, null) == "$expected|$fingerprint") return true
+        val ok = matchesTrustedSha(file, expected)
+        if (ok) prefs.edit().putString(KEY_VERIFIED_PREFIX + file.name, "$expected|$fingerprint").apply()
+        return ok
+    }
+
+    private fun markVerified(context: Context, file: File, expectedSha256: String) {
+        context.getSharedPreferences(PREFS, 0).edit()
+            .putString(KEY_VERIFIED_PREFIX + file.name, "$expectedSha256|${file.length()}-${file.lastModified()}")
+            .apply()
+    }
+
+    internal fun downloadFile(dir: File, url: String, targetName: String, expectedSha256: String, maxAttempts: Int = 3): File {
         require(url.startsWith("https://") || url.startsWith("http://")) { "请输入有效的 HTTP(S) 下载地址" }
         require(targetName.matches(Regex("[A-Za-z0-9._-]+"))) { "模型文件名无效" }
-        val target = File(directory(context), targetName)
-        val expected = expectedSha256?.trim()?.lowercase()?.takeIf { it.isNotBlank() }
+        val expected = expectedSha256.trim().lowercase()
+        require(SHA256_HEX.matches(expected)) { "必须提供可信的 SHA-256 校验和" }
+        val target = File(dir, targetName)
         var lastError: Throwable? = null
         repeat(maxAttempts.coerceAtLeast(1)) { attempt ->
-            val temp = File(directory(context), ".$targetName.part-$attempt")
+            val temp = File(dir, ".$targetName.part-$attempt")
             try {
                 val connection = URL(url).openConnection() as HttpURLConnection
                 try {
@@ -255,27 +349,47 @@ internal object HfModelStore {
                     connection.disconnect()
                 }
                 if (temp.length() == 0L) error("下载文件为空")
-                if (expected != null && sha256(temp) != expected) error("SHA-256 校验失败")
+                if (sha256(temp) != expected) error("SHA-256 校验失败")
                 if (target.exists() && !target.delete()) error("无法替换旧模型文件")
                 if (!temp.renameTo(target)) error("无法原子保存模型文件")
                 return target
             } catch (error: Throwable) {
                 lastError = error
                 temp.delete()
-                if (attempt + 1 == maxAttempts.coerceAtLeast(1)) throw error
+                if (attempt + 1 == maxAttempts.coerceAtLeast(1)) throw IOException(error.message ?: "下载失败", error)
             }
         }
         throw IOException(lastError?.message ?: "下载失败")
     }
 
-    fun download(context: Context, url: String, targetName: String, expectedSha256: String? = null, onDone: (Result<File>) -> Unit) {
+    /** 生产下载入口：trustedSha256 必填（目录模型用钉住的官方 SHA-256），成功后再记入已校验指纹。 */
+    fun download(context: Context, url: String, targetName: String, trustedSha256: String, onDone: (Result<File>) -> Unit) {
         Thread {
-            val result = runCatching { downloadFile(context, url, targetName, expectedSha256) }
+            val result = runCatching {
+                val target = downloadFile(directory(context), url, targetName, trustedSha256)
+                markVerified(context, target, trustedSha256)
+                target
+            }
             android.os.Handler(android.os.Looper.getMainLooper()).post { onDone(result) }
         }.start()
     }
 
-    internal fun validateModel(file: File) = require(file.isFile && file.length() > 8) { "模型文件不存在或为空" }
+    /** 自定义 URL 路径：先经 HTTP HEAD 从 HF LFS 元数据解析官方 SHA-256；无法可信获得则阻断，绝不无校验安装。 */
+    fun downloadFromHf(context: Context, url: String, targetName: String, resolver: HfShaResolver = HfHttpShaResolver, onDone: (Result<File>) -> Unit) {
+        Thread {
+            val result = runCatching { downloadWithResolvedSha(directory(context), url, targetName, resolver) }
+            android.os.Handler(android.os.Looper.getMainLooper()).post { onDone(result) }
+        }.start()
+    }
+
+    internal fun downloadWithResolvedSha(dir: File, url: String, targetName: String, resolver: HfShaResolver, maxAttempts: Int = 3): File {
+        val trusted = resolver.resolveSha256(url)
+            ?: throw IOException("无法从 HF LFS 元数据获取可信 SHA-256，已阻断下载（禁止无校验安装）")
+        return downloadFile(dir, url, targetName, trusted, maxAttempts)
+    }
+
+    internal fun validateModel(context: Context, file: File, expectedSha256: String): Unit =
+        require(file.isFile && file.length() > 8 && isVerified(context, file)) { "模型文件校验失败（SHA-256 不匹配）" }
 }
 
 @Composable
@@ -309,14 +423,14 @@ private fun AuraSwapContent(context: Context) {
             val sourceFile = File(source.trim()); val targetFile = File(target.trim())
             status = when {
                 !sourceFile.isFile || !targetFile.isFile -> "请选择存在的 Source 和 Target 图片。"
-                !HfModelCatalog.all { model -> File(HfModelStore.directory(context), model.file).isFile } -> "请先下载 SCRFD、ArcFace、inswapper_128 和 CodeFormer 四个模型。"
+                !HfModelCatalog.all { model -> HfModelStore.isUsable(context, model) } -> "请先下载并通过 SHA-256 校验 SCRFD、ArcFace、inswapper_128 和 CodeFormer 四个模型。"
                 else -> runCatching {
                     val models = HfModelStore.installed(context)
                     val swapper = models.first { it.name == "inswapper_128.fp16.mnn" }
                     val detector = models.first { it.name == "scrfd_10g.fp16.mnn" }
                     val embedding = models.first { it.name == "arcface_w600k_r50.fp16.mnn" }
                     val restore = models.first { it.name == "codeformer.fp16.mnn" }
-                    HfModelCatalog.forEach { model -> HfModelStore.validateModel(File(HfModelStore.directory(context), model.file)) }
+                    HfModelCatalog.forEach { model -> HfModelStore.validateModel(context, File(HfModelStore.directory(context), model.file), model.sha256) }
                     MnnAuraBackend.run(context, AuraSwapRequest(sourceFile, targetFile, swapper, detector, embedding, restore))
                     "Aura Swap 完成"
                 }.getOrElse { "Aura Swap 失败：${it.message}" }
@@ -333,25 +447,33 @@ private fun ModelStoreContent(context: Context) {
     var status by rememberSaveable { mutableStateOf<String?>(null) }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("Model Store", color = FancyCream, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
-        Text("需要 SCRFD + ArcFace + inswapper_128 + CodeFormer；仅下载已获授权的模型。", color = FancyCream, fontSize = 12.sp)
+        Text("需要 SCRFD + ArcFace + inswapper_128 + CodeFormer；仅下载已获授权的模型，安装前以官方 SHA-256 校验。", color = FancyCream, fontSize = 12.sp)
         HfModelCatalog.forEach { model ->
             Row(Modifier.fillMaxWidth().background(FancyNavyMid, RoundedCornerShape(12.dp)).padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) { Text(model.title, color = FancyCream, fontWeight = FontWeight.SemiBold); Text(model.size, color = FancyGoldDim, fontSize = 11.sp) }
-                Icon(Icons.Default.Check, null, tint = if (HfModelStore.installed(context).any { it.name == model.file }) FancyGold else FancyGoldDim)
+                Column(Modifier.weight(1f)) {
+                    Text(model.title, color = FancyCream, fontWeight = FontWeight.SemiBold)
+                    Text(model.size, color = FancyGoldDim, fontSize = 11.sp)
+                    Text("SHA-256 ${model.sha256.take(8)}…${model.sha256.takeLast(8)}", color = FancyGoldDim, fontSize = 10.sp, modifier = Modifier.testTag("hf-sha-${model.id}"))
+                }
+                Icon(Icons.Default.Check, null, tint = if (HfModelStore.isUsable(context, model)) FancyGold else FancyGoldDim)
                 Button(onClick = {
                     downloading = true; status = null
-                    HfModelStore.download(context, model.url, model.file) { result ->
+                    HfModelStore.download(context, model.url, model.file, model.sha256) { result ->
                         downloading = false
-                        status = result.fold({ "下载完成：${it.name}" }, { "下载失败：${it.message}" })
+                        status = result.fold({ "下载完成：${it.name}（已通过官方 SHA-256 校验）" }, { "下载失败：${it.message}" })
                     }
                 }, enabled = !downloading, colors = ButtonDefaults.buttonColors(containerColor = FancyGold, contentColor = FancyInk)) { Text("下载") }
             }
         }
         Spacer(Modifier.height(4.dp))
         OutlinedTextField(url, { url = it; HfModelStore.saveDownloadUrl(context, it) }, label = { Text("自定义 SCRFD 模型 URL") }, modifier = Modifier.fillMaxWidth().testTag("hf-url"), colors = auraFieldColors())
+        Text("自定义下载会先通过 HTTP HEAD 获取 HF LFS 元数据中的官方 SHA-256；无法可信获得时将阻断下载。", color = FancyGoldDim, fontSize = 11.sp)
         Button(onClick = {
             status = null; downloading = true
-            HfModelStore.download(context, url, HfModelCatalog.first().file) { result -> downloading = false; status = result.fold({ "下载完成：${it.name}（尚未完成推理配对）" }, { "下载失败：${it.message}" }) }
+            HfModelStore.downloadFromHf(context, url.trim(), HfModelCatalog.first().file) { result ->
+                downloading = false
+                status = result.fold({ "下载完成：${it.name}（已按解析出的 SHA-256 校验；与官方模型不一致时不会用于推理）" }, { "下载失败：${it.message}" })
+            }
         }, enabled = !downloading, modifier = Modifier.fillMaxWidth().testTag("hf-download"), colors = ButtonDefaults.buttonColors(containerColor = FancyGold, contentColor = FancyInk)) {
             Icon(Icons.Default.Download, null); Text(if (downloading) "Downloading…" else "Download from Hugging Face")
         }

@@ -41,8 +41,10 @@ class AuraSwapSmokeTest {
         composeRule.onNodeWithTag("aura-run").performClick()
         composeRule.onNodeWithTag("aura-status").assertIsDisplayed()
         composeRule.onNodeWithTag("aura-store-toggle").performClick()
-        composeRule.onNodeWithTag("hf-installed").assertIsDisplayed()
-        composeRule.onNodeWithTag("hf-download").assertIsDisplayed()
+        composeRule.onNodeWithTag("hf-sha-scrfd-10g").assertIsDisplayed()
+        // 卡片下方的说明与按钮可能在较小屏幕上位于折叠线以下，存在即可，不需可见。
+        composeRule.onNodeWithTag("hf-installed").assertExists()
+        composeRule.onNodeWithTag("hf-download").assertExists()
     }
 
     @Test
@@ -72,7 +74,7 @@ class AuraSwapSmokeTest {
                 }
             }
             val model = HfModelStore.downloadFile(
-                context,
+                HfModelStore.directory(context),
                 "http://127.0.0.1:${server.localPort}/model.bin",
                 "inswapper_128.fp16.mnn",
                 expectedSha256 = HfModelStore.sha256(File(context.cacheDir, "expected").apply { writeBytes(payload) }),
