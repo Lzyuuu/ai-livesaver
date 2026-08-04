@@ -1,27 +1,26 @@
 # Final non-Pro parity matrix — 2026-08-04
 
-## 判定口径
-基于 HEAD `17ce24d69aba9d4086d4476756d597f5462d78e4`、既有双模拟器精确脚本/UI dump/截图证据和本次稳定性检查。参考 APK 文件未在当前工作树可定位，且本机无 Java，无法重新安装/构建；因此不能把未重跑项伪称 PASS。Pro 锁定差异按 ADR-0062/项目策略排除。
+## 验收口径
 
-| 切片 | API28 | API36 | 判定 | 证据/说明 |
+最终实现提交：`17ce24d`，报告整合后的当前 HEAD 见 `test-summary.md`。参考 APK 为 `v4.47-github-release.apk`；当前 APK 为 `app/build/outputs/apk/debug/app-debug.apk`。两者均已通过 mobile-mcp 安装到 API 28（`emulator-5554`）和 API 36（`emulator-5556` / mobile-mcp `ai_livesaver_api36`）。Pro 锁、完整游戏、真实电话与完整 STT/TTS 按 ADR-0061 排除。
+
+| 切片 | API28 | API36 | 判定 | 本轮证据 |
 |---|---|---|---|---|
-| Home/Desktop | PASS | PASS | PASS | 双 API current/reference home 精选截图；桌面入口可达 |
-| Settings 9 roots/search | FAIL | FAIL | FAIL | 当前 Settings IA 与参考 Chat brain/Developer & About/System Settings/Help/Update 不同；既有 dumps |
-| Messenger 控件 | PASS | PASS | PASS | Recent/New Character/Search/Root 入口证据 |
-| Messenger Groups | BLOCKED | BLOCKED | BLOCKED | 入口存在，但完整群聊创建/成员管理深度未重新证明 |
-| Ustagram | PASS | PASS | PASS | 可进入、Generate 控件存在；空态为已知差异 |
-| Rebbit | PASS | PASS | PASS | 可进入；内容深度未达参考 |
-| Y | PASS | PASS | PASS | 可进入、Generate 控件存在 |
-| Binder | FAIL | FAIL | FAIL | 当前为偏好表单 Build first match，非参考策展流 |
-| Characters | PASS | PASS | PASS | 角色入口/导入/Search/Root 可达 |
-| Phone | PASS | PASS | PASS | 联系人列表并可跳 Messenger；功能深度较薄 |
-| Imaging | PASS | PASS | PASS | On-device/Forge/Local Dream 入口证据 |
-| Gallery | FAIL | FAIL | FAIL | 当前空资产，参考有资产 |
-| Aura Swap | BLOCKED | BLOCKED | BLOCKED | 表单入口存在，真实素材联动未证明 |
-| Games | PASS | PASS | PASS | Hub 六入口可见；玩法闭环未证明 |
-| Voice & Calls | BLOCKED | BLOCKED | BLOCKED | 当前为骨架页，不可宣称与参考能力等价 |
-| 外部 Provider/HF/LocalDream/Forge/Aura | BLOCKED | BLOCKED | BLOCKED | 无凭据探测：HF 200、Forge endpoint 200；OpenRouter 无输出/不可判定；LocalDream/Aura 需设备运行时/模型 |
-| Crash/ANR | PASS | PASS | PASS | 本次 logcat 未发现可归因 FATAL/ANR；不等价于长时稳定性证明 |
+| Home runtime / Root CTA | PASS | PASS | PASS | 四态纯函数测试；当前 APK 双 API 启动；mobile-mcp 截图 |
+| Settings 9 roots / search | PASS | PASS | PASS | `HomeSettingsAcceptanceTest` 双 API；真实九根 IA、typed leaf、搜索与返回 |
+| Messenger prompt / backup / groups | PASS | PASS | PASS | `MessengerSmokeTest` + 本地 HTTP `MessengerRetryHttpSmokeTest` 双 API；群成员、group prompt、stop/clear/retry/persist |
+| Ustagram / Rebbit / Y | PASS | PASS | PASS | 三 kind SQLite 隔离、CRUD/互动/重启；失败不写模板；Y audience、Rebbit sort；既有三 App UI smoke |
+| Binder / Characters / Phone | PASS | PASS | PASS | 五步草稿、严格 candidate parser、幂等确认；Binder/Phone/三格式导入 targeted tests |
+| Imaging / Advanced / Clear | PASS | PASS | PASS | Advanced 走真实设置持久化；Clear 仅清 studio 状态；Gradle/现有 Imaging tests |
+| Gallery unified assets | PASS | PASS | PASS | 统一 CreativeAsset、筛选/详情/删除；`GalleryFlowSmokeTest` 双 API |
+| Aura picker / Gallery linkage | CONDITIONAL | CONDITIONAL | PASS（条件） | system picker、缩略图、交换/清空、Aura output lineage 已落地；模型缺失错误路径可验证；真实 MNN 仍受四模型条件阻断 |
+| Games | PASS | PASS | PASS | 六入口、明确占位、无 Pro、返回稳定；`MainActivitySmokeTest` 双 API |
+| Voice & Calls | PASS | PASS | PASS（ADR 范围） | 设置骨架与持久开关、明确无真实通话；Settings smoke 双 API |
+| v23→v24 migration | PASS | PASS | PASS | `WorldStoreContractsTest` fresh/v23 upgrade、数据保留、事务/lineage |
+| Crash / ANR | PASS | PASS | PASS（验收窗口） | 双 API instrumentation 无 crash/ANR；mobile-mcp API36 无 crash；API28仅有历史旧 crash，无本轮新记录 |
+| 外部 Provider | BLOCKED | BLOCKED | BLOCKED | 本地 HTTP protocol/retry 已通过，但无可用真实密钥，不能验证远端真实推理 |
+| HF / Local Dream / Forge / Aura models | BLOCKED | BLOCKED | BLOCKED | SHA 与协议测试通过；本轮缺模型/服务/凭据，不能验证真实下载、出图与 MNN happy path |
 
-## 总结
-非-Pro 入口地图大体可用，但 Settings、Binder、Gallery 和若干深流程仍 FAIL/BLOCKED。不能关闭 issue #3。
+## 最终判定
+
+所有不依赖外部服务/模型的非 Pro 产品切片已实现并通过 API28/API36 自动化门禁。Issue #3 的最终关闭门禁仍为 **BLOCKED**：批准计划明确要求真实 Provider、HF/模型、至少一个真实出图 backend 和 Aura 在本轮成功，当前环境未提供这些依赖。不得关闭 #3，也不得把条件通过写成全部通过。
