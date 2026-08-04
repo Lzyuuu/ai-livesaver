@@ -111,27 +111,30 @@ class RebbitFlowSmokeTest {
         }
         composeRule.assertRebbitPostVisible(recoveryPostId)
 
-        composeRule.openRebbitPost(postId)
+        // The earlier post may belong to the subreddit disabled by the intentional
+        // "None" experiment. Exercise detail, voting, and replies on the recovery post,
+        // which is guaranteed to be visible in the re-enabled general feed.
+        composeRule.openRebbitPost(recoveryPostId)
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("rebbit-detail").assertIsDisplayed()
 
         composeRule.onNodeWithContentDescription("顶", useUnmergedTree = true).performClick()
         composeRule.waitForIdle()
         WorldStore(context).use { store ->
-            assertEquals(1, store.posts("forum").first { it.id == postId }.voteScore)
+            assertEquals(1, store.posts("forum").first { it.id == recoveryPostId }.voteScore)
         }
         composeRule.onNodeWithContentDescription("踩", useUnmergedTree = true).performClick()
         composeRule.waitForIdle()
         WorldStore(context).use { store ->
-            assertEquals(-1, store.posts("forum").first { it.id == postId }.voteScore)
+            assertEquals(-1, store.posts("forum").first { it.id == recoveryPostId }.voteScore)
         }
 
         val replyBody = "UI reply ${System.nanoTime()}"
-        composeRule.onNodeWithTag("rebbit-reply-$postId").performTextInput(replyBody)
-        composeRule.onNodeWithTag("rebbit-send-$postId").performClick()
+        composeRule.onNodeWithTag("rebbit-reply-$recoveryPostId").performTextInput(replyBody)
+        composeRule.onNodeWithTag("rebbit-send-$recoveryPostId").performClick()
         composeRule.waitForIdle()
         WorldStore(context).use { store ->
-            assertTrue(store.comments(postId).any { it.body == replyBody })
+            assertTrue(store.comments(recoveryPostId).any { it.body == replyBody })
         }
 
         composeRule.onNodeWithTag("rebbit-back").performClick()
