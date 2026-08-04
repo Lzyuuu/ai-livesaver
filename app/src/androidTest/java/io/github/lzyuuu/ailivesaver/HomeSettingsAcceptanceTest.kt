@@ -1,5 +1,7 @@
 package io.github.lzyuuu.ailivesaver
 
+import android.Manifest
+import android.os.Build
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
@@ -19,7 +21,13 @@ class HomeSettingsAcceptanceTest {
     @get:Rule val rule = createAndroidComposeRule<MainActivity>()
 
     @Before fun seed() {
-        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val context = instrumentation.targetContext
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            instrumentation.uiAutomation
+                .executeShellCommand("pm grant ${context.packageName} ${Manifest.permission.POST_NOTIFICATIONS}")
+                .close()
+        }
         writeWelcomeGuideCompleted(context, true)
         WorldStore(context).use { DesktopSeed.ensureDesktopWorld(it, "验收", "test", context) }
         rule.activityRule.scenario.recreate()
