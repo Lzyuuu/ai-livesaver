@@ -1,6 +1,8 @@
 package io.github.lzyuuu.ailivesaver
 
+import android.Manifest
 import android.graphics.Bitmap
+import android.os.Build
 import android.graphics.Color
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -8,6 +10,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import androidx.test.rule.GrantPermissionRule
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
@@ -23,6 +26,12 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class AuraSwapSmokeTest {
     @get:Rule val composeRule = createAndroidComposeRule<MainActivity>()
+
+    @get:Rule val notificationPermissionRule = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        GrantPermissionRule.grant(Manifest.permission.POST_NOTIFICATIONS)
+    } else {
+        org.junit.rules.TestRule { base, _ -> base }
+    }
 
     @Before
     fun seedDesktopShell() {

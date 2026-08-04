@@ -9,8 +9,10 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
+import android.Manifest
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import androidx.test.rule.GrantPermissionRule
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -22,6 +24,13 @@ import org.junit.runner.RunWith
 class YFeedFlowSmokeTest {
     @get:Rule
     val composeRule = createAndroidComposeRule<MainActivity>()
+
+    @get:Rule
+    val notificationPermissionRule = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+        GrantPermissionRule.grant(Manifest.permission.POST_NOTIFICATIONS)
+    } else {
+        org.junit.rules.TestRule { base, _ -> base }
+    }
 
     private lateinit var context: android.content.Context
 
