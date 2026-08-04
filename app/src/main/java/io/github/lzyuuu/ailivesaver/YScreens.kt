@@ -1,6 +1,7 @@
 package io.github.lzyuuu.ailivesaver
 
 import android.app.Activity
+import android.content.Context
 import android.graphics.Color as AndroidColor
 import android.os.Build
 import androidx.activity.compose.BackHandler
@@ -302,10 +303,9 @@ internal fun YScreen(
     var composerOpen by rememberSaveable { mutableStateOf(false) }
     var promptEditorOpen by rememberSaveable { mutableStateOf(false) }
     var draft by rememberSaveable { mutableStateOf("") }
+    val promptPrefs = remember(context) { context.getSharedPreferences("social_y", Context.MODE_PRIVATE) }
     var generatePrompt by rememberSaveable {
-        mutableStateOf(
-            "Write one short public broadcast under 60 Chinese characters. Sound like a microblog.",
-        )
+        mutableStateOf(promptPrefs.getString("generate_prompt", "Write one short public broadcast under 60 Chinese characters. Sound like a microblog.").orEmpty())
     }
     var menuOpen by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf<String?>(null) }
@@ -673,7 +673,10 @@ internal fun YScreen(
         YPromptDialog(
             prompt = generatePrompt,
             onPromptChange = { generatePrompt = it },
-            onDismiss = { promptEditorOpen = false },
+            onDismiss = {
+                promptPrefs.edit().putString("generate_prompt", generatePrompt.trim()).apply()
+                promptEditorOpen = false
+            },
         )
     }
 }

@@ -42,6 +42,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -372,7 +373,8 @@ internal fun RebbitScreen(
     val identity = remember(revision) { store.identity() }
     val character = remember(revision) { store.primaryCharacter() }
     val characters = remember(revision) { store.characters(includeDeparted = true) }
-    val posts = remember(revision) { store.posts("forum", "latest") }
+    var forumSort by rememberSaveable { mutableStateOf("latest") }
+    val posts = remember(revision, forumSort) { store.posts("forum", forumSort) }
     val queuedResponseCount = remember(revision) { store.socialResponseQueueCount() }
     var selectedPostId by rememberSaveable { mutableStateOf<Long?>(null) }
     var composerOpen by rememberSaveable { mutableStateOf(false) }
@@ -470,6 +472,11 @@ internal fun RebbitScreen(
                 textAlign = TextAlign.Center,
                 lineHeight = 16.sp,
             )
+        }
+        Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf("latest" to "New", "best" to "Best", "hot" to "Hot", "top" to "Top").forEach { (value, label) ->
+                FilterChip(selected = forumSort == value, onClick = { forumSort = value }, label = { Text(label) }, shape = RoundedCornerShape(50))
+            }
         }
 
         if (selectedPost != null) {
