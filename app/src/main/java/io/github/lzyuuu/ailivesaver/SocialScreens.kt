@@ -282,7 +282,7 @@ internal fun SocialScreen(
                 onChanged()
             },
             onUpdatePost = { title, body ->
-                store.updateUserPost(selectedPost.id, title, body)
+                store.updateUserPost(selectedPost.id, title, body, kind = selectedPost.kind)
                 onChanged()
             },
             onUpdateMediaDescription = { description ->

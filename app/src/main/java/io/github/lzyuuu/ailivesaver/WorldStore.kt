@@ -2714,7 +2714,7 @@ internal class WorldStore(
         }
     }
 
-    fun updateUserPost(postId: Long, title: String, body: String): Boolean {
+    fun updateUserPost(postId: Long, title: String, body: String, kind: String? = null): Boolean {
         val cleanTitle = title.trim()
         val cleanBody = body.trim()
         var updated = false
@@ -2727,8 +2727,8 @@ internal class WorldStore(
                         put("title", cleanTitle)
                         put("body", cleanBody)
                     },
-                    "id = ? AND author_kind = 'user'",
-                    arrayOf(postId.toString()),
+                    "id = ? AND author_kind = 'user'" + (kind?.let { " AND kind = ?" } ?: ""),
+                    (listOf(postId.toString()) + (kind?.let { listOf(it) } ?: emptyList())).toTypedArray(),
                 ) == 1
                 if (updated) {
                     update(

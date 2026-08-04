@@ -304,6 +304,8 @@ internal fun YScreen(
     var composerOpen by rememberSaveable { mutableStateOf(false) }
     var promptEditorOpen by rememberSaveable { mutableStateOf(false) }
     var draft by rememberSaveable { mutableStateOf("") }
+    var audience by rememberSaveable { mutableStateOf("world") }
+    var selectedCharacterIds by rememberSaveable { mutableStateOf(emptyList<Long>()) }
     val promptPrefs = remember(context) { context.getSharedPreferences("social_y", Context.MODE_PRIVATE) }
     var generatePrompt by rememberSaveable {
         mutableStateOf(promptPrefs.getString("generate_prompt", "Write one short public broadcast under 60 Chinese characters. Sound like a microblog.").orEmpty())
@@ -337,6 +339,8 @@ internal fun YScreen(
             title = "",
             body = body,
             authorKind = "user",
+            audience = audience,
+            audienceCharacterIds = selectedCharacterIds.joinToString(","),
             worldEventKind = Y_POST_KIND,
         )
         draft = ""
@@ -665,7 +669,12 @@ internal fun YScreen(
     if (composerOpen) {
         YComposeDialog(
             draft = draft,
+            audience = audience,
+            selectedCharacterIds = selectedCharacterIds,
+            characters = characters,
             onDraftChange = { draft = it },
+            onAudienceChange = { audience = it },
+            onSelectedCharacterIdsChange = { selectedCharacterIds = it },
             onCancel = { composerOpen = false },
             onPost = { publishDraft() },
         )
@@ -685,6 +694,11 @@ internal fun YScreen(
 @Composable
 private fun YComposeDialog(
     draft: String,
+    audience: String,
+    selectedCharacterIds: List<Long>,
+    characters: List<ResidentCharacter>,
+    onAudienceChange: (String) -> Unit,
+    onSelectedCharacterIdsChange: (List<Long>) -> Unit,
     onDraftChange: (String) -> Unit,
     onCancel: () -> Unit,
     onPost: () -> Unit,
@@ -707,6 +721,15 @@ private fun YComposeDialog(
                 fontWeight = FontWeight.Bold,
                 fontSize = 22.sp,
             )
+            Text(stringResource(R.string.audience), color = YBodyText)
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                listOf("world" to R.string.audience_world, "selected" to R.string.audience_selected).forEach { (value, label) ->
+                    FilterChip(selected = audience == value, onClick = { onAudienceChange(value) }, label = { Text(stringResource(label)) })
+                }
+            }
+            if (audience == "selected") Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                characters.forEach { c -> FilterChip(selected = c.id in selectedCharacterIds, onClick = { onSelectedCharacterIdsChange(if (c.id in selectedCharacterIds) selectedCharacterIds - c.id else selectedCharacterIds + c.id) }, label = { Text(c.name) }) }
+            }
             BasicTextField(
                 value = draft,
                 onValueChange = onDraftChange,
