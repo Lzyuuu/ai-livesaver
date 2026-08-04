@@ -399,6 +399,12 @@
     <string name="my_posts_summary">你在这个世界里留下的 Moments 与 Commons。</string>
     <string name="no_my_posts">还没有发布动态。去和这个世界分享一点什么吧。</string>
     <string name="open">打开</string>
+    <string name="settings_category_ai_models">AI &amp; Models</string>
+    <string name="settings_category_voice_calls">Voice &amp; Calls</string>
+    <string name="settings_category_image_generation">Image Generation</string>
+    <string name="settings_category_you_personas">You &amp; Personas</string>
+    <string name="settings_category_app">App</string>
+    <string name="settings_category_developer_about">Developer &amp; About</string>
     <string name="provider_settings">推理配置</string>
     <string name="provider_settings_summary">DeepSeek、OpenAI、OpenRouter 与自定义 Provider</string>
     <string name="voice_calls_settings">Voice &amp; Calls</string>
