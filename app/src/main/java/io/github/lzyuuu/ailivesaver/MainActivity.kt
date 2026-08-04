@@ -1563,8 +1563,14 @@ private fun MeScreen(
             SettingsDestination.APPEARANCE, SettingsDestination.APP -> onOpenWorldSettings()
         }
     }
+    var settingsQuery by rememberSaveable { mutableStateOf("") }
+    var expandedSections by rememberSaveable { mutableStateOf(SettingsSection.entries.associateWith { true }) }
+    val searchResults = searchSettings(settingsQuery)
+    val visibleSettings = if (settingsQuery.isBlank()) settings else searchResults.map { result ->
+        settings.first { it.destination == result.destination }
+    }
     val categorizedSettings = SettingsSection.entries.map { section ->
-        Triple(section.name.lowercase(), section, settings.filter { it.destination.section == section })
+        Triple(section.name.lowercase(), section, visibleSettings.filter { it.destination.section == section })
     }
     LazyColumn(
         modifier = Modifier.fillMaxSize().testTag("me-settings-list"),
@@ -1579,9 +1585,23 @@ private fun MeScreen(
         item {
             Text(
                 stringResource(R.string.settings_title),
+                modifier = Modifier.testTag("settings-root-title"),
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
             )
+            OutlinedTextField(
+                value = settingsQuery,
+                onValueChange = { settingsQuery = it },
+                modifier = Modifier.fillMaxWidth().testTag("settings-search"),
+                label = { Text("Search settings") },
+                trailingIcon = {
+                    if (settingsQuery.isNotEmpty()) TextButton(onClick = { settingsQuery = "" }) { Text("Clear") }
+                },
+                singleLine = true,
+            )
+            if (settingsQuery.isNotBlank() && searchResults.isEmpty()) {
+                Text("No settings found", modifier = Modifier.testTag("settings-no-results"), color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
         }
         categorizedSettings.forEach { (categoryTag, category, entries) ->
             item {
