@@ -34,8 +34,7 @@ class BinderFlowSmokeTest {
         composeRule.onNodeWithTag("desktop-hub-social_hub").performClick()
         composeRule.onNodeWithTag("hub-app-binder").performClick()
         composeRule.onNodeWithText("Binder", useUnmergedTree = true).assertIsDisplayed()
-        composeRule.onNodeWithTag("binder-next").performClick()
-        composeRule.onNodeWithTag("binder-error").assertIsDisplayed()
+        composeRule.onNodeWithTag("binder-field-relationship").performTextInput("长期陪伴")
         composeRule.onNodeWithTag("binder-next").performClick()
         composeRule.onNodeWithText("人格与沟通", useUnmergedTree = true).assertIsDisplayed()
     }
