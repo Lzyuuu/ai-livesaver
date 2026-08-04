@@ -2,6 +2,7 @@ package io.github.lzyuuu.ailivesaver
 
 import android.content.ContentValues
 import android.database.sqlite.SQLiteDatabase
+import org.json.JSONObject
 
 internal data class PersistedMessengerGroup(val id: Long, val name: String, val prompt: String, val memberIds: List<Long>)
 internal data class BinderDraft(val id: String, val step: Int, val payload: String, val updatedAt: Long)
@@ -83,12 +84,28 @@ internal fun WorldStore.confirmBinderCandidateIdempotently(id: String, draftId: 
     synchronized(writableDatabase) {
         val existing = getConfirmedBinderCandidate(draftId)
         if (existing != null) {
-            return@synchronized writableDatabase.query("characters", arrayOf("id"), "card_json LIKE ?", arrayOf("%\"binder_candidate_id\":\"${existing.id}\"%"), null, null, "id").use { c ->
-                if (c.moveToFirst()) c.getLong(0) else 0L
-            }
+            return@synchronized characters(includeDeparted = true).firstOrNull { character ->
+                runCatching {
+                    JSONObject(character.cardJson)
+                        .getJSONObject("data")
+                        .getJSONObject("extensions")
+                        .optString("binder_candidate_id") == existing.id
+                }.getOrDefault(false)
+            }?.id ?: 0L
         }
         saveBinderCandidate(BinderCandidate(id, draftId, candidate.toJson(), false))
-        val card = CharacterCardV2.buildCardJson(candidate.name, CharacterProfileFields(description=candidate.persona, relationship=candidate.relationship), "{\"binder_candidate_id\":\"$id\"}")
+        val baseCard = CharacterCardV2.buildCardJson(
+            candidate.name,
+            CharacterProfileFields(
+                description = candidate.persona,
+                relationship = candidate.relationship,
+            ),
+        )
+        val card = JSONObject(baseCard).apply {
+            getJSONObject("data")
+                .getJSONObject("extensions")
+                .put("binder_candidate_id", id)
+        }.toString(2)
         val characterId = addCharacter(candidate.name, candidate.persona, "resident", "", "", "", card)
         confirmBinderCandidate(id)
         characterId

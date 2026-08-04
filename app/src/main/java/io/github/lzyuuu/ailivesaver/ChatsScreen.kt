@@ -1158,6 +1158,7 @@ private fun GroupConversationScreen(
                                             reply,
                                             response.config.preset.displayName,
                                             response.config.model,
+                                            finalSender = "character:${member.id}",
                                         )
                                     }
                                 },

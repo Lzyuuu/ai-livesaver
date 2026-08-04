@@ -170,7 +170,9 @@ internal object ProviderProtocol {
         disableThinking: Boolean = false,
     ): JSONObject = JSONObject()
         .put("model", model)
-        .put("max_tokens", 240)
+        // Binder candidate lists can exceed the previous 240-token ceiling. A truncated
+        // outer JSON object is unusable, so reserve enough room for bounded structured payloads.
+        .put("max_tokens", 1_024)
         .put("response_format", JSONObject().put("type", "json_object"))
         .apply {
             if (disableThinking) put("thinking", JSONObject().put("type", "disabled"))

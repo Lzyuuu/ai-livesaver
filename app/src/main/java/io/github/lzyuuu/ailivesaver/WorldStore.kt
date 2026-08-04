@@ -1706,15 +1706,41 @@ internal class WorldStore(
         body: String,
         providerName: String,
         modelName: String,
+        finalSender: String = "assistant",
     ) {
         val finalBody = body.trim()
         require(finalBody.isNotEmpty()) { "Provider returned an empty reply" }
+        val senderCharacterId = finalSender
+            .takeIf { it.startsWith("character:") }
+            ?.removePrefix("character:")
+            ?.toLongOrNull()
+        require(finalSender == "assistant" || senderCharacterId != null && senderCharacterId > 0) {
+            "Invalid assistant reply sender"
+        }
         writableDatabase.run {
             beginTransaction()
             try {
+                if (senderCharacterId != null) {
+                    val validGroupMember = rawQuery(
+                        """
+                        SELECT EXISTS(
+                            SELECT 1
+                            FROM messages
+                            JOIN characters AS group_character ON group_character.id = messages.character_id
+                            JOIN messenger_groups ON group_character.card_json = 'group:' || messenger_groups.id
+                            JOIN messenger_group_members ON messenger_group_members.group_id = messenger_groups.id
+                            JOIN characters AS member ON member.id = messenger_group_members.character_id
+                            WHERE messages.id = ? AND member.id = ? AND member.active = 1
+                        )
+                        """.trimIndent(),
+                        arrayOf(messageId.toString(), senderCharacterId.toString()),
+                    ).use { cursor -> cursor.moveToFirst() && cursor.getInt(0) == 1 }
+                    require(validGroupMember) { "Reply sender is not an active group member" }
+                }
                 val updated = update(
                     "messages",
                     ContentValues().apply {
+                        put("sender", finalSender)
                         put("body", finalBody)
                         put("draft_body", "")
                         put("status", "complete")
@@ -1723,7 +1749,7 @@ internal class WorldStore(
                         put("error", "")
                     },
                     """
-                    id = ? AND sender = 'assistant' AND active = 1 AND EXISTS(
+                    id = ? AND sender = 'assistant' AND status = 'streaming' AND active = 1 AND EXISTS(
                         SELECT 1 FROM characters
                         WHERE characters.id = messages.character_id AND characters.active = 1
                     )

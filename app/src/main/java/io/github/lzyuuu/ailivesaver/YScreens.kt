@@ -362,33 +362,8 @@ internal fun YScreen(
         if (character == null || generating) return
         generating = true
         status = yGenerating
-        val actor = store.characters(includeDeparted = false).firstOrNull() ?: character
-        val config = ProviderStore(context).loadFor(ProviderTask.World)
-        ProviderTextClient.completeStructured(
-            config,
-            "You are ${actor.name}. ${actor.persona}",
-            generatePrompt.trim().ifBlank {
-                "Write one short public broadcast under 60 Chinese characters."
-            },
-        ) { result ->
-            result.onSuccess { response ->
-                val body = yResolvedGenerateBody(response.text, actor.name)
-                store.createPost(
-                    kind = Y_POST_KIND,
-                    authorName = actor.name,
-                    title = "",
-                    body = body,
-                    authorKind = "resident",
-                    authorCharacterId = actor.id,
-                    providerName = response.config.preset.displayName,
-                    modelName = response.config.model,
-                    worldEventKind = Y_POST_KIND,
-                )
-                status = null
-            }.onFailure {
-                // Provider 失败不能产生未标识的 AI 帖子；保留离线历史并展示失败状态。
-                status = yGenerateFailed
-            }
+        generateYPost(context, generatePrompt) { created ->
+            status = if (created) null else yGenerateFailed
             generating = false
             onChanged()
         }
