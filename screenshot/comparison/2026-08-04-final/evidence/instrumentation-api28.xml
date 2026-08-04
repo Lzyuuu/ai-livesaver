@@ -1,0 +1,294 @@
+<?xml version='1.0' encoding='UTF-8' ?>
+<testsuites tests="66" failures="0" errors="0" skipped="4" time="120.393" timestamp="2026-08-04T11:23:59" hostname="localhost">
+  <testsuite name="io.github.lzyuuu.ailivesaver.AuraRuntimeE2eTest" tests="1" failures="0" errors="0" skipped="1" time="0.012" timestamp="2026-08-04T11:23:59" hostname="localhost">
+    <properties>
+      <property name="device" value="ai_livesaver_api28(AVD) - 9" />
+      <property name="flavor" value="" />
+      <property name="project" value=":app" />
+    </properties>
+    <testcase name="runsFancyRuntimeWithoutActivity" classname="io.github.lzyuuu.ailivesaver.AuraRuntimeE2eTest" time="0.012">
+      <skipped />
+    </testcase>
+  </testsuite>
+  <testsuite name="io.github.lzyuuu.ailivesaver.AuraSwapSmokeTest" tests="7" failures="0" errors="0" skipped="2" time="22.99" timestamp="2026-08-04T11:23:59" hostname="localhost">
+    <properties>
+      <property name="device" value="ai_livesaver_api28(AVD) - 9" />
+      <property name="flavor" value="" />
+      <property name="project" value=":app" />
+    </properties>
+    <testcase name="runsFancyRuntimeOnStagedPortraits" classname="io.github.lzyuuu.ailivesaver.AuraSwapSmokeTest" time="4.012">
+      <skipped />
+    </testcase>
+    <testcase name="nativeMnnLoaderRejectsInvalidModelWithRole" classname="io.github.lzyuuu.ailivesaver.AuraSwapSmokeTest" time="3.802" />
+    <testcase name="downloadsWithRetryChecksumAndRejectsUnavailableInference" classname="io.github.lzyuuu.ailivesaver.AuraSwapSmokeTest" time="3.763" />
+    <testcase name="loadsFancyModelsWhenStagedOnDevice" classname="io.github.lzyuuu.ailivesaver.AuraSwapSmokeTest" time="2.872">
+      <skipped />
+    </testcase>
+    <testcase name="fusesRestoredFaceBackToTargetSize" classname="io.github.lzyuuu.ailivesaver.AuraSwapSmokeTest" time="2.432" />
+    <testcase name="opensAuraSwapAndModelStoreEmptyDirectoryPath" classname="io.github.lzyuuu.ailivesaver.AuraSwapSmokeTest" time="4.1" />
+    <testcase name="imagePipelineConvertsChwAndParsesFivePointFace" classname="io.github.lzyuuu.ailivesaver.AuraSwapSmokeTest" time="2.009" />
+  </testsuite>
+  <testsuite name="io.github.lzyuuu.ailivesaver.BinderFlowSmokeTest" tests="1" failures="0" errors="0" skipped="0" time="3.876" timestamp="2026-08-04T11:23:59" hostname="localhost">
+    <properties>
+      <property name="device" value="ai_livesaver_api28(AVD) - 9" />
+      <property name="flavor" value="" />
+      <property name="project" value=":app" />
+    </properties>
+    <testcase name="binderRejectsBlankThenBuildsMatchAndOpensMessenger" classname="io.github.lzyuuu.ailivesaver.BinderFlowSmokeTest" time="3.876" />
+  </testsuite>
+  <testsuite name="io.github.lzyuuu.ailivesaver.CharacterLifecycleSmokeTest" tests="1" failures="0" errors="0" skipped="0" time="0.062" timestamp="2026-08-04T11:23:59" hostname="localhost">
+    <properties>
+      <property name="device" value="ai_livesaver_api28(AVD) - 9" />
+      <property name="flavor" value="" />
+      <property name="project" value=":app" />
+    </properties>
+    <testcase name="recordsDepartureAndRequiresItBeforePermanentDeletion" classname="io.github.lzyuuu.ailivesaver.CharacterLifecycleSmokeTest" time="0.062" />
+  </testsuite>
+  <testsuite name="io.github.lzyuuu.ailivesaver.CharactersImportPersistenceSmokeTest" tests="3" failures="0" errors="0" skipped="0" time="11.432" timestamp="2026-08-04T11:23:59" hostname="localhost">
+    <properties>
+      <property name="device" value="ai_livesaver_api28(AVD) - 9" />
+      <property name="flavor" value="" />
+      <property name="project" value=":app" />
+    </properties>
+    <testcase name="importsXmlAndJsonCardsAndPersistsAcrossRestart" classname="io.github.lzyuuu.ailivesaver.CharactersImportPersistenceSmokeTest" time="3.594" />
+    <testcase name="opensCharactersFromSocialHub" classname="io.github.lzyuuu.ailivesaver.CharactersImportPersistenceSmokeTest" time="3.691" />
+    <testcase name="newCharacterPersistsAfterEditorSave" classname="io.github.lzyuuu.ailivesaver.CharactersImportPersistenceSmokeTest" time="4.147" />
+  </testsuite>
+  <testsuite name="io.github.lzyuuu.ailivesaver.ChatPersistenceSmokeTest" tests="5" failures="0" errors="0" skipped="0" time="0.461" timestamp="2026-08-04T11:23:59" hostname="localhost">
+    <properties>
+      <property name="device" value="ai_livesaver_api28(AVD) - 9" />
+      <property name="flavor" value="" />
+      <property name="project" value=":app" />
+    </properties>
+    <testcase name="rejectsLateRepliesAndRollsBackProactiveMessagesAfterDeparture" classname="io.github.lzyuuu.ailivesaver.ChatPersistenceSmokeTest" time="0.075" />
+    <testcase name="interruptAssistantReplyMarksStreamingAsInterrupted" classname="io.github.lzyuuu.ailivesaver.ChatPersistenceSmokeTest" time="0.087" />
+    <testcase name="completesFromAReopenedStoreAndRejectsAStaleRecap" classname="io.github.lzyuuu.ailivesaver.ChatPersistenceSmokeTest" time="0.182" />
+    <testcase name="clearsActiveConversationWhileKeepingRetiredHistory" classname="io.github.lzyuuu.ailivesaver.ChatPersistenceSmokeTest" time="0.031" />
+    <testcase name="keepsOfflineMessageAndInterruptsStreamingDraftAfterReopen" classname="io.github.lzyuuu.ailivesaver.ChatPersistenceSmokeTest" time="0.086" />
+  </testsuite>
+  <testsuite name="io.github.lzyuuu.ailivesaver.GalleryFlowSmokeTest" tests="1" failures="0" errors="0" skipped="0" time="3.789" timestamp="2026-08-04T11:23:59" hostname="localhost">
+    <properties>
+      <property name="device" value="ai_livesaver_api28(AVD) - 9" />
+      <property name="flavor" value="" />
+      <property name="project" value=":app" />
+    </properties>
+    <testcase name="browseByCharacterAndOpenImage" classname="io.github.lzyuuu.ailivesaver.GalleryFlowSmokeTest" time="3.789" />
+  </testsuite>
+  <testsuite name="io.github.lzyuuu.ailivesaver.HomeSettingsAcceptanceTest" tests="1" failures="0" errors="0" skipped="0" time="5.005" timestamp="2026-08-04T11:23:59" hostname="localhost">
+    <properties>
+      <property name="device" value="ai_livesaver_api28(AVD) - 9" />
+      <property name="flavor" value="" />
+      <property name="project" value=":app" />
+    </properties>
+    <testcase name="desktopHomeAndSettingsAreReachable" classname="io.github.lzyuuu.ailivesaver.HomeSettingsAcceptanceTest" time="5.005" />
+  </testsuite>
+  <testsuite name="io.github.lzyuuu.ailivesaver.ImagingLocalDreamSuccessTest" tests="1" failures="0" errors="0" skipped="1" time="2.067" timestamp="2026-08-04T11:23:59" hostname="localhost">
+    <properties>
+      <property name="device" value="ai_livesaver_api28(AVD) - 9" />
+      <property name="flavor" value="" />
+      <property name="project" value=":app" />
+    </properties>
+    <testcase name="testConnectionAndGeneratePersistsResult" classname="io.github.lzyuuu.ailivesaver.ImagingLocalDreamSuccessTest" time="2.067">
+      <skipped />
+    </testcase>
+  </testsuite>
+  <testsuite name="io.github.lzyuuu.ailivesaver.LocalDreamHttpSmokeTest" tests="1" failures="0" errors="0" skipped="0" time="0.142" timestamp="2026-08-04T11:23:59" hostname="localhost">
+    <properties>
+      <property name="device" value="ai_livesaver_api28(AVD) - 9" />
+      <property name="flavor" value="" />
+      <property name="project" value=":app" />
+    </properties>
+    <testcase name="consumesLocalDreamSseAndPersistsRgbImage" classname="io.github.lzyuuu.ailivesaver.LocalDreamHttpSmokeTest" time="0.142" />
+  </testsuite>
+  <testsuite name="io.github.lzyuuu.ailivesaver.MainActivitySmokeTest" tests="7" failures="0" errors="0" skipped="0" time="26.557" timestamp="2026-08-04T11:23:59" hostname="localhost">
+    <properties>
+      <property name="device" value="ai_livesaver_api28(AVD) - 9" />
+      <property name="flavor" value="" />
+      <property name="project" value=":app" />
+    </properties>
+    <testcase name="exposesSystemDesktopWithoutFiveTabs" classname="io.github.lzyuuu.ailivesaver.MainActivitySmokeTest" time="2.836" />
+    <testcase name="opensSocialHubAppAndReturnsToDesktop" classname="io.github.lzyuuu.ailivesaver.MainActivitySmokeTest" time="3.645" />
+    <testcase name="presetsRootInPhone" classname="io.github.lzyuuu.ailivesaver.MainActivitySmokeTest" time="2.413" />
+    <testcase name="opensAllSixGamePlaceholdersWithoutPaywall" classname="io.github.lzyuuu.ailivesaver.MainActivitySmokeTest" time="6.278" />
+    <testcase name="opensImagingStudioFromDockAndSwitchesBackends" classname="io.github.lzyuuu.ailivesaver.MainActivitySmokeTest" time="4.028" />
+    <testcase name="opensGamesHubWithoutPaywall" classname="io.github.lzyuuu.ailivesaver.MainActivitySmokeTest" time="4.19" />
+    <testcase name="opensMessengerFromDockAndReturns" classname="io.github.lzyuuu.ailivesaver.MainActivitySmokeTest" time="3.167" />
+  </testsuite>
+  <testsuite name="io.github.lzyuuu.ailivesaver.MessengerRetryHttpSmokeTest" tests="2" failures="0" errors="0" skipped="0" time="0.487" timestamp="2026-08-04T11:23:59" hostname="localhost">
+    <properties>
+      <property name="device" value="ai_livesaver_api28(AVD) - 9" />
+      <property name="flavor" value="" />
+      <property name="project" value=":app" />
+    </properties>
+    <testcase name="groupMemberFailureCanRetryWithoutDroppingSuccessfulMember" classname="io.github.lzyuuu.ailivesaver.MessengerRetryHttpSmokeTest" time="0.365" />
+    <testcase name="shippedStreamFailureThenRetryUsesRealHttpAndOneTimelineVersion" classname="io.github.lzyuuu.ailivesaver.MessengerRetryHttpSmokeTest" time="0.122" />
+  </testsuite>
+  <testsuite name="io.github.lzyuuu.ailivesaver.MessengerSmokeTest" tests="4" failures="0" errors="0" skipped="0" time="15.557" timestamp="2026-08-04T11:23:59" hostname="localhost">
+    <properties>
+      <property name="device" value="ai_livesaver_api28(AVD) - 9" />
+      <property name="flavor" value="" />
+      <property name="project" value=":app" />
+    </properties>
+    <testcase name="createsGroupWithoutPaywallAndSharesTimelineAcrossMembers" classname="io.github.lzyuuu.ailivesaver.MessengerSmokeTest" time="5.196" />
+    <testcase name="opensNewGroupDialogFromMessengerList" classname="io.github.lzyuuu.ailivesaver.MessengerSmokeTest" time="3.198" />
+    <testcase name="opensMessengerFromDockAndReturns" classname="io.github.lzyuuu.ailivesaver.MessengerSmokeTest" time="3.212" />
+    <testcase name="opensMessengerConversationAndExposesEnhancementsMenu" classname="io.github.lzyuuu.ailivesaver.MessengerSmokeTest" time="3.951" />
+  </testsuite>
+  <testsuite name="io.github.lzyuuu.ailivesaver.NpcPublicationSmokeTest" tests="1" failures="0" errors="0" skipped="0" time="0.117" timestamp="2026-08-04T11:23:59" hostname="localhost">
+    <properties>
+      <property name="device" value="ai_livesaver_api28(AVD) - 9" />
+      <property name="flavor" value="" />
+      <property name="project" value=":app" />
+    </properties>
+    <testcase name="commitsNpcLifecycleAndContentAsOneWorldChange" classname="io.github.lzyuuu.ailivesaver.NpcPublicationSmokeTest" time="0.117" />
+  </testsuite>
+  <testsuite name="io.github.lzyuuu.ailivesaver.PhoneContactsSmokeTest" tests="1" failures="0" errors="0" skipped="0" time="3.011" timestamp="2026-08-04T11:23:59" hostname="localhost">
+    <properties>
+      <property name="device" value="ai_livesaver_api28(AVD) - 9" />
+      <property name="flavor" value="" />
+      <property name="project" value=":app" />
+    </properties>
+    <testcase name="phoneContactDialsIntoMatchingMessengerConversation" classname="io.github.lzyuuu.ailivesaver.PhoneContactsSmokeTest" time="3.011" />
+  </testsuite>
+  <testsuite name="io.github.lzyuuu.ailivesaver.ProviderEnvSeedTest" tests="2" failures="0" errors="0" skipped="0" time="0.076" timestamp="2026-08-04T11:23:59" hostname="localhost">
+    <properties>
+      <property name="device" value="ai_livesaver_api28(AVD) - 9" />
+      <property name="flavor" value="" />
+      <property name="project" value=":app" />
+    </properties>
+    <testcase name="seedDesktopShellForLiveVerification" classname="io.github.lzyuuu.ailivesaver.ProviderEnvSeedTest" time="0.069" />
+    <testcase name="seedChatProviderFromInstrumentationArgs" classname="io.github.lzyuuu.ailivesaver.ProviderEnvSeedTest" time="0.007" />
+  </testsuite>
+  <testsuite name="io.github.lzyuuu.ailivesaver.RebbitFlowSmokeTest" tests="1" failures="0" errors="0" skipped="0" time="8.275" timestamp="2026-08-04T11:23:59" hostname="localhost">
+    <properties>
+      <property name="device" value="ai_livesaver_api28(AVD) - 9" />
+      <property name="flavor" value="" />
+      <property name="project" value=":app" />
+    </properties>
+    <testcase name="rebbitForumFlowThroughMainActivityComposeUi" classname="io.github.lzyuuu.ailivesaver.RebbitFlowSmokeTest" time="8.275" />
+  </testsuite>
+  <testsuite name="io.github.lzyuuu.ailivesaver.RelationshipPersistenceSmokeTest" tests="1" failures="0" errors="0" skipped="0" time="0.156" timestamp="2026-08-04T11:23:59" hostname="localhost">
+    <properties>
+      <property name="device" value="ai_livesaver_api28(AVD) - 9" />
+      <property name="flavor" value="" />
+      <property name="project" value=":app" />
+    </properties>
+    <testcase name="migratesAndPersistsHiddenRelationshipDimensions" classname="io.github.lzyuuu.ailivesaver.RelationshipPersistenceSmokeTest" time="0.156" />
+  </testsuite>
+  <testsuite name="io.github.lzyuuu.ailivesaver.SocialDomainPersistenceSmokeTest" tests="1" failures="0" errors="0" skipped="0" time="0.034" timestamp="2026-08-04T11:23:59" hostname="localhost">
+    <properties>
+      <property name="device" value="ai_livesaver_api28(AVD) - 9" />
+      <property name="flavor" value="" />
+      <property name="project" value=":app" />
+    </properties>
+    <testcase name="kindsAreIsolatedAndUserCrudSurvivesReopen" classname="io.github.lzyuuu.ailivesaver.SocialDomainPersistenceSmokeTest" time="0.034" />
+  </testsuite>
+  <testsuite name="io.github.lzyuuu.ailivesaver.SocialPostVersionSmokeTest" tests="4" failures="0" errors="0" skipped="0" time="0.038" timestamp="2026-08-04T11:23:59" hostname="localhost">
+    <properties>
+      <property name="device" value="ai_livesaver_api28(AVD) - 9" />
+      <property name="flavor" value="" />
+      <property name="project" value=":app" />
+    </properties>
+    <testcase name="rejectsARewriteWhenTheSourcePostHasChangedOrDisappeared" classname="io.github.lzyuuu.ailivesaver.SocialPostVersionSmokeTest" time="0.027" />
+    <testcase name="preservesPostsAndEventsWhenTheAuthorOperationDoesNotMatch" classname="io.github.lzyuuu.ailivesaver.SocialPostVersionSmokeTest" time="0.004" />
+    <testcase name="rollsBackPostPublicationsWhenTheirWorldEventFails" classname="io.github.lzyuuu.ailivesaver.SocialPostVersionSmokeTest" time="0.002" />
+    <testcase name="keepsAUserPostAndItsWorldExcerptInSync" classname="io.github.lzyuuu.ailivesaver.SocialPostVersionSmokeTest" time="0.005" />
+  </testsuite>
+  <testsuite name="io.github.lzyuuu.ailivesaver.SocialResponsePersistenceSmokeTest" tests="2" failures="0" errors="0" skipped="0" time="0.036" timestamp="2026-08-04T11:23:59" hostname="localhost">
+    <properties>
+      <property name="device" value="ai_livesaver_api28(AVD) - 9" />
+      <property name="flavor" value="" />
+      <property name="project" value=":app" />
+    </properties>
+    <testcase name="commitsAResponseAtomicallyAndRejectsLateResults" classname="io.github.lzyuuu.ailivesaver.SocialResponsePersistenceSmokeTest" time="0.032" />
+    <testcase name="rejectsLateResidentSocialActivityAfterDeparture" classname="io.github.lzyuuu.ailivesaver.SocialResponsePersistenceSmokeTest" time="0.004" />
+  </testsuite>
+  <testsuite name="io.github.lzyuuu.ailivesaver.SystemSettingsSmokeTest" tests="1" failures="0" errors="0" skipped="0" time="2.86" timestamp="2026-08-04T11:23:59" hostname="localhost">
+    <properties>
+      <property name="device" value="ai_livesaver_api28(AVD) - 9" />
+      <property name="flavor" value="" />
+      <property name="project" value=":app" />
+    </properties>
+    <testcase name="settingsExposeNineRootsAndKeyEntries" classname="io.github.lzyuuu.ailivesaver.SystemSettingsSmokeTest" time="2.86" />
+  </testsuite>
+  <testsuite name="io.github.lzyuuu.ailivesaver.UstagramFlowSmokeTest" tests="1" failures="0" errors="0" skipped="0" time="4.87" timestamp="2026-08-04T11:23:59" hostname="localhost">
+    <properties>
+      <property name="device" value="ai_livesaver_api28(AVD) - 9" />
+      <property name="flavor" value="" />
+      <property name="project" value=":app" />
+    </properties>
+    <testcase name="hubEntryComposeLikeReplyGenerateAndReturnToDesktop" classname="io.github.lzyuuu.ailivesaver.UstagramFlowSmokeTest" time="4.87" />
+  </testsuite>
+  <testsuite name="io.github.lzyuuu.ailivesaver.VisionDescriptionSmokeTest" tests="1" failures="0" errors="0" skipped="0" time="0.113" timestamp="2026-08-04T11:23:59" hostname="localhost">
+    <properties>
+      <property name="device" value="ai_livesaver_api28(AVD) - 9" />
+      <property name="flavor" value="" />
+      <property name="project" value=":app" />
+    </properties>
+    <testcase name="appliesVisionResultOnlyToTheSameUndescribedImage" classname="io.github.lzyuuu.ailivesaver.VisionDescriptionSmokeTest" time="0.113" />
+  </testsuite>
+  <testsuite name="io.github.lzyuuu.ailivesaver.WorldDataErasureSmokeTest" tests="1" failures="0" errors="0" skipped="0" time="0.118" timestamp="2026-08-04T11:23:59" hostname="localhost">
+    <properties>
+      <property name="device" value="ai_livesaver_api28(AVD) - 9" />
+      <property name="flavor" value="" />
+      <property name="project" value=":app" />
+    </properties>
+    <testcase name="erasesWorldCredentialsPreferencesDiagnosticsAndCache" classname="io.github.lzyuuu.ailivesaver.WorldDataErasureSmokeTest" time="0.118" />
+  </testsuite>
+  <testsuite name="io.github.lzyuuu.ailivesaver.WorldMediaCleanupSmokeTest" tests="1" failures="0" errors="0" skipped="0" time="0.032" timestamp="2026-08-04T11:23:59" hostname="localhost">
+    <properties>
+      <property name="device" value="ai_livesaver_api28(AVD) - 9" />
+      <property name="flavor" value="" />
+      <property name="project" value=":app" />
+    </properties>
+    <testcase name="removesOnlyUnreferencedPrivateMedia" classname="io.github.lzyuuu.ailivesaver.WorldMediaCleanupSmokeTest" time="0.032" />
+  </testsuite>
+  <testsuite name="io.github.lzyuuu.ailivesaver.WorldMediaIntentSmokeTest" tests="5" failures="0" errors="0" skipped="0" time="0.122" timestamp="2026-08-04T11:23:59" hostname="localhost">
+    <properties>
+      <property name="device" value="ai_livesaver_api28(AVD) - 9" />
+      <property name="flavor" value="" />
+      <property name="project" value=":app" />
+    </properties>
+    <testcase name="keepsPausedMediaJobsPendingForRetry" classname="io.github.lzyuuu.ailivesaver.WorldMediaIntentSmokeTest" time="0.028" />
+    <testcase name="restoringAnImageVersionSupersedesAnInFlightRedraw" classname="io.github.lzyuuu.ailivesaver.WorldMediaIntentSmokeTest" time="0.001" />
+    <testcase name="rollsBackMediaPublicationWhenItsWorldEventCannotBeCommitted" classname="io.github.lzyuuu.ailivesaver.WorldMediaIntentSmokeTest" time="0.002" />
+    <testcase name="hidesGeneratedPostUntilReadyAndKeepsProviderProvenance" classname="io.github.lzyuuu.ailivesaver.WorldMediaIntentSmokeTest" time="0.061" />
+    <testcase name="ignoresACompletedImageFromASupersededRedraw" classname="io.github.lzyuuu.ailivesaver.WorldMediaIntentSmokeTest" time="0.03" />
+  </testsuite>
+  <testsuite name="io.github.lzyuuu.ailivesaver.WorldRestoreRecoverySmokeTest" tests="2" failures="0" errors="0" skipped="0" time="0.088" timestamp="2026-08-04T11:23:59" hostname="localhost">
+    <properties>
+      <property name="device" value="ai_livesaver_api28(AVD) - 9" />
+      <property name="flavor" value="" />
+      <property name="project" value=":app" />
+    </properties>
+    <testcase name="copiesAReadableDatabaseSnapshotWhileTheStoreIsOpen" classname="io.github.lzyuuu.ailivesaver.WorldRestoreRecoverySmokeTest" time="0.029" />
+    <testcase name="restoresSnapshotLeftByInterruptedRestore" classname="io.github.lzyuuu.ailivesaver.WorldRestoreRecoverySmokeTest" time="0.059" />
+  </testsuite>
+  <testsuite name="io.github.lzyuuu.ailivesaver.WorldStoreClearPostsTest" tests="1" failures="0" errors="0" skipped="0" time="0.061" timestamp="2026-08-04T11:23:59" hostname="localhost">
+    <properties>
+      <property name="device" value="ai_livesaver_api28(AVD) - 9" />
+      <property name="flavor" value="" />
+      <property name="project" value=":app" />
+    </properties>
+    <testcase name="clearPostsUsesPerPostCleanupAndPreservesOtherKinds" classname="io.github.lzyuuu.ailivesaver.WorldStoreClearPostsTest" time="0.061" />
+  </testsuite>
+  <testsuite name="io.github.lzyuuu.ailivesaver.WorldStoreContractsTest" tests="4" failures="0" errors="0" skipped="0" time="0.096" timestamp="2026-08-04T11:23:59" hostname="localhost">
+    <properties>
+      <property name="device" value="ai_livesaver_api28(AVD) - 9" />
+      <property name="flavor" value="" />
+      <property name="project" value=":app" />
+    </properties>
+    <testcase name="v23UpgradePreservesExistingDataAndCreatesNewTables" classname="io.github.lzyuuu.ailivesaver.WorldStoreContractsTest" time="0.032" />
+    <testcase name="creativeSupportsLineageStatusFilterDeleteNullableAndIdempotentUri" classname="io.github.lzyuuu.ailivesaver.WorldStoreContractsTest" time="0.032" />
+    <testcase name="freshSchemaSupportsGroupMembershipAndRollback" classname="io.github.lzyuuu.ailivesaver.WorldStoreContractsTest" time="0.001" />
+    <testcase name="binderConfirmationIsUniqueAndIdempotent" classname="io.github.lzyuuu.ailivesaver.WorldStoreContractsTest" time="0.031" />
+  </testsuite>
+  <testsuite name="io.github.lzyuuu.ailivesaver.YFeedFlowSmokeTest" tests="1" failures="0" errors="0" skipped="0" time="6.189" timestamp="2026-08-04T11:23:59" hostname="localhost">
+    <properties>
+      <property name="device" value="ai_livesaver_api28(AVD) - 9" />
+      <property name="flavor" value="" />
+      <property name="project" value=":app" />
+    </properties>
+    <testcase name="opensYComposePostsNestedRepliesGenerateAndReturns" classname="io.github.lzyuuu.ailivesaver.YFeedFlowSmokeTest" time="6.189" />
+  </testsuite>
+</testsuites>

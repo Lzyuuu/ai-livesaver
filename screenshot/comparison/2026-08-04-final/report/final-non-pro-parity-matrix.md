@@ -2,7 +2,7 @@
 
 ## 验收口径
 
-最终实现提交：`17ce24d`，报告整合后的当前 HEAD 见 `test-summary.md`。参考 APK 为 `v4.47-github-release.apk`；当前 APK 为 `app/build/outputs/apk/debug/app-debug.apk`。两者均已通过 mobile-mcp 安装到 API 28（`emulator-5554`）和 API 36（`emulator-5556` / mobile-mcp `ai_livesaver_api36`）。Pro 锁、完整游戏、真实电话与完整 STT/TTS 按 ADR-0061 排除。
+最终验证实现提交：`31f736dce993c4b196499c6c83aa759eb2ba4d31`，报告整合后的当前 HEAD 见 `test-summary.md`。参考 APK 为 `v4.47-github-release.apk`；当前 APK 为 `app/build/outputs/apk/debug/app-debug.apk`。两者均已通过 mobile-mcp 安装到 API 28（`emulator-5554`）和 API 36（`emulator-5556` / mobile-mcp `ai_livesaver_api36`）。Pro 锁、完整游戏、真实电话与完整 STT/TTS 按 ADR-0061 排除。
 
 | 切片 | API28 | API36 | 判定 | 本轮证据 |
 |---|---|---|---|---|

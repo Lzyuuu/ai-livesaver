@@ -1,9 +1,9 @@
 # Final acceptance test summary
 
 - Date: 2026-08-04
-- Final implementation HEAD: `34866d3` plus this evidence update
+- Verified implementation HEAD: `31f736dce993c4b196499c6c83aa759eb2ba4d31` (evidence-only commit follows)
 - Current APK: `app/build/outputs/apk/debug/app-debug.apk`
-- Current APK SHA-256 at acceptance build: `50fe2376b6820787fca97c782a682e8d60efed3dc98c3f6a0b8e5d1e78b208d9`
+- Current APK SHA-256 at final verification: `d0554e0058f5e327940e76fed3fd24fc4f32c63cd7b9cb87d3c60b2fd4bfcd81`
 - Reference APK: `v4.47-github-release.apk`
 - Reference APK SHA-256: `fbc341267b1e09a72ca975d00316ba9827b7731f752eabab35b54d690e8ee097`
 - Devices: API28 `emulator-5554`; API36 `emulator-5556` / mobile-mcp `ai_livesaver_api36`
@@ -29,7 +29,7 @@ Command: `./gradlew connectedDebugAndroidTest --no-daemon`
 - Conditional skips are honest environment gates: Aura verified model/runtime tests and Local Dream live host success test. Their local protocol/failure behavior remains covered by other shipped tests.
 - The complete rerun includes all in-repo instrumentation, not only selected core classes.
 
-Durable log: private scratch `full-instrumentation-after-fix.log`.
+Durable evidence: `../evidence/instrumentation-api28.xml`, `../evidence/instrumentation-api36.xml`; full console log is in private scratch `full-instrumentation-after-fix.log`.
 
 ## Mobile-MCP
 
