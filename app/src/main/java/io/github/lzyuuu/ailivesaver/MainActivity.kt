@@ -1574,12 +1574,12 @@ private fun MeScreen(
         }
     }
     val categorizedSettings = listOf(
-        R.string.settings_category_ai_models to settings.filter { it.destination == "providers" },
-        R.string.settings_category_voice_calls to settings.filter { it.destination == "voice" },
-        R.string.settings_category_image_generation to settings.filter { it.destination == "dream" },
-        R.string.settings_category_you_personas to settings.filter { it.destination == "identity" || it.destination == "characters" },
-        R.string.settings_category_app to settings.filter { it.destination == "world" || it.destination == "knowledge" || it.destination == "storage" || it.destination == "privacy" },
-        R.string.settings_category_developer_about to settings.filter { it.destination == "diagnostics" || it.destination == "backups" || it.destination == "updates" },
+        Triple("ai-models", R.string.settings_category_ai_models, settings.filter { it.destination == "providers" }),
+        Triple("voice-calls", R.string.settings_category_voice_calls, settings.filter { it.destination == "voice" }),
+        Triple("image-generation", R.string.settings_category_image_generation, settings.filter { it.destination == "dream" }),
+        Triple("you-personas", R.string.settings_category_you_personas, settings.filter { it.destination == "identity" || it.destination == "characters" }),
+        Triple("app", R.string.settings_category_app, settings.filter { it.destination == "world" || it.destination == "knowledge" || it.destination == "storage" || it.destination == "privacy" }),
+        Triple("developer-about", R.string.settings_category_developer_about, settings.filter { it.destination == "diagnostics" || it.destination == "backups" || it.destination == "updates" }),
     )
     LazyColumn(
         modifier = Modifier.fillMaxSize().testTag("me-settings-list"),
@@ -1598,10 +1598,11 @@ private fun MeScreen(
                 fontWeight = FontWeight.Bold,
             )
         }
-        categorizedSettings.forEach { (category, entries) ->
+        categorizedSettings.forEach { (categoryTag, category, entries) ->
             item {
                 Text(
                     stringResource(category),
+                    modifier = Modifier.testTag("settings-category-$categoryTag"),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                 )
