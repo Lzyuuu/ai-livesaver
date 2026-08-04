@@ -121,6 +121,7 @@ import java.util.Date
 import java.util.Locale
 
 internal const val APP_PREFERENCES = "app_settings"
+internal const val VOICE_ENABLED_KEY = "voice_enabled"
 internal const val WELCOME_GUIDE_COMPLETED_KEY = "welcome_guide_completed"
 internal const val OPEN_DESKTOP_APP_EXTRA = "open_desktop_app"
 internal const val ROOT_APPEARANCE_KEY = "root_appearance_id"

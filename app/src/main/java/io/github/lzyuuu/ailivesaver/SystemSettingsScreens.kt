@@ -21,6 +21,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -31,9 +32,13 @@ internal fun VoiceCallsSettingsScreen(
     contentPadding: PaddingValues,
     onBack: () -> Unit,
 ) {
-    var enabled by rememberSaveable { mutableStateOf(false) }
+    val context = LocalContext.current
+    val preferences = context.getSharedPreferences(APP_PREFERENCES, android.content.Context.MODE_PRIVATE)
+    var enabled by rememberSaveable { mutableStateOf(preferences.getBoolean(VOICE_ENABLED_KEY, false)) }
     LazyColumn(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier
+            .fillMaxSize()
+            .testTag("voice-calls-settings"),
         contentPadding = PaddingValues(
             start = 20.dp,
             top = contentPadding.calculateTopPadding() + 12.dp,
@@ -55,7 +60,14 @@ internal fun VoiceCallsSettingsScreen(
                             Text(stringResource(R.string.voice_calls_enable), fontWeight = FontWeight.Bold)
                             Text(stringResource(R.string.voice_calls_enable_summary), color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
-                        Switch(checked = enabled, onCheckedChange = { enabled = it })
+                        Switch(
+                            checked = enabled,
+                            onCheckedChange = {
+                                enabled = it
+                                preferences.edit().putBoolean(VOICE_ENABLED_KEY, it).apply()
+                            },
+                            modifier = Modifier.testTag("voice-enabled-switch"),
+                        )
                     }
                     Text(stringResource(R.string.voice_calls_skeleton), color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
