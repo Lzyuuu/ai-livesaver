@@ -293,6 +293,7 @@ internal fun YScreen(
     onBack: () -> Unit,
 ) {
     val context = LocalContext.current
+    val yGenerating = stringResource(R.string.y_generating)
     val identity = remember(revision) { store.identity() }
     val character = remember(revision) { store.primaryCharacter() }
     val posts = remember(revision) { store.posts(Y_POST_KIND) }
@@ -354,7 +355,7 @@ internal fun YScreen(
     fun generatePost() {
         if (character == null || generating) return
         generating = true
-        status = context.getString(R.string.y_generating)
+        status = yGenerating
         val actor = store.characters(includeDeparted = false).firstOrNull() ?: character
         val config = ProviderStore(context).loadFor(ProviderTask.World)
         ProviderTextClient.completeStructured(

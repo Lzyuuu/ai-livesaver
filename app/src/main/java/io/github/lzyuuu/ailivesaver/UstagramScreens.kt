@@ -219,6 +219,8 @@ internal fun UstagramAppScreen(
     onBack: () -> Unit,
 ) {
     val context = LocalContext.current
+    val ustagramGenerateFailed = stringResource(R.string.ustagram_generate_failed)
+    val imageReadyToPost = stringResource(R.string.image_ready_to_post)
     val identity = remember(revision) { store.identity() }
     val characters = remember(revision) { store.characters(includeDeparted = true) }
     val posts = remember(revision) { store.posts("moment") }
@@ -277,13 +279,13 @@ internal fun UstagramAppScreen(
                         status = if (success) {
                             null
                         } else {
-                            context.getString(R.string.ustagram_generate_failed)
+                            ustagramGenerateFailed
                         }
                         if (success) onChanged()
                     }
                 ) {
                     generating = false
-                    status = context.getString(R.string.ustagram_generate_failed)
+                    status = ustagramGenerateFailed
                 }
             },
             menuOpen = menuOpen,
@@ -665,6 +667,7 @@ private fun UstagramComposerDialog(
     onPublish: (caption: String, attachAiImage: Boolean, cachedImagePath: String?) -> Unit,
 ) {
     val context = LocalContext.current
+    val imageReadyToPost = stringResource(R.string.image_ready_to_post)
     var caption by rememberSaveable { mutableStateOf("") }
     var attachAiImage by rememberSaveable { mutableStateOf(true) }
     var cachedImagePath by rememberSaveable { mutableStateOf<String?>(null) }
@@ -680,7 +683,7 @@ private fun UstagramComposerDialog(
                     cachedImagePath?.let(::File)?.takeIf { it.parentFile == context.cacheDir }?.delete()
                     cachedImagePath = it
                     attachAiImage = false
-                    imageStatus = context.getString(R.string.image_ready_to_post)
+                    imageStatus = imageReadyToPost
                 }.onFailure {
                     imageStatus = it.message.orEmpty()
                 }

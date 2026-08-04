@@ -366,6 +366,9 @@ internal fun RebbitScreen(
     onBack: () -> Unit,
 ) {
     val context = LocalContext.current
+    val socialRequiresWorld = stringResource(R.string.social_requires_world)
+    val rebbitGenerating = stringResource(R.string.rebbit_generating)
+    val rebbitGenerateFailed = stringResource(R.string.rebbit_generate_failed)
     val identity = remember(revision) { store.identity() }
     val character = remember(revision) { store.primaryCharacter() }
     val characters = remember(revision) { store.characters(includeDeparted = true) }
@@ -418,17 +421,17 @@ internal fun RebbitScreen(
             onGenerate = {
                 if (generating) return@RebbitTopBar
                 if (character == null) {
-                    status = context.getString(R.string.social_requires_world)
+                    status = socialRequiresWorld
                     return@RebbitTopBar
                 }
                 generating = true
-                status = context.getString(R.string.rebbit_generating)
+                status = rebbitGenerating
                 WorldEngine.generateRebbitPost(
                     context,
                     rebbitGeneratePrompt(context),
                 ) { ok ->
                     generating = false
-                    status = if (ok) null else context.getString(R.string.rebbit_generate_failed)
+                    status = if (ok) null else rebbitGenerateFailed
                     onChanged()
                 }
             },
