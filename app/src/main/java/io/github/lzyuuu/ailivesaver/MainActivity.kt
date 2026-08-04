@@ -388,9 +388,13 @@ private fun AiLivesaverApp(
     val identity = remember(worldRevision) { worldStore.identity() }
     val primaryCharacter = remember(worldRevision) { worldStore.primaryCharacter() }
     val characters = remember(worldRevision) { worldStore.characters(includeDeparted = false) }
-    val hasChatProvider = remember(worldRevision) {
-        ProviderStore(context).loadTask(ProviderTask.Chat) != null
-    }
+    val chatProvider = remember(worldRevision) { ProviderStore(context).loadTask(ProviderTask.Chat) }
+    val homeState = homeRuntimeState(
+        config = chatProvider,
+        localReady = false,
+        fault = chatProvider?.let { it.isValid() && it.capabilities.failures.containsKey(ProviderCapability.Chat) } == true,
+    )
+    val homePresentation = homeRuntimePresentation(homeState)
     val activeDesktopApp = DesktopApp.fromRoute(desktopRouteKey)
     val activeHub = DesktopHub.fromRoute(activeHubRoute)
 
@@ -816,21 +820,13 @@ private fun AiLivesaverApp(
                                 android.content.Context.MODE_PRIVATE,
                             ).getString(ROOT_APPEARANCE_KEY, null),
                         ) ?: RootAppearance.AnimeBlonde,
-                        rootStatus = if (hasChatProvider) {
-                            "管着这里 · 来找我聊聊"
-                        } else {
-                            "我还缺一个大脑。戏剧化，是的。但也很有必要。"
-                        },
-                        rootActionLabel = if (hasChatProvider) {
-                            "打开 Messenger"
-                        } else {
-                            "去把大脑接上"
-                        },
+                        rootStatus = homePresentation.status,
+                        rootActionLabel = homePresentation.actionLabel,
                         onOpenRoot = {
-                            if (hasChatProvider) {
-                                openMessenger(primaryCharacter?.id)
-                            } else {
-                                showProviders = true
+                            when (homePresentation.action) {
+                                HomeAction.CONFIGURE_PROVIDER -> showProviders = true
+                                HomeAction.OPEN_MESSENGER -> openMessenger(primaryCharacter?.id)
+                                HomeAction.OPEN_RUNTIME -> showDiagnostics = true
                             }
                         },
                         onOpenHub = { hub -> activeHubRoute = hub.route },
@@ -1493,10 +1489,8 @@ internal fun Avatar(
 }
 
 private data class SettingRow(
-    val titleRes: Int,
-    val summaryRes: Int,
+    val destination: SettingsDestination,
     val icon: ImageVector,
-    val destination: String? = null,
 )
 
 @Composable
@@ -1538,49 +1532,40 @@ private fun MeScreen(
             .filter { it.authorKind == "user" }
             .sortedByDescending(SocialPost::createdAt)
     }
-    val settings = listOf(
-        SettingRow(R.string.user_identity, R.string.user_identity_summary, Icons.Default.Person, "identity"),
-        SettingRow(R.string.world_members, R.string.world_members_summary, Icons.Default.Favorite, "characters"),
-        SettingRow(R.string.provider_settings, R.string.provider_settings_summary, Icons.Default.Settings, "providers"),
-        SettingRow(R.string.voice_calls_settings, R.string.voice_calls_settings_summary, Icons.Default.Call, "voice"),
-        SettingRow(R.string.local_dream_settings, R.string.local_dream_settings_summary, Icons.Default.Star, "dream"),
-        SettingRow(R.string.world_settings, R.string.world_settings_summary, Icons.Default.Home, "world"),
-        SettingRow(
-            R.string.world_knowledge,
-            R.string.world_knowledge_summary,
-            Icons.AutoMirrored.Filled.List,
-            "knowledge",
-        ),
-        SettingRow(R.string.runtime_status, R.string.runtime_status_summary, Icons.Default.Build, "diagnostics"),
-        SettingRow(R.string.storage_settings, R.string.storage_settings_summary, Icons.Default.Info, "storage"),
-        SettingRow(R.string.privacy_settings, R.string.privacy_settings_summary, Icons.Default.Lock, "privacy"),
-        SettingRow(R.string.backup_settings, R.string.backup_settings_summary, Icons.Default.Share, "backups"),
-        SettingRow(R.string.about_updates, R.string.about_updates_summary, Icons.Default.Info, "updates"),
-    )
-    fun openSetting(destination: String?) {
+    val settings = settingsDestinationsInOrder().map { destination ->
+        SettingRow(destination, when (destination.section) {
+            SettingsSection.CHAT_BRAIN -> Icons.Default.Settings
+            SettingsSection.VOICE_CALLS -> Icons.Default.Call
+            SettingsSection.IMAGE_GENERATION -> Icons.Default.Star
+            SettingsSection.YOU_PERSONAS -> Icons.Default.Person
+            SettingsSection.APP -> Icons.Default.Home
+            SettingsSection.DEVELOPER_ABOUT -> Icons.Default.Info
+            SettingsSection.SYSTEM_SETTINGS -> Icons.Default.Info
+            SettingsSection.HELP_GUIDE, SettingsSection.UPDATE -> Icons.Default.Info
+        })
+    }
+    fun openSetting(destination: SettingsDestination) {
         when (destination) {
-            "identity" -> onOpenIdentity()
-            "characters" -> onOpenCharacters()
-            "providers" -> onOpenProviders()
-            "voice" -> onOpenVoiceCalls()
-            "storage" -> onOpenStorage()
-            "dream" -> onOpenLocalDream()
-            "world" -> onOpenWorldSettings()
-            "knowledge" -> onOpenWorldKnowledge()
-            "diagnostics" -> onOpenDiagnostics()
-            "privacy" -> onOpenPrivacy()
-            "backups" -> onOpenBackups()
-            "updates" -> onOpenUpdates()
+            SettingsDestination.PROVIDER -> onOpenProviders()
+            SettingsDestination.CHAT_BRAIN -> onOpenProviders()
+            SettingsDestination.VOICE, SettingsDestination.CALLS -> onOpenVoiceCalls()
+            SettingsDestination.LOCAL_DREAM, SettingsDestination.IMAGING -> onOpenLocalDream()
+            SettingsDestination.IDENTITY -> onOpenIdentity()
+            SettingsDestination.CHARACTERS -> onOpenCharacters()
+            SettingsDestination.WORLD -> onOpenWorldSettings()
+            SettingsDestination.KNOWLEDGE -> onOpenWorldKnowledge()
+            SettingsDestination.PRIVACY -> onOpenPrivacy()
+            SettingsDestination.BACKUPS -> onOpenBackups()
+            SettingsDestination.DIAGNOSTICS, SettingsDestination.RUNTIME, SettingsDestination.ABOUT -> onOpenDiagnostics()
+            SettingsDestination.STORAGE, SettingsDestination.SYSTEM -> onOpenStorage()
+            SettingsDestination.HELP -> onOpenWorldSettings()
+            SettingsDestination.UPDATE -> onOpenUpdates()
+            SettingsDestination.APPEARANCE, SettingsDestination.APP -> onOpenWorldSettings()
         }
     }
-    val categorizedSettings = listOf(
-        Triple("ai-models", R.string.settings_category_ai_models, settings.filter { it.destination == "providers" }),
-        Triple("voice-calls", R.string.settings_category_voice_calls, settings.filter { it.destination == "voice" }),
-        Triple("image-generation", R.string.settings_category_image_generation, settings.filter { it.destination == "dream" }),
-        Triple("you-personas", R.string.settings_category_you_personas, settings.filter { it.destination == "identity" || it.destination == "characters" }),
-        Triple("app", R.string.settings_category_app, settings.filter { it.destination == "world" || it.destination == "knowledge" || it.destination == "storage" || it.destination == "privacy" }),
-        Triple("developer-about", R.string.settings_category_developer_about, settings.filter { it.destination == "diagnostics" || it.destination == "backups" || it.destination == "updates" }),
-    )
+    val categorizedSettings = SettingsSection.entries.map { section ->
+        Triple(section.name.lowercase(), section, settings.filter { it.destination.section == section })
+    }
     LazyColumn(
         modifier = Modifier.fillMaxSize().testTag("me-settings-list"),
         contentPadding = PaddingValues(
@@ -1601,7 +1586,7 @@ private fun MeScreen(
         categorizedSettings.forEach { (categoryTag, category, entries) ->
             item {
                 Text(
-                    stringResource(category),
+                    category.name.replace('_', ' ').lowercase().replaceFirstChar { it.uppercase() },
                     modifier = Modifier.testTag("settings-category-$categoryTag"),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
@@ -1742,7 +1727,7 @@ private fun MeScreen(
 @Composable
 private fun SettingGroup(
     settings: List<SettingRow>,
-    onOpen: (String?) -> Unit,
+    onOpen: (SettingsDestination) -> Unit,
 ) {
     Card(
         colors = CardDefaults.cardColors(
@@ -1754,8 +1739,8 @@ private fun SettingGroup(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .testTag("me-setting-${setting.destination}")
-                        .clickable(enabled = setting.destination != null) {
+                        .testTag("me-setting-${setting.destination.name.lowercase()}")
+                        .clickable {
                             onOpen(setting.destination)
                         }
                         .padding(horizontal = 16.dp, vertical = 14.dp),
@@ -1777,9 +1762,9 @@ private fun SettingGroup(
                     }
                     Spacer(Modifier.width(14.dp))
                     Column(Modifier.weight(1f)) {
-                        Text(stringResource(setting.titleRes), fontWeight = FontWeight.Bold)
+                        Text(setting.destination.title, fontWeight = FontWeight.Bold)
                         Text(
-                            stringResource(setting.summaryRes),
+                            setting.destination.synonyms.firstOrNull() ?: "设置与配置",
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis,
