@@ -1573,6 +1573,14 @@ private fun MeScreen(
             "updates" -> onOpenUpdates()
         }
     }
+    val categorizedSettings = listOf(
+        R.string.settings_category_ai_models to settings.filter { it.destination == "providers" },
+        R.string.settings_category_voice_calls to settings.filter { it.destination == "voice" },
+        R.string.settings_category_image_generation to settings.filter { it.destination == "dream" },
+        R.string.settings_category_you_personas to settings.filter { it.destination == "identity" || it.destination == "characters" },
+        R.string.settings_category_app to settings.filter { it.destination == "world" || it.destination == "knowledge" || it.destination == "storage" || it.destination == "privacy" },
+        R.string.settings_category_developer_about to settings.filter { it.destination == "diagnostics" || it.destination == "backups" || it.destination == "updates" },
+    )
     LazyColumn(
         modifier = Modifier.fillMaxSize().testTag("me-settings-list"),
         contentPadding = PaddingValues(
@@ -1583,6 +1591,23 @@ private fun MeScreen(
         ),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
+        item {
+            Text(
+                stringResource(R.string.settings_title),
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+            )
+        }
+        categorizedSettings.forEach { (category, entries) ->
+            item {
+                Text(
+                    stringResource(category),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                )
+            }
+            item { SettingGroup(entries, ::openSetting) }
+        }
         item {
             Row(
                 horizontalArrangement = Arrangement.spacedBy(14.dp),
@@ -1602,13 +1627,6 @@ private fun MeScreen(
                     )
                 }
             }
-        }
-        item {
-            Text(
-                stringResource(R.string.settings_title),
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-            )
         }
         item {
             Card(
@@ -1708,24 +1726,6 @@ private fun MeScreen(
                     }
                 }
             }
-        }
-        val categorizedSettings = listOf(
-            R.string.settings_category_ai_models to settings.filter { it.destination == "providers" },
-            R.string.settings_category_voice_calls to settings.filter { it.destination == "voice" },
-            R.string.settings_category_image_generation to settings.filter { it.destination == "dream" },
-            R.string.settings_category_you_personas to settings.filter { it.destination == "identity" || it.destination == "characters" },
-            R.string.settings_category_app to settings.filter { it.destination == "world" || it.destination == "knowledge" || it.destination == "storage" || it.destination == "privacy" },
-            R.string.settings_category_developer_about to settings.filter { it.destination == "diagnostics" || it.destination == "backups" || it.destination == "updates" },
-        )
-        categorizedSettings.forEach { (category, entries) ->
-            item {
-                Text(
-                    stringResource(category),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                )
-            }
-            item { SettingGroup(entries, ::openSetting) }
         }
         item {
             Spacer(Modifier.height(8.dp))
