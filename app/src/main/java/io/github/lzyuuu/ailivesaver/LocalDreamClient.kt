@@ -330,8 +330,9 @@ internal object LocalDreamClient {
                     }
                     var completed: JSONObject? = null
                     var firstStepAt: Long? = null
-                    connection.inputStream.bufferedReader().useLines { lines ->
-                        lines.forEach { line ->
+                    connection.inputStream.bufferedReader().use { reader ->
+                        while (true) {
+                            val line = reader.readLine() ?: break
                             when (val event = parseLocalDreamSseLine(line)) {
                                 is LocalDreamSseEvent.Progress -> {
                                     if (firstStepAt == null) firstStepAt = SystemClock.elapsedRealtime()
@@ -341,7 +342,8 @@ internal object LocalDreamClient {
                                 }
                                 is LocalDreamSseEvent.Complete -> completed = event.payload
                                 is LocalDreamSseEvent.Error -> throw IOException(event.message)
-                                LocalDreamSseEvent.Done, null -> Unit
+                                LocalDreamSseEvent.Done -> break
+                                null -> Unit
                             }
                         }
                     }
