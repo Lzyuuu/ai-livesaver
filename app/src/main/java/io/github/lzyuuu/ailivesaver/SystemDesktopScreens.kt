@@ -573,6 +573,8 @@ internal fun GamesHubScreen(
             modifier = Modifier.fillMaxSize(),
         ) {
             items(GamesHubEntries, key = { it.id }) { game ->
+                val gameTitle = stringResource(game.titleRes)
+                val gameStatus = stringResource(game.statusNoteRes)
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -580,7 +582,7 @@ internal fun GamesHubScreen(
                         .clip(RoundedCornerShape(18.dp))
                         .background(cardSurface)
                         .clickable { onOpenGame(game) }
-                        .semantics { contentDescription = "${stringResource(game.titleRes)}: ${stringResource(game.statusNoteRes)}" }
+                        .semantics { contentDescription = "$gameTitle: $gameStatus" }
                         .padding(horizontal = 15.dp)
                         .testTag("games-entry-${game.id}"),
                     verticalAlignment = Alignment.CenterVertically,
