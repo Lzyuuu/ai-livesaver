@@ -40,6 +40,10 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -464,17 +468,20 @@ internal fun PhoneContactsScreen(
     onBack: () -> Unit,
     onCall: (Long) -> Unit,
 ) {
+    var query by rememberSaveable { mutableStateOf("") }
+    val visibleCharacters = characters.filter { query.isBlank() || it.name.contains(query, true) || it.persona.contains(query, true) }
     PlaceholderAppScreen(
         title = "Phone",
         summary = "联系人列表。拨号会进入对应角色的 Messenger 对话。",
         contentPadding = contentPadding,
         onBack = onBack,
     ) {
+        androidx.compose.material3.OutlinedTextField(value=query, onValueChange={query=it}, label={Text("搜索联系人")}, modifier=Modifier.fillMaxWidth().padding(horizontal=16.dp).testTag("phone-search"))
         LazyColumn(
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            items(characters, key = { it.id }) { character ->
+            items(visibleCharacters, key = { it.id }) { character ->
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()

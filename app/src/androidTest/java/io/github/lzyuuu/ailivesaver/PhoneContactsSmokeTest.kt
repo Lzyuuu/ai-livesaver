@@ -5,8 +5,10 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTextInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Before
@@ -40,6 +42,8 @@ class PhoneContactsSmokeTest {
 
         composeRule.onNodeWithText("Phone", useUnmergedTree = true).assertIsDisplayed()
         composeRule.onNodeWithText("Root", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("phone-search").performTextInput("Root")
+        composeRule.onAllNodesWithText("Root", useUnmergedTree = true)[0].assertIsDisplayed()
         composeRule.onAllNodesWithContentDescription("拨号", useUnmergedTree = true)[0].performClick()
         composeRule.waitForIdle()
         val listVisible = composeRule.onAllNodesWithTag("messenger-list").fetchSemanticsNodes().isNotEmpty()
