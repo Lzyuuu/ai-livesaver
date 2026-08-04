@@ -121,7 +121,7 @@ class MessengerRetryHttpSmokeTest {
                     readHeaders(input)
                     val n = requests.incrementAndGet()
                     if (n == 1) {
-                        write(client, "data: ${delta("partial")}\n\n")
+                        writeTruncatedStream(client, "data: ${delta("partial")}\n\n")
                     } else {
                         write(client, "data: ${delta("retry succeeded")}\n\n" + "data: [DONE]\n\n")
                     }
@@ -131,6 +131,16 @@ class MessengerRetryHttpSmokeTest {
         private fun delta(text: String) = JSONObject().put("choices", org.json.JSONArray().put(JSONObject().put("delta", JSONObject().put("content", text)))).toString()
         private fun readHeaders(input: InputStream) { val b = ByteArrayOutputStream(); var tail = ""; while (true) { val c = input.read(); if (c < 0) break; b.write(c); tail = (tail + c.toChar()).takeLast(4); if (tail == "\r\n\r\n") break } }
         private fun write(client: java.net.Socket, body: String) { val bytes = body.toByteArray(); client.getOutputStream().apply { write("HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nContent-Length: ${bytes.size}\r\nConnection: close\r\n\r\n".toByteArray()); write(bytes); flush() } }
+        private fun writeTruncatedStream(client: java.net.Socket, body: String) {
+            val bytes = body.toByteArray()
+            client.getOutputStream().apply {
+                // Advertise a longer body, then close after one valid delta. This deterministically
+                // exercises the incomplete-SSE failure on Android 9 and Android 16 HTTP stacks.
+                write("HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nContent-Length: ${bytes.size + 32}\r\nConnection: close\r\n\r\n".toByteArray())
+                write(bytes)
+                flush()
+            }
+        }
         override fun close() { socket.close(); worker.join(2_000) }
     }
 }

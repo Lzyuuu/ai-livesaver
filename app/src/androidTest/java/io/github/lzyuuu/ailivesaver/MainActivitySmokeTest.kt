@@ -10,6 +10,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.assertTrue
@@ -201,8 +202,8 @@ class MainActivitySmokeTest {
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("imaging-backend-local_dream").assertIsDisplayed()
         composeRule.onNodeWithTag("imaging-test-connection").assertIsDisplayed()
-        composeRule.onNodeWithTag("imaging-generate").assertIsDisplayed()
-        composeRule.onNodeWithTag("imaging-prompt").assertIsDisplayed()
+        composeRule.onNodeWithTag("imaging-prompt").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithTag("imaging-generate").performScrollTo().assertIsDisplayed()
 
         composeRule.onNodeWithTag("imaging-back").performClick()
         composeRule.waitForIdle()
