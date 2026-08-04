@@ -1,9 +1,16 @@
 package io.github.lzyuuu.ailivesaver
 
 import android.content.Context
+import android.net.Uri
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.compose.foundation.Image
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.BitmapFactory
 import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.PointF
@@ -393,7 +400,7 @@ internal object HfModelStore {
 }
 
 @Composable
-internal fun AuraSwapScreen(contentPadding: PaddingValues, onBack: () -> Unit) {
+internal fun AuraSwapScreen(contentPadding: PaddingValues, onBack: () -> Unit, onOpenGallery: () -> Unit = {}) {
     val context = LocalContext.current
     var tab by rememberSaveable { mutableStateOf("aura") }
     Column(Modifier.fillMaxSize().background(FancyInk).padding(contentPadding).testTag("aura-swap-screen")) {
@@ -404,21 +411,41 @@ internal fun AuraSwapScreen(contentPadding: PaddingValues, onBack: () -> Unit) {
                 Icon(if (tab == "aura") Icons.Default.Download else Icons.Default.Refresh, "切换", tint = FancyGold)
             }
         }
-        if (tab == "store") ModelStoreContent(context) else AuraSwapContent(context)
+        if (tab == "store") ModelStoreContent(context) else AuraSwapContent(context, onOpenGallery)
     }
 }
 
 @Composable
-private fun AuraSwapContent(context: Context) {
+private fun AuraSwapContent(context: Context, onOpenGallery: () -> Unit) {
     var source by rememberSaveable { mutableStateOf("") }
     var target by rememberSaveable { mutableStateOf("") }
+    var picking by rememberSaveable { mutableStateOf("source") }
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
+        uri ?: return@rememberLauncherForActivityResult
+        val file = File(context.filesDir, "media/import-${System.currentTimeMillis()}.bin").apply { parentFile?.mkdirs() }
+        runCatching { context.contentResolver.openInputStream(uri)!!.use { input -> file.outputStream().use(input::copyTo) } }
+            .onSuccess { if (picking == "source") source = file.absolutePath else target = file.absolutePath }
+    }
     var status by rememberSaveable { mutableStateOf<String?>(null) }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("Swap the aura between two images.", color = FancyCream)
         Text("Source image", color = FancyGold, fontSize = 12.sp)
-        OutlinedTextField(source, { source = it }, label = { Text("Source path") }, modifier = Modifier.fillMaxWidth().testTag("aura-source"), colors = auraFieldColors())
+        source.takeIf { it.isNotBlank() }?.let { path -> BitmapFactory.decodeFile(path)?.asImageBitmap()?.let { bitmap -> Image(bitmap, "Source thumbnail", Modifier.size(96.dp), contentScale = ContentScale.Crop) } }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            OutlinedTextField(source, {}, label = { Text("Source") }, modifier = Modifier.weight(1f).testTag("aura-source"), colors = auraFieldColors(), readOnly = true)
+            Button(onClick = { picking = "source"; picker.launch("image/*") }) { Text("系统选择") }
+        }
         Text("Target image", color = FancyGold, fontSize = 12.sp)
-        OutlinedTextField(target, { target = it }, label = { Text("Target path") }, modifier = Modifier.fillMaxWidth().testTag("aura-target"), colors = auraFieldColors())
+        target.takeIf { it.isNotBlank() }?.let { path -> BitmapFactory.decodeFile(path)?.asImageBitmap()?.let { bitmap -> Image(bitmap, "Target thumbnail", Modifier.size(96.dp), contentScale = ContentScale.Crop) } }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            OutlinedTextField(target, {}, label = { Text("Target") }, modifier = Modifier.weight(1f).testTag("aura-target"), colors = auraFieldColors(), readOnly = true)
+            Button(onClick = { picking = "target"; picker.launch("image/*") }) { Text("系统选择") }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            TextButton(onClick = { val old = source; source = target; target = old }) { Text("交换") }
+            TextButton(onClick = { source = ""; target = "" }) { Text("清空") }
+            TextButton(onClick = onOpenGallery) { Text("Gallery") }
+        }
         Button(onClick = {
             val sourceFile = File(source.trim()); val targetFile = File(target.trim())
             status = when {

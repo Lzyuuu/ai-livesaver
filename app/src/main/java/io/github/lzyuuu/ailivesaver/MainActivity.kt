@@ -778,6 +778,7 @@ private fun AiLivesaverApp(
                 DesktopApp.AuraSwap -> AuraSwapScreen(
                     contentPadding = padding,
                     onBack = { goDesktopHome() },
+                    onOpenGallery = { openDesktopApp(DesktopApp.Gallery) },
                 )
                 DesktopApp.Storage -> PlaceholderAppScreen(
                     title = "Storage",
