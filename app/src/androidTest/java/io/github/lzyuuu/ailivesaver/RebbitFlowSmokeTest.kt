@@ -1,6 +1,7 @@
 package io.github.lzyuuu.ailivesaver
 
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.AndroidComposeTestRule
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
@@ -8,6 +9,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextInput
 import androidx.test.ext.junit.rules.ActivityScenarioRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -40,6 +42,11 @@ class RebbitFlowSmokeTest {
                 context = context,
             )
             store.ensureDefaultRebbitSubreddits()
+            // The publish path always resolves to the first enabled subreddit, so make
+            // "general" deterministically enabled before composing. This keeps the posts
+            // created by this test visible in the feed regardless of subreddit state left
+            // by earlier suite runs (the "None" experiment below disables everything).
+            store.setRebbitSubredditEnabled("general", true)
         }
         composeRule.activityRule.scenario.recreate()
         composeRule.waitForIdle()
@@ -158,15 +165,30 @@ class RebbitFlowSmokeTest {
         )
     }
 
+    /**
+     * The feed is a LazyColumn sorted newest-first, so a post published earlier sits below
+     * newer posts (and below the queued-response banner). Whether its card is composed at
+     * any instant depends on viewport height and async inference progress, which made
+     * direct lookups flaky. The DB already proved the post exists, so scroll the feed to
+     * the card before asserting/clicking — still opening the real detail screen through
+     * the user-visible card, never bypassing the UI.
+     */
+    private fun AndroidComposeTestRule<ActivityScenarioRule<MainActivity>, MainActivity>
+        .scrollRebbitFeedTo(postId: Long) {
+        onNodeWithTag("rebbit-feed").performScrollToNode(hasTestTag("rebbit-post-$postId"))
+    }
+
     private fun AndroidComposeTestRule<ActivityScenarioRule<MainActivity>, MainActivity>.assertRebbitPostVisible(
         postId: Long,
     ) {
+        scrollRebbitFeedTo(postId)
         onNodeWithTag("rebbit-post-$postId", useUnmergedTree = true).assertIsDisplayed()
     }
 
     private fun AndroidComposeTestRule<ActivityScenarioRule<MainActivity>, MainActivity>.openRebbitPost(
         postId: Long,
     ) {
+        scrollRebbitFeedTo(postId)
         onNodeWithTag("rebbit-post-$postId", useUnmergedTree = true).performClick()
     }
 
