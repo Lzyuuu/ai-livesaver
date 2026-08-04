@@ -99,7 +99,22 @@ class SocialPostVersionSmokeTest {
     fun keepsAUserPostAndItsWorldExcerptInSync() {
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
         val store = WorldStore(context)
-        val postId = store.createPost("forum", "Old title", "Old body")
+        // Publish through the app's own subreddit resolution so the post lands in an
+        // enabled subreddit. The default subreddit derives from the ambient profile name,
+        // and an earlier suite test that leaves that subreddit disabled would otherwise
+        // make posts("forum") hide this post (it filters disabled subreddits), breaking
+        // the sync contract under test with NoSuchElementException.
+        val postId = store.run {
+            val subreddit = resolveRebbitPublishSubreddit()
+            createPost(
+                kind = "forum",
+                authorName = userName(),
+                title = "Old title",
+                body = "Old body",
+                authorKind = "user",
+                subreddit = subreddit,
+            )
+        }
 
         try {
             assertTrue(store.updateUserPost(postId, "New title", "New body"))

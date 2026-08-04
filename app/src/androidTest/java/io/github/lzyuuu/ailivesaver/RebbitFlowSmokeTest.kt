@@ -12,6 +12,7 @@ import androidx.compose.ui.test.performTextInput
 import androidx.test.ext.junit.rules.ActivityScenarioRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -42,6 +43,19 @@ class RebbitFlowSmokeTest {
         }
         composeRule.activityRule.scenario.recreate()
         composeRule.waitForIdle()
+    }
+
+    @After
+    fun restoreSubredditVisibility() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        WorldStore(context).use { store ->
+            // The "None" experiment disables every subreddit, and only the publish path
+            // re-enables "general" afterwards. posts("forum") hides posts whose subreddit
+            // is disabled, so a left-behind disabled user subreddit would make later
+            // suite tests unable to see their own forum posts. Restore the pre-test
+            // visibility so this shared world.db stays intact for subsequent tests.
+            store.setAllRebbitSubredditsEnabled(true)
+        }
     }
 
     @Test
