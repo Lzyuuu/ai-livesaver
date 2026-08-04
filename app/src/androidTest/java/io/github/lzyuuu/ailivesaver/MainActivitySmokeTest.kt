@@ -1,5 +1,7 @@
 package io.github.lzyuuu.ailivesaver
 
+import android.Manifest
+import android.os.Build
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
@@ -23,7 +25,13 @@ class MainActivitySmokeTest {
 
     @Before
     fun seedDesktopShell() {
-        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val context = instrumentation.targetContext
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            instrumentation.uiAutomation
+                .executeShellCommand("pm grant ${context.packageName} ${Manifest.permission.POST_NOTIFICATIONS}")
+                .close()
+        }
         writeWelcomeGuideCompleted(context, true)
         resetImagingStudioOnDeviceForSmoke(context)
         WorldStore(context).use { store ->

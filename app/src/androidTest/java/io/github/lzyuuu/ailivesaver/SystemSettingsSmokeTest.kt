@@ -8,6 +8,7 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performScrollToNode
 import org.junit.Before
 import org.junit.Rule
@@ -25,21 +26,18 @@ class SystemSettingsSmokeTest {
     }
 
     @Test
-    fun settingsExposeSixCategoriesAndKeyEntries() {
+    fun settingsExposeNineRootsAndKeyEntries() {
         composeRule.onNodeWithTag("desktop-dock-settings").performClick()
         composeRule.onNodeWithText("设置").assertIsDisplayed()
-        listOf("ai-models", "voice-calls", "image-generation", "you-personas", "app", "developer-about").forEach {
-            val tag = "settings-category-$it"
-            composeRule.onNodeWithTag("me-settings-list").performScrollToNode(hasTestTag(tag))
-            composeRule.onNodeWithTag(tag).assertIsDisplayed()
-        }
-        listOf("me-setting-providers", "me-setting-voice", "me-setting-dream", "me-setting-identity", "me-setting-world", "me-setting-diagnostics").forEach {
-            composeRule.onNodeWithTag("me-settings-list").performScrollToNode(hasTestTag(it))
-            composeRule.onNodeWithTag(it).assertIsDisplayed()
+        val roots = listOf("chat_brain", "voice_calls", "image_generation", "you_personas", "app", "developer_about", "system_settings", "help_guide", "update")
+        roots.forEachIndexed { index, root ->
+            composeRule.onNodeWithTag("me-settings-list").performScrollToIndex(index + 2)
+            composeRule.onNodeWithTag("settings-root-$root").assertIsDisplayed()
         }
 
-        composeRule.onNodeWithTag("me-settings-list").performScrollToNode(hasTestTag("me-setting-voice"))
-        composeRule.onNodeWithTag("me-setting-voice").performClick()
+        composeRule.onNodeWithTag("me-settings-list").performScrollToIndex(3)
+        composeRule.onNodeWithTag("settings-root-voice_calls").performClick()
+        composeRule.onNodeWithTag("me-setting-voice").assertIsDisplayed().performClick()
         composeRule.waitUntil(5_000) {
             composeRule.onAllNodesWithText("Voice & Calls", useUnmergedTree = true)
                 .fetchSemanticsNodes().isNotEmpty()
@@ -49,8 +47,9 @@ class SystemSettingsSmokeTest {
         // The settings screen is a lazy list; verify the actual storage entry is reachable
         // through the same user-visible settings surface rather than assuming fixed layout.
         composeRule.onNodeWithText("返回", useUnmergedTree = true).performClick()
-        composeRule.onNodeWithTag("me-settings-list").performScrollToNode(hasTestTag("me-setting-storage"))
-        composeRule.onNodeWithTag("me-setting-storage").performClick()
+        composeRule.onNodeWithTag("me-settings-list").performScrollToIndex(8)
+        composeRule.onNodeWithTag("settings-root-system_settings").performClick()
+        composeRule.onNodeWithTag("me-setting-storage").assertIsDisplayed().performClick()
         composeRule.waitUntil(5_000) {
             composeRule.onAllNodesWithText("Storage", useUnmergedTree = true)
                 .fetchSemanticsNodes().isNotEmpty()
