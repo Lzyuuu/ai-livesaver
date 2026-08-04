@@ -562,6 +562,7 @@ internal object ProviderChatClient {
         userContext: MemberWorldContext,
         characterContext: MemberWorldContext,
         relationship: RelationshipState,
+        systemPromptAppendix: String = "",
         onDelta: (String) -> Unit,
         callback: (Result<ProviderResponse>) -> Unit,
         handle: ProviderStreamHandle = ProviderStreamHandle(),
@@ -578,7 +579,7 @@ internal object ProviderChatClient {
                     userContext,
                     characterContext,
                     relationship,
-                )
+                ) + systemPromptAppendix.trim().takeIf { it.isNotBlank() }?.let { "\n\nGroup scene/system instructions:\n$it" }.orEmpty()
                 val requestMessages = JSONArray().put(
                     JSONObject().put("role", "system").put("content", system),
                 )

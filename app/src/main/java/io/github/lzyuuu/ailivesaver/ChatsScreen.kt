@@ -88,12 +88,20 @@ import androidx.compose.ui.unit.dp
 import java.text.DateFormat
 import java.util.Date
 
-private data class MessengerGroup(val memberIds: List<Long>)
+private data class MessengerGroup(val id: Long, val memberIds: List<Long>, val prompt: String)
 
-private fun groupFor(character: ResidentCharacter): MessengerGroup? {
+private fun groupFor(store: WorldStore, character: ResidentCharacter): MessengerGroup? {
     if (!character.cardJson.startsWith("group:")) return null
-    val ids = character.cardJson.removePrefix("group:").split(',').mapNotNull(String::toLongOrNull)
-    return ids.takeIf { it.size >= 2 }?.let(::MessengerGroup)
+    val token = character.cardJson.removePrefix("group:")
+    val persistedId = token.toLongOrNull()
+    if (persistedId != null) {
+        return store.loadPersistedMessengerGroup(persistedId)?.let {
+            MessengerGroup(it.id, it.memberIds, it.prompt)
+        }
+    }
+    // Compatibility with pre-contract group rows.
+    val ids = token.split(',').mapNotNull(String::toLongOrNull)
+    return ids.takeIf { it.size >= 2 }?.let { MessengerGroup(0L, it, "") }
 }
 
 internal object ActiveChatReplies {
@@ -183,7 +191,7 @@ internal fun ChatsScreen(
     when {
         character != null -> {
         key(character.id) {
-            val group = groupFor(character)
+            val group = groupFor(store, character)
             if (group == null) {
                 ConversationScreen(contentPadding, store, character, revision, onChanged, { selectedId = null }, onManageCharacters)
             } else {
@@ -228,6 +236,7 @@ private fun ChatListScreen(
     var newName by rememberSaveable { mutableStateOf("") }
     var newPersona by rememberSaveable { mutableStateOf("") }
     var groupName by rememberSaveable { mutableStateOf("") }
+    var groupPrompt by rememberSaveable { mutableStateOf("") }
     var selectedGroupMemberIds by rememberSaveable { mutableStateOf(setOf<Long>()) }
     var createError by remember { mutableStateOf<String?>(null) }
     val groupNameFocusRequester = remember { FocusRequester() }
@@ -287,6 +296,7 @@ private fun ChatListScreen(
                 showNewGroupSheet = false
                 groupName = ""
                 selectedGroupMemberIds = emptySet()
+                groupPrompt = ""
                 createError = null
             },
             title = { Text(stringResource(R.string.messenger_new_group_title), color = FancyCream) },
@@ -306,6 +316,14 @@ private fun ChatListScreen(
                             .focusRequester(groupNameFocusRequester)
                             .testTag("messenger-new-group-name"),
 
+                        colors = messengerFieldColors(),
+                    )
+                    OutlinedTextField(
+                        value = groupPrompt,
+                        onValueChange = { groupPrompt = it },
+                        label = { Text("Group prompt / scene") },
+                        minLines = 2,
+                        modifier = Modifier.fillMaxWidth().testTag("messenger-new-group-prompt"),
                         colors = messengerFieldColors(),
                     )
                     characters.forEach { resident ->
@@ -340,6 +358,9 @@ private fun ChatListScreen(
                                 val memberNames = characters
                                     .filter { it.id in selectedGroupMemberIds }
                                     .joinToString(", ") { it.name }
+                                val persistedId = store.savePersistedMessengerGroup(
+                                    PersistedMessengerGroup(0L, groupName.trim(), groupPrompt.trim(), selectedGroupMemberIds.toList()),
+                                )
                                 val id = store.addCharacter(
                                     name = groupName.trim(),
                                     persona = "Group chat with $memberNames.",
@@ -347,7 +368,7 @@ private fun ChatListScreen(
                                     appearance = "",
                                     clothing = "",
                                     negativePrompt = "",
-                                    cardJson = "group:${selectedGroupMemberIds.joinToString(",")}",
+                                    cardJson = "group:$persistedId",
                                 )
                                 selectedGroupMemberIds.forEach { memberId ->
                                     store.addMessage(id, "character:$memberId", "我加入了这个群组。")
@@ -1065,6 +1086,7 @@ private fun GroupConversationScreen(
                 userContext = store.memberWorldContext("user"),
                 characterContext = store.memberWorldContext("character:${member.id}"),
                 relationship = store.relationship(member.id),
+                systemPromptAppendix = group.prompt,
                 onDelta = {},
                 callback = { result ->
                     runCatching {
