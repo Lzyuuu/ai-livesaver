@@ -1,20 +1,80 @@
 package io.github.lzyuuu.ailivesaver
 
 import android.content.ContentValues
+import android.database.sqlite.SQLiteDatabase
 
-internal data class MessengerGroup(val id: Long, val name: String, val prompt: String, val memberIds: List<Long>)
+internal data class PersistedMessengerGroup(val id: Long, val name: String, val prompt: String, val memberIds: List<Long>)
 internal data class BinderDraft(val id: String, val step: Int, val payload: String, val updatedAt: Long)
-internal data class CreativeAsset(val id: Long, val pathOrUri: String, val kind: String, val backend: String, val prompt: String, val character: String, val sourceId: Long?, val targetId: Long?, val status: String, val error: String, val createdAt: Long)
+internal data class BinderCandidate(val id: String, val draftId: String, val payload: String, val confirmed: Boolean)
+internal data class CreativeAsset(val id: Long, val pathOrUri: String, val kind: String, val backend: String, val prompt: String, val characterId: Long?, val character: String, val sourceId: Long?, val targetId: Long?, val status: String, val error: String, val createdAt: Long)
 
-internal fun WorldStore.saveMessengerGroup(group: MessengerGroup): Long = writableDatabase.let { db ->
-    val v = ContentValues().apply { put("name", group.name); put("prompt", group.prompt) }
-    val id = db.insertWithOnConflict("messenger_groups", null, v, android.database.sqlite.SQLiteDatabase.CONFLICT_REPLACE)
-    db.delete("messenger_group_members", "group_id=?", arrayOf(id.toString()))
-    group.memberIds.distinct().forEach { member -> db.insert("messenger_group_members", null, ContentValues().apply { put("group_id", id); put("character_id", member) }) }
-    id
+/** Creates or replaces a group and its complete member set atomically. */
+internal fun WorldStore.savePersistedMessengerGroup(group: PersistedMessengerGroup): Long {
+    val database = writableDatabase
+    database.beginTransaction()
+    return try {
+        val values = ContentValues().apply { put("name", group.name); put("prompt", group.prompt) }
+        val id = if (group.id == 0L) database.insertOrThrow("messenger_groups", null, values) else {
+            check(database.update("messenger_groups", values, "id=?", arrayOf(group.id.toString())) == 1)
+            group.id
+        }
+        database.delete("messenger_group_members", "group_id=?", arrayOf(id.toString()))
+        group.memberIds.distinct().forEach { memberId ->
+            database.insertOrThrow("messenger_group_members", null, ContentValues().apply {
+                put("group_id", id)
+                put("character_id", memberId)
+            })
+        }
+        database.setTransactionSuccessful()
+        id
+    } finally {
+        database.endTransaction()
+    }
 }
-internal fun WorldStore.loadMessengerGroup(id: Long): MessengerGroup? = writableDatabase.query("messenger_groups", arrayOf("id","name","prompt"), "id=?", arrayOf(id.toString()), null,null,null).use { c -> if (!c.moveToFirst()) null else MessengerGroup(c.getLong(0),c.getString(1),c.getString(2), writableDatabase.query("messenger_group_members", arrayOf("character_id"), "group_id=?", arrayOf(id.toString()),null,null,null).use { m -> buildList { while(m.moveToNext()) add(m.getLong(0)) } }) }
-internal fun WorldStore.putBinderDraft(draft: BinderDraft) { writableDatabase.insertWithOnConflict("binder_drafts", null, ContentValues().apply { put("id",draft.id); put("step",draft.step); put("payload",draft.payload); put("updated_at",draft.updatedAt) }, android.database.sqlite.SQLiteDatabase.CONFLICT_REPLACE) }
-internal fun WorldStore.getBinderDraft(id: String): BinderDraft? = writableDatabase.query("binder_drafts",null,"id=?",arrayOf(id),null,null,null).use { c -> if(!c.moveToFirst()) null else BinderDraft(c.getString(c.getColumnIndexOrThrow("id")),c.getInt(c.getColumnIndexOrThrow("step")),c.getString(c.getColumnIndexOrThrow("payload")),c.getLong(c.getColumnIndexOrThrow("updated_at"))) }
-internal fun WorldStore.saveCreativeAsset(a: CreativeAsset): Long = writableDatabase.insert("creative_assets",null,ContentValues().apply { put("path_uri",a.pathOrUri);put("kind",a.kind);put("backend",a.backend);put("prompt",a.prompt);put("character",a.character);put("source_id",a.sourceId);put("target_id",a.targetId);put("status",a.status);put("error",a.error);put("created_at",a.createdAt) })
-internal fun WorldStore.queryCreativeAssets(): List<CreativeAsset> = writableDatabase.query("creative_assets",null,null,null,null,null,"created_at DESC").use { c -> buildList { while(c.moveToNext()) add(CreativeAsset(c.getLong(c.getColumnIndexOrThrow("id")),c.getString(c.getColumnIndexOrThrow("path_uri")),c.getString(c.getColumnIndexOrThrow("kind")),c.getString(c.getColumnIndexOrThrow("backend")),c.getString(c.getColumnIndexOrThrow("prompt")),c.getString(c.getColumnIndexOrThrow("character")),c.getLong(c.getColumnIndexOrThrow("source_id")).takeUnless { c.isNull(c.getColumnIndexOrThrow("source_id")) },c.getLong(c.getColumnIndexOrThrow("target_id")).takeUnless { c.isNull(c.getColumnIndexOrThrow("target_id")) },c.getString(c.getColumnIndexOrThrow("status")),c.getString(c.getColumnIndexOrThrow("error")),c.getLong(c.getColumnIndexOrThrow("created_at")))) } }
+
+internal fun WorldStore.loadPersistedMessengerGroup(id: Long): PersistedMessengerGroup? {
+    writableDatabase.query("messenger_groups", arrayOf("id", "name", "prompt"), "id=?", arrayOf(id.toString()), null, null, null).use { cursor ->
+        if (!cursor.moveToFirst()) return null
+        val members = writableDatabase.query("messenger_group_members", arrayOf("character_id"), "group_id=?", arrayOf(id.toString()), null, null, "character_id").use { memberCursor ->
+            buildList { while (memberCursor.moveToNext()) add(memberCursor.getLong(0)) }
+        }
+        return PersistedMessengerGroup(cursor.getLong(0), cursor.getString(1), cursor.getString(2), members)
+    }
+}
+
+internal fun WorldStore.putBinderDraft(draft: BinderDraft) {
+    writableDatabase.insertWithOnConflict("binder_drafts", null, ContentValues().apply {
+        put("id", draft.id); put("step", draft.step); put("payload", draft.payload); put("updated_at", draft.updatedAt)
+    }, SQLiteDatabase.CONFLICT_REPLACE).also { check(it != -1L) }
+}
+internal fun WorldStore.getBinderDraft(id: String): BinderDraft? = writableDatabase.query("binder_drafts", null, "id=?", arrayOf(id), null, null, null).use { c ->
+    if (!c.moveToFirst()) null else BinderDraft(c.getString(c.getColumnIndexOrThrow("id")), c.getInt(c.getColumnIndexOrThrow("step")), c.getString(c.getColumnIndexOrThrow("payload")), c.getLong(c.getColumnIndexOrThrow("updated_at")))
+}
+internal fun WorldStore.saveBinderCandidate(candidate: BinderCandidate) { writableDatabase.insertWithOnConflict("binder_candidates", null, ContentValues().apply { put("id", candidate.id); put("draft_id", candidate.draftId); put("payload", candidate.payload); put("confirmed", if (candidate.confirmed) 1 else 0) }, SQLiteDatabase.CONFLICT_REPLACE) }
+internal fun WorldStore.confirmBinderCandidate(id: String) { writableDatabase.update("binder_candidates", ContentValues().apply { put("confirmed", 1) }, "id=?", arrayOf(id)) }
+internal fun WorldStore.getConfirmedBinderCandidate(draftId: String): BinderCandidate? = writableDatabase.query("binder_candidates", null, "draft_id=? AND confirmed=1", arrayOf(draftId), null, null, "id").use { c -> if (!c.moveToFirst()) null else BinderCandidate(c.getString(c.getColumnIndexOrThrow("id")), c.getString(c.getColumnIndexOrThrow("draft_id")), c.getString(c.getColumnIndexOrThrow("payload")), true) }
+
+internal fun WorldStore.saveCreativeAsset(asset: CreativeAsset): Long = writableDatabase.insertWithOnConflict("creative_assets", null, ContentValues().apply { put("path_uri", asset.pathOrUri); put("kind", asset.kind); put("backend", asset.backend); put("prompt", asset.prompt); put("character_id", asset.characterId); put("character", asset.character); put("source_id", asset.sourceId); put("target_id", asset.targetId); put("status", asset.status); put("error", asset.error); put("created_at", asset.createdAt) }, SQLiteDatabase.CONFLICT_IGNORE).let { check(it != -1L); it }
+internal fun WorldStore.getCreativeAsset(id: Long): CreativeAsset? = queryCreative("id=?", arrayOf(id.toString())).firstOrNull()
+internal fun WorldStore.updateCreativeAssetStatus(id: Long, status: String, error: String = "") { check(writableDatabase.update("creative_assets", ContentValues().apply { put("status", status); put("error", error) }, "id=?", arrayOf(id.toString())) == 1) }
+internal fun WorldStore.deleteCreativeAsset(id: Long) { writableDatabase.delete("creative_assets", "id=?", arrayOf(id.toString())) }
+internal fun WorldStore.queryCreativeAssets(status: String? = null, characterId: Long? = null): List<CreativeAsset> {
+    val clauses = mutableListOf<String>()
+    val args = mutableListOf<String>()
+    if (status != null) { clauses += "status=?"; args += status }
+    if (characterId != null) { clauses += "character_id=?"; args += characterId.toString() }
+    return queryCreative(clauses.joinToString(" AND ").ifEmpty { null }, args.toTypedArray())
+}
+
+private fun WorldStore.queryCreative(selection: String?, args: Array<String>): List<CreativeAsset> = writableDatabase.query("creative_assets", null, selection, args, null, null, "created_at DESC, id DESC").use { cursor ->
+    buildList {
+        while (cursor.moveToNext()) {
+            fun text(name: String) = cursor.getString(cursor.getColumnIndexOrThrow(name))
+            fun nullableLong(name: String): Long? {
+                val index = cursor.getColumnIndexOrThrow(name)
+                return if (cursor.isNull(index)) null else cursor.getLong(index)
+            }
+            add(CreativeAsset(cursor.getLong(cursor.getColumnIndexOrThrow("id")), text("path_uri"), text("kind"), text("backend"), text("prompt"), nullableLong("character_id"), text("character"), nullableLong("source_id"), nullableLong("target_id"), text("status"), text("error"), cursor.getLong(cursor.getColumnIndexOrThrow("created_at"))))
+        }
+    }
+}

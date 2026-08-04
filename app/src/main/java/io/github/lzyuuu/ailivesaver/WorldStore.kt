@@ -437,7 +437,8 @@ internal class WorldStore(context: Context) :
         database.execSQL("CREATE TABLE IF NOT EXISTS messenger_group_members (group_id INTEGER NOT NULL REFERENCES messenger_groups(id) ON DELETE CASCADE, character_id INTEGER NOT NULL REFERENCES characters(id) ON DELETE CASCADE, PRIMARY KEY(group_id, character_id))")
         database.execSQL("CREATE INDEX IF NOT EXISTS idx_group_members_character ON messenger_group_members(character_id)")
         database.execSQL("CREATE TABLE IF NOT EXISTS binder_drafts (id TEXT PRIMARY KEY, step INTEGER NOT NULL, payload TEXT NOT NULL, updated_at INTEGER NOT NULL)")
-        database.execSQL("CREATE TABLE IF NOT EXISTS creative_assets (id INTEGER PRIMARY KEY AUTOINCREMENT, path_uri TEXT NOT NULL, kind TEXT NOT NULL, backend TEXT NOT NULL, prompt TEXT NOT NULL, character TEXT NOT NULL, source_id INTEGER REFERENCES creative_assets(id) ON DELETE SET NULL, target_id INTEGER REFERENCES creative_assets(id) ON DELETE SET NULL, status TEXT NOT NULL, error TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL)")
+        database.execSQL("CREATE TABLE IF NOT EXISTS binder_candidates (id TEXT PRIMARY KEY, draft_id TEXT NOT NULL REFERENCES binder_drafts(id) ON DELETE CASCADE, payload TEXT NOT NULL, confirmed INTEGER NOT NULL DEFAULT 0)")
+        database.execSQL("CREATE TABLE IF NOT EXISTS creative_assets (id INTEGER PRIMARY KEY AUTOINCREMENT, path_uri TEXT NOT NULL UNIQUE, kind TEXT NOT NULL, backend TEXT NOT NULL, prompt TEXT NOT NULL, character_id INTEGER REFERENCES characters(id) ON DELETE SET NULL, character TEXT NOT NULL, source_id INTEGER REFERENCES creative_assets(id) ON DELETE SET NULL, target_id INTEGER REFERENCES creative_assets(id) ON DELETE SET NULL, status TEXT NOT NULL, error TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL)")
         database.execSQL("CREATE INDEX IF NOT EXISTS idx_creative_created ON creative_assets(created_at)")
     }
 
