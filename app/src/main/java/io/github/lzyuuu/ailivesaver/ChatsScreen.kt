@@ -1090,12 +1090,26 @@ private fun GroupConversationScreen(
 ) {
     val context = LocalContext.current
     val provider = remember { ProviderStore(context) }
-    val members = remember(revision) { store.characters().filter { it.id in group.memberIds } }
+    val allCharacters = remember(revision) { store.characters() }
+    var memberIds by remember(group.id, revision) { mutableStateOf(group.memberIds.toSet()) }
+    var prompt by remember(group.id, revision) { mutableStateOf(group.prompt) }
+    val members = allCharacters.filter { it.id in memberIds }
     val messages = remember(revision) { store.messages(groupCharacter.id) }
     var input by rememberSaveable { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
+    var showDetails by rememberSaveable { mutableStateOf(false) }
+    var confirmClear by remember { mutableStateOf(false) }
+    var groupHandles by remember { mutableStateOf<Map<Long, ProviderStreamHandle>>(emptyMap()) }
     BackHandler { onBack() }
+    fun persistDetails() {
+        if (memberIds.size < 2) { error = "Select at least two members"; return }
+        store.savePersistedMessengerGroup(PersistedMessengerGroup(group.id, groupCharacter.name, prompt.trim(), memberIds.toList()))
+        showDetails = false
+        onChanged()
+    }
+    fun stopAll() { groupHandles.values.forEach { it.cancel() }; groupHandles = emptyMap() }
     fun send() {
+        if (groupHandles.isNotEmpty()) return
         error = null
         val body = input.trim()
         if (body.isEmpty()) return
@@ -1113,6 +1127,8 @@ private fun GroupConversationScreen(
                 error = failure.message.orEmpty()
                 return@forEach
             }
+            val handle = ProviderStreamHandle()
+            groupHandles = groupHandles + (member.id to handle)
             ProviderChatClient.stream(
                 config = config,
                 character = member,
@@ -1126,7 +1142,9 @@ private fun GroupConversationScreen(
                 relationship = store.relationship(member.id),
                 systemPromptAppendix = group.prompt,
                 onDelta = {},
+                handle = handle,
                 callback = { result ->
+                    groupHandles = groupHandles - member.id
                     runCatching {
                         WorldStore(context.applicationContext).use { callbackStore ->
                             result.fold(
@@ -1155,6 +1173,28 @@ private fun GroupConversationScreen(
         }
         onChanged()
     }
+    if (showDetails) {
+        AlertDialog(
+            onDismissRequest = { showDetails = false },
+            title = { Text("Group details", color = FancyCream) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(prompt, { prompt = it }, label = { Text("Group prompt / scene") }, minLines = 3, colors = messengerFieldColors(), modifier = Modifier.testTag("messenger-group-prompt"))
+                    allCharacters.forEach { member ->
+                        TextButton(onClick = { memberIds = if (member.id in memberIds) memberIds - member.id else memberIds + member.id }, modifier = Modifier.fillMaxWidth()) {
+                            Text("${if (member.id in memberIds) "✓ " else ""}${member.name}", color = if (member.id in memberIds) FancyGold else FancyCream)
+                        }
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = ::persistDetails, modifier = Modifier.testTag("messenger-group-details-save")) { Text("Save", color = FancyGold) } },
+            dismissButton = { TextButton(onClick = { showDetails = false }) { Text("Cancel", color = FancyCream) } },
+            containerColor = FancyNavyMid,
+        )
+    }
+    if (confirmClear) {
+        AlertDialog(onDismissRequest = { confirmClear = false }, title = { Text("Clear group") }, text = { Text("Clear this group conversation?") }, confirmButton = { TextButton(onClick = { stopAll(); store.clearConversation(groupCharacter.id); confirmClear = false; onChanged() }, modifier = Modifier.testTag("messenger-group-clear-confirm")) { Text("Clear") } }, dismissButton = { TextButton(onClick = { confirmClear = false }) { Text("Cancel") } })
+    }
     Column(
         modifier = Modifier.fillMaxSize().background(FancyInk).padding(
             top = contentPadding.calculateTopPadding(),
@@ -1164,6 +1204,15 @@ private fun GroupConversationScreen(
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(4.dp)) {
             IconButton(onClick = onBack) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.back), tint = FancyCream)
+            }
+            IconButton(onClick = { showDetails = true }, modifier = Modifier.testTag("messenger-group-details")) {
+                Icon(Icons.Default.Tune, contentDescription = "Group details", tint = FancyGold)
+            }
+            IconButton(onClick = ::stopAll, enabled = groupHandles.isNotEmpty(), modifier = Modifier.testTag("messenger-group-stop")) {
+                Icon(Icons.Default.Close, contentDescription = "Stop", tint = FancyGold)
+            }
+            IconButton(onClick = { confirmClear = true }, modifier = Modifier.testTag("messenger-group-clear")) {
+                Icon(Icons.Default.Refresh, contentDescription = "Clear", tint = FancyGold)
             }
             Column(Modifier.weight(1f)) {
                 Text(groupCharacter.name, color = FancyCream, fontFamily = FontFamily.Serif, fontWeight = FontWeight.Bold)
