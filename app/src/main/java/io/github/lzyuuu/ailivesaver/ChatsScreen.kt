@@ -1034,14 +1034,26 @@ private fun GroupConversationScreen(
     val members = remember(revision) { store.characters().filter { it.id in group.memberIds } }
     val messages = remember(revision) { store.messages(groupCharacter.id) }
     var input by rememberSaveable { mutableStateOf("") }
+    var error by remember { mutableStateOf<String?>(null) }
     BackHandler { onBack() }
     fun send() {
+        error = null
         val body = input.trim()
         if (body.isEmpty()) return
         input = ""
         store.addMessage(groupCharacter.id, "user", body)
         val config = provider.loadFor(ProviderTask.Chat)
         members.forEach { member ->
+            val pendingReply = runCatching {
+                store.beginAssistantReply(
+                    groupCharacter.id,
+                    config.preset.displayName,
+                    config.model,
+                )
+            }.getOrElse { failure ->
+                error = failure.message.orEmpty()
+                return@forEach
+            }
             ProviderChatClient.stream(
                 config = config,
                 character = member,
@@ -1055,11 +1067,26 @@ private fun GroupConversationScreen(
                 relationship = store.relationship(member.id),
                 onDelta = {},
                 callback = { result ->
-                    val reply = result.getOrNull()?.text?.trim().takeUnless { it.isNullOrEmpty() }
-                        ?: "${member.name}：我听到了，我们一起聊聊。"
                     runCatching {
                         WorldStore(context.applicationContext).use { callbackStore ->
-                            callbackStore.addMessage(groupCharacter.id, "character:${member.id}", reply)
+                            result.fold(
+                                onSuccess = { response ->
+                                    val reply = response.text.trim()
+                                    if (reply.isEmpty()) {
+                                        callbackStore.failAssistantReply(pendingReply.id, "Provider returned an empty reply")
+                                    } else {
+                                        callbackStore.completeAssistantReply(
+                                            pendingReply.id,
+                                            reply,
+                                            response.config.preset.displayName,
+                                            response.config.model,
+                                        )
+                                    }
+                                },
+                                onFailure = { failure ->
+                                    callbackStore.failAssistantReply(pendingReply.id, failure.message.orEmpty())
+                                },
+                            )
                         }
                     }
                     onChanged()
@@ -1092,9 +1119,23 @@ private fun GroupConversationScreen(
                 }
                 Column(Modifier.fillMaxWidth().testTag("messenger-group-message-${message.id}")) {
                     Text(sender, color = if (message.sender == "user") FancyGold else FancyCream.copy(alpha = 0.75f), style = MaterialTheme.typography.labelSmall)
-                    Text(message.body, color = FancyCream, modifier = Modifier.padding(top = 2.dp))
+                    if (message.status == "failed") {
+                        Text(
+                            stringResource(R.string.messenger_reply_failed),
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.labelSmall,
+                        )
+                        if (message.error.isNotBlank()) {
+                            Text(message.error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                        }
+                    } else {
+                        Text(message.body, color = FancyCream, modifier = Modifier.padding(top = 2.dp))
+                    }
                 }
             }
+        }
+        error?.let { message ->
+            Text(message, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(horizontal = 12.dp))
         }
         Row(Modifier.fillMaxWidth().padding(10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedTextField(input, { input = it }, Modifier.weight(1f), placeholder = { Text(stringResource(R.string.messenger_message_placeholder)) }, singleLine = true, colors = messengerSearchFieldColors())

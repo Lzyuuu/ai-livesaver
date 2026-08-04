@@ -591,6 +591,7 @@
     <string name="media_storage_usage">已保存图片占用 %1$s</string>
     <string name="storage_low_generation_paused">存储空间不足，生图队列已暂停</string>
     <string name="retry_generation">重新加入队列</string>
+    <string name="messenger_reply_failed">回复失败：Provider 未返回有效内容，请重试。</string>
     <string name="image_versions">图片版本（%1$d）</string>
     <string name="image_version_history">图片版本</string>
     <string name="current_image_version">当前显示版本</string>
