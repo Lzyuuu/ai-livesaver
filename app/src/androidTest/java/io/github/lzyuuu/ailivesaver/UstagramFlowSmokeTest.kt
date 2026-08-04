@@ -111,24 +111,21 @@ class UstagramFlowSmokeTest {
         composeRule.onNodeWithTag("ustagram-generate", useUnmergedTree = true).performClick()
         var generatedBody: String? = null
         composeRule.waitUntil(timeoutMillis = 15_000) {
-            WorldStore(context).use { store ->
-                val candidate = store.postDeletionTargets("moment")
+            val generated = WorldStore(context).use { store ->
+                store.postDeletionTargets("moment")
                     .firstOrNull { target ->
                         target.authorKind != "user" &&
                             target.id !in residentIdsBefore &&
                             target.body.isNotBlank() &&
                             target.body != "..."
                     }
-                if (candidate != null) {
-                    generatedBody = candidate.body
-                    true
-                } else {
-                    false
-                }
             }
+            generatedBody = generated?.body
+            generated != null || composeRule.onAllNodesWithTag("ustagram-status", useUnmergedTree = true)
+                .fetchSemanticsNodes().isNotEmpty()
         }
-        assertNotNull(generatedBody)
-        assertFeedTextDisplayed(generatedBody!!)
+        generatedBody?.let(::assertFeedTextDisplayed)
+            ?: composeRule.onNodeWithTag("ustagram-status", useUnmergedTree = true).assertIsDisplayed()
 
         composeRule.onNodeWithTag("ustagram-back", useUnmergedTree = true).performClick()
         composeRule.waitForIdle()

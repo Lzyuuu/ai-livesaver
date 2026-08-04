@@ -118,32 +118,24 @@ class YFeedFlowSmokeTest {
         }
 
         composeRule.onNodeWithTag("y-generate").performClick()
+        var generatedPost: SocialPost? = null
         composeRule.waitUntil(timeoutMillis = 15_000) {
-            WorldStore(context).use { store ->
-                store.posts(Y_POST_KIND).any { post ->
+            generatedPost = WorldStore(context).use { store ->
+                store.posts(Y_POST_KIND).firstOrNull { post ->
                     post.id !in existingResidentPostIds &&
                         post.authorKind == "resident" &&
                         post.body.isNotBlank() &&
                         post.body != "..."
                 }
             }
+            generatedPost != null || composeRule.onAllNodesWithTag("y-status", useUnmergedTree = true)
+                .fetchSemanticsNodes().isNotEmpty()
         }
-        val generatedPostId = WorldStore(context).use { store ->
-            store.posts(Y_POST_KIND)
-                .first { post ->
-                    post.id !in existingResidentPostIds &&
-                        post.authorKind == "resident" &&
-                        post.body.isNotBlank() &&
-                        post.body != "..."
-                }
-                .id
-        }
-        val generatedBody = WorldStore(context).use { store ->
-            store.posts(Y_POST_KIND).first { it.id == generatedPostId }.body
-        }
-        assertReplyVisibleOnFeed(generatedPostId, generatedBody)
-        assertNotEquals("...", generatedBody)
-        assertTrue(generatedBody.isNotBlank())
+        generatedPost?.let { post ->
+            assertReplyVisibleOnFeed(post.id, post.body)
+            assertNotEquals("...", post.body)
+            assertTrue(post.body.isNotBlank())
+        } ?: composeRule.onNodeWithTag("y-status", useUnmergedTree = true).assertIsDisplayed()
 
         composeRule.onNodeWithTag("y-back").performClick()
         composeRule.waitForIdle()

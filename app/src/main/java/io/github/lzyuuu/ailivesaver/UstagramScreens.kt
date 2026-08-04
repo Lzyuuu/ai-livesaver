@@ -335,7 +335,9 @@ internal fun UstagramAppScreen(
                 it,
                 color = Color(0xFFFF8A80),
                 style = MaterialTheme.typography.labelMedium,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                modifier = Modifier
+                    .padding(horizontal = 16.dp, vertical = 4.dp)
+                    .semantics { testTag = "ustagram-status" },
             )
         }
         if (posts.isEmpty()) {

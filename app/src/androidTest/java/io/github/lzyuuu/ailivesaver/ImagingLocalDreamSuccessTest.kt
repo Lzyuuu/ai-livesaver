@@ -18,6 +18,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
+import org.junit.Assume.assumeTrue
 import org.junit.rules.RuleChain
 import org.junit.rules.TestRule
 import org.junit.runner.RunWith
@@ -63,7 +64,15 @@ class ImagingLocalDreamSuccessTest {
 
     @Test
     fun testConnectionAndGeneratePersistsResult() {
-        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val context = instrumentation.targetContext
+        val localDreamAvailable = runCatching {
+            java.net.Socket().use { socket ->
+                socket.connect(java.net.InetSocketAddress("127.0.0.1", 8081), 500)
+            }
+            true
+        }.getOrDefault(false)
+        assumeTrue("Requires host Local Dream mock on :8081 and adb reverse tcp:8081 tcp:8081", localDreamAvailable)
         val outDir = File(context.filesDir, "issue-28-p0").apply { mkdirs() }
 
         composeRule.onNodeWithTag("desktop-dock-imaging").performClick()
