@@ -177,6 +177,7 @@ internal fun ChatsScreen(
     onChanged: () -> Unit,
     onConfigureProvider: () -> Unit,
     onManageCharacters: () -> Unit,
+    onOpenBackup: () -> Unit = {},
     onBackToDesktop: (() -> Unit)? = null,
 ) {
     val characters = remember(revision) { store.characters(includeDeparted = false) }
@@ -209,6 +210,7 @@ internal fun ChatsScreen(
                 revision = revision,
                 onCharacterSelected = { selectedId = it },
                 onManageCharacters = onManageCharacters,
+                onOpenBackup = onOpenBackup,
                 onBackToDesktop = onBackToDesktop,
                 onChanged = onChanged,
             )
@@ -224,6 +226,7 @@ private fun ChatListScreen(
     revision: Int,
     onCharacterSelected: (Long) -> Unit,
     onManageCharacters: () -> Unit,
+    onOpenBackup: () -> Unit,
     onBackToDesktop: (() -> Unit)?,
     onChanged: () -> Unit,
 ) {
@@ -232,6 +235,8 @@ private fun ChatListScreen(
     var showNewSheet by rememberSaveable { mutableStateOf(false) }
     var showNewGroupSheet by rememberSaveable { mutableStateOf(false) }
     var listMenuExpanded by remember { mutableStateOf(false) }
+    var showRootPrompt by rememberSaveable { mutableStateOf(false) }
+    var rootPrompt by rememberSaveable { mutableStateOf("") }
     var creating by rememberSaveable { mutableStateOf(false) }
     var newName by rememberSaveable { mutableStateOf("") }
     var newPersona by rememberSaveable { mutableStateOf("") }
@@ -288,6 +293,25 @@ private fun ChatListScreen(
         }.onFailure {
             createError = "$importFailed：${it.message.orEmpty()}"
         }
+    }
+
+    if (showRootPrompt) {
+        AlertDialog(
+            onDismissRequest = { showRootPrompt = false },
+            title = { Text("Edit prompt", color = FancyCream) },
+            text = { OutlinedTextField(rootPrompt, { rootPrompt = it }, label = { Text("Root/system prompt") }, minLines = 5, colors = messengerFieldColors()) },
+            confirmButton = {
+                TextButton(onClick = {
+                    characters.firstOrNull { it.name.equals("Root", true) }?.let { root ->
+                        store.updateCharacter(root.copy(persona = rootPrompt.trim().ifBlank { DesktopSeed.ROOT_PERSONA }))
+                        onChanged()
+                    }
+                    showRootPrompt = false
+                }, modifier = Modifier.testTag("messenger-edit-prompt-save")) { Text("Save", color = FancyGold) }
+            },
+            dismissButton = { TextButton(onClick = { showRootPrompt = false }) { Text("Cancel", color = FancyCream) } },
+            containerColor = FancyNavyMid,
+        )
     }
 
     if (showNewGroupSheet) {
@@ -562,6 +586,20 @@ private fun ChatListScreen(
                     expanded = listMenuExpanded,
                     onDismissRequest = { listMenuExpanded = false },
                 ) {
+                    DropdownMenuItem(
+                        text = { Text("Edit prompt") },
+                        onClick = {
+                            listMenuExpanded = false
+                            rootPrompt = characters.firstOrNull { it.name.equals("Root", true) }?.persona.orEmpty()
+                            showRootPrompt = true
+                        },
+                        modifier = Modifier.testTag("messenger-edit-prompt"),
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Back up") },
+                        onClick = { listMenuExpanded = false; onOpenBackup() },
+                        modifier = Modifier.testTag("messenger-back-up"),
+                    )
                     DropdownMenuItem(
                         text = { Text(stringResource(R.string.messenger_import)) },
                         onClick = {

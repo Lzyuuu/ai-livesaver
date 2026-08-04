@@ -685,6 +685,7 @@ private fun AiLivesaverApp(
                         onChanged = { worldRevision++ },
                         onConfigureProvider = { showProviders = true },
                         onManageCharacters = { showCharacters = true },
+                        onOpenBackup = { showBackups = true },
                         onBackToDesktop = { goDesktopHome() },
                     )
                 }
