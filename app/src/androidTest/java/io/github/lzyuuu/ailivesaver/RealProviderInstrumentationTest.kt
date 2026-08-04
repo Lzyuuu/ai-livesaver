@@ -20,7 +20,32 @@ class RealProviderInstrumentationTest {
     private val timeout = 90L
 
     @Test
-    fun realProviderCapabilitiesPersistForChatAndWorld() {
+    fun capabilityAndMessengerOrchestrated() {
+        val context = target()
+        val config = configureAndVerify(context)
+        realStreamCancelInterruptedThenRetrySameMessageAndGroupAppendix(context, config)
+    }
+
+    @Test
+    fun structuredBinderAndSocialOrchestrated() {
+        val context = target()
+        val config = configureAndVerify(context)
+        realStructuredBinderCandidateValidatesAndCanBeCreatedIdempotently(context, config)
+        realSocialGeneration(context)
+    }
+
+    private fun configureAndVerify(context: Context): ProviderConfig {
+        val config = readConfig(context)
+        val results = awaitResult<List<CapabilityResult>> { done -> ProviderCapabilityTester.test(config, done) }
+        val required = setOf(ProviderCapability.Chat, ProviderCapability.Streaming, ProviderCapability.Structured)
+        assertTrue(results.filter { it.capability in required }.all(CapabilityResult::passed))
+        val capabilities = ProviderCapabilities().withResults(results)
+        ProviderStore(context).apply { saveTask(ProviderTask.Chat, config.copy(capabilities = capabilities)); saveTask(ProviderTask.World, config.copy(capabilities = capabilities)) }
+        assertEquals(required, ProviderStore(context).loadFor(ProviderTask.Chat).capabilities.supported.intersect(required))
+        return config.copy(capabilities = capabilities)
+    }
+
+    private fun realProviderCapabilitiesPersistForChatAndWorld() {
         val context = target()
         val config = readConfig(context)
         val results = awaitResult<List<CapabilityResult>> { done ->
@@ -37,10 +62,7 @@ class RealProviderInstrumentationTest {
         assertEquals(required, ProviderStore(context).loadFor(ProviderTask.World).capabilities.supported.intersect(required))
     }
 
-    @Test
-    fun realStreamCancelInterruptedThenRetrySameMessageAndGroupAppendix() {
-        val context = target()
-        val config = ProviderStore(context).loadFor(ProviderTask.Chat)
+    private fun realStreamCancelInterruptedThenRetrySameMessageAndGroupAppendix(context: Context, config: ProviderConfig) {
         require(config.isValid())
         val ids = WorldStore(context).use {
             listOf(
@@ -57,7 +79,10 @@ class RealProviderInstrumentationTest {
                     onDelta = { cancelled.cancel() }, callback = done, handle = cancelled)
             }
             assertTrue(interrupted.isFailure)
-            WorldStore(context).use { it.failAssistantReply(first.id, "interrupted") }
+            WorldStore(context).use {
+                it.interruptAssistantReply(first.id)
+                assertEquals("interrupted", it.messages(ids[0], includeRetired = true).single().status)
+            }
             val retry = WorldStore(context).use { it.beginAssistantReply(ids[0], config.preset.displayName, config.model, first.id) }
             val response = stream(config, context, ids[0], retry.id)
             assertTrue(response.text.isNotBlank())
@@ -79,10 +104,7 @@ class RealProviderInstrumentationTest {
         }
     }
 
-    @Test
-    fun realStructuredBinderCandidateValidatesAndCanBeCreatedIdempotently() {
-        val context = target()
-        val config = ProviderStore(context).loadFor(ProviderTask.World)
+    private fun realStructuredBinderCandidateValidatesAndCanBeCreatedIdempotently(context: Context, config: ProviderConfig) {
         val response = awaitResult<ProviderResponse> { done ->
             ProviderTextClient.completeStructured(config, "Return JSON only: candidates array with name, persona, relationship, reasons.", "Create one fictional companion candidate.", done)
         }
@@ -91,11 +113,32 @@ class RealProviderInstrumentationTest {
         val candidate = candidates.first()
         val store = WorldStore(context)
         try {
-            val first = store.addCharacter(candidate.name, candidate.persona, "resident", "", "", "")
-            val second = runCatching { store.addCharacter(candidate.name, candidate.persona, "resident", "", "", "") }.getOrThrow()
-            assertNotNull(first); assertNotNull(second)
-            store.deleteCharacter(first); store.deleteCharacter(second)
+            val draftId = "real-binder-${System.nanoTime()}"
+            val candidateId = "real-candidate-${System.nanoTime()}"
+            val first = store.confirmBinderCandidateIdempotently(candidateId, draftId, candidate)
+            val second = store.confirmBinderCandidateIdempotently(candidateId, draftId, candidate)
+            assertTrue(first > 0)
+            assertEquals(first, second)
+            assertTrue(store.getConfirmedBinderCandidate(draftId)?.confirmed == true)
+            store.deleteCharacter(first)
         } finally { store.close() }
+    }
+
+    private fun realSocialGeneration(context: Context) {
+        val beforeMoment = WorldStore(context).use { it.posts("moment").size }
+        val momentDone = CountDownLatch(1)
+        assertTrue(WorldEngine.generateMomentPost(context) { momentDone.countDown() })
+        assertTrue(momentDone.await(timeout, TimeUnit.SECONDS))
+        val beforeRebbit = WorldStore(context).use { it.posts("forum").size }
+        val rebbitDone = CountDownLatch(1)
+        assertTrue(WorldEngine.generateRebbitPost(context, "Write one original safe forum post.") { rebbitDone.countDown() })
+        assertTrue(rebbitDone.await(timeout, TimeUnit.SECONDS))
+        WorldStore(context).use {
+            assertTrue(it.posts("moment").size > beforeMoment)
+            assertTrue(it.posts("forum").size > beforeRebbit)
+            assertTrue(it.posts("moment").first().body.isNotBlank())
+            assertTrue(it.posts("forum").first().body.isNotBlank())
+        }
     }
 
     private fun stream(config: ProviderConfig, context: Context, id: Long, replyId: Long, appendix: String = ""): ProviderResponse {
