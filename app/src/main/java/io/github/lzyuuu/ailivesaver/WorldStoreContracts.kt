@@ -79,6 +79,18 @@ internal fun WorldStore.confirmBinderCandidate(id: String) {
         database.endTransaction()
     }
 }
+internal fun WorldStore.confirmBinderCandidateIdempotently(id: String, draftId: String, candidate: BinderCandidatePayload): Long {
+    val existing = getConfirmedBinderCandidate(draftId)
+    if (existing != null) {
+        return writableDatabase.query("characters", arrayOf("id"), "card_json LIKE ?", arrayOf("%binder_candidate_id=${id}%"), null, null, "id").use { c -> if (c.moveToFirst()) c.getLong(0) else 0L }
+    }
+    saveBinderCandidate(BinderCandidate(id, draftId, candidate.toJson(), false))
+    val card = CharacterCardV2.buildCardJson(candidate.name, CharacterProfileFields(description=candidate.persona, relationship=candidate.relationship), "{\"binder_candidate_id\":\"$id\"}")
+    val characterId = addCharacter(candidate.name, candidate.persona, "resident", "", "", "", card)
+    confirmBinderCandidate(id)
+    return characterId
+}
+
 internal fun WorldStore.getConfirmedBinderCandidate(draftId: String): BinderCandidate? = writableDatabase.query("binder_candidates", null, "draft_id=? AND confirmed=1", arrayOf(draftId), null, null, "id").use { c -> if (!c.moveToFirst()) null else BinderCandidate(c.getString(c.getColumnIndexOrThrow("id")), c.getString(c.getColumnIndexOrThrow("draft_id")), c.getString(c.getColumnIndexOrThrow("payload")), true) }
 
 internal fun WorldStore.saveCreativeAsset(asset: CreativeAsset): Long {
