@@ -117,7 +117,10 @@ internal data class ProviderConfig(
     val capabilities: ProviderCapabilities = ProviderCapabilities(),
     val fallback: ProviderConfig? = null,
 ) {
-    fun isValid() = baseUrl.startsWith("https://") && model.isNotBlank() && apiKey.isNotBlank()
+    // Local loopback HTTP is intentionally accepted for on-device integration tests; remote providers remain TLS-only.
+    fun isValid() = (baseUrl.startsWith("https://") ||
+        (baseUrl.startsWith("http://127.0.0.1") || baseUrl.startsWith("http://localhost"))) &&
+        model.isNotBlank() && apiKey.isNotBlank()
 
     fun supports(capability: ProviderCapability): Boolean =
         isValid() && (
