@@ -332,7 +332,7 @@ internal data class MemberWorldContext(
     val timeZone: String,
 )
 
-internal const val WORLD_DATABASE_VERSION = 23
+internal const val WORLD_DATABASE_VERSION = 24
 
 internal class WorldStore(context: Context) :
     SQLiteOpenHelper(context, "world.db", null, WORLD_DATABASE_VERSION),
@@ -429,6 +429,16 @@ internal class WorldStore(context: Context) :
         createM3Tables(database)
         createSocialResponseQueueTable(database)
         createInteractionTables(database)
+        createSettingsDomainTables(database)
+    }
+
+    private fun createSettingsDomainTables(database: SQLiteDatabase) {
+        database.execSQL("CREATE TABLE IF NOT EXISTS messenger_groups (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, prompt TEXT NOT NULL DEFAULT '')")
+        database.execSQL("CREATE TABLE IF NOT EXISTS messenger_group_members (group_id INTEGER NOT NULL REFERENCES messenger_groups(id) ON DELETE CASCADE, character_id INTEGER NOT NULL REFERENCES characters(id) ON DELETE CASCADE, PRIMARY KEY(group_id, character_id))")
+        database.execSQL("CREATE INDEX IF NOT EXISTS idx_group_members_character ON messenger_group_members(character_id)")
+        database.execSQL("CREATE TABLE IF NOT EXISTS binder_drafts (id TEXT PRIMARY KEY, step INTEGER NOT NULL, payload TEXT NOT NULL, updated_at INTEGER NOT NULL)")
+        database.execSQL("CREATE TABLE IF NOT EXISTS creative_assets (id INTEGER PRIMARY KEY AUTOINCREMENT, path_uri TEXT NOT NULL, kind TEXT NOT NULL, backend TEXT NOT NULL, prompt TEXT NOT NULL, character TEXT NOT NULL, source_id INTEGER REFERENCES creative_assets(id) ON DELETE SET NULL, target_id INTEGER REFERENCES creative_assets(id) ON DELETE SET NULL, status TEXT NOT NULL, error TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL)")
+        database.execSQL("CREATE INDEX IF NOT EXISTS idx_creative_created ON creative_assets(created_at)")
     }
 
     override fun onConfigure(database: SQLiteDatabase) {
@@ -514,6 +524,7 @@ internal class WorldStore(context: Context) :
             )
             createRebbitSubredditTables(database)
         }
+        if (oldVersion < 24) createSettingsDomainTables(database)
     }
 
     private fun createRebbitSubredditTables(database: SQLiteDatabase) {
