@@ -1,0 +1,4 @@
+08-04 18:42:29.094  1661  1708 I ActivityManager: Force stopping io.github.lzyuuu.ailivesaver.test appid=10479 user=0: pkg removed
+08-04 18:42:29.102  1661  1661 I ConditionProviders: Disallowing condition provider io.github.lzyuuu.ailivesaver.test
+08-04 18:42:29.102  1661  1777 D WifiConfigManager: Remove all networks for app ApplicationInfo{aa4a3d9 io.github.lzyuuu.ailivesaver.test}
+08-04 18:42:29.106  1661  1672 W BroadcastQueue: Background execution not allowed: receiving Intent { act=android.intent.action.PACKAGE_REMOVED dat=package:io.github.lzyuuu.ailivesaver.test flg=0x4000010 (has extras) } to com.android.musicfx/.Compatibility$Receiver
