@@ -383,6 +383,7 @@ private fun AiLivesaverApp(
     var showCharacters by rememberSaveable { mutableStateOf(false) }
     var showVoiceCalls by rememberSaveable { mutableStateOf(false) }
     var showStorage by rememberSaveable { mutableStateOf(false) }
+    var showWelcomeGuide by rememberSaveable { mutableStateOf(false) }
     var requestedChatCharacterId by rememberSaveable { mutableStateOf<Long?>(null) }
     var pendingSocialPostRoute by remember { mutableStateOf<PendingSocialPostRoute?>(null) }
     val identity = remember(worldRevision) { worldStore.identity() }
@@ -529,7 +530,7 @@ private fun AiLivesaverApp(
     val settingsOpen = showUpdates || showProviders || showWorldSettings || showWorldKnowledge ||
         showWorldChronicle || showLocalDream ||
         showDiagnostics || showPrivacy || showBackups || showIdentity || showCharacters ||
-            showVoiceCalls || showStorage
+            showVoiceCalls || showStorage || showWelcomeGuide
 
     BackHandler(enabled = settingsOpen || activeDesktopApp != null || activeHub != null || activeGameId != null) {
         when {
@@ -548,6 +549,7 @@ private fun AiLivesaverApp(
                 showCharacters = false
                 showVoiceCalls = false
                 showStorage = false
+                showWelcomeGuide = false
             }
             activeGameId != null -> backFromGamePlaceholder()
             activeDesktopApp == DesktopApp.Games -> backFromGamesHub()
@@ -560,7 +562,13 @@ private fun AiLivesaverApp(
         containerColor = FancyInk,
         bottomBar = {},
     ) { padding ->
-        if (showUpdates) {
+        if (showWelcomeGuide) {
+            WelcomeGuideHost { finished ->
+                writeRootAppearance(context, finished.appearanceId)
+                writeWelcomeGuideCompleted(context, true)
+                showWelcomeGuide = false
+            }
+        } else if (showUpdates) {
             UpdateScreen(
                 contentPadding = padding,
                 onBack = { showUpdates = false },
@@ -1559,13 +1567,13 @@ private fun MeScreen(
             SettingsDestination.BACKUPS -> onOpenBackups()
             SettingsDestination.DIAGNOSTICS, SettingsDestination.RUNTIME, SettingsDestination.ABOUT -> onOpenDiagnostics()
             SettingsDestination.STORAGE, SettingsDestination.SYSTEM -> onOpenStorage()
-            SettingsDestination.HELP -> onOpenWorldSettings()
+            SettingsDestination.HELP -> showWelcomeGuide = true
             SettingsDestination.UPDATE -> onOpenUpdates()
             SettingsDestination.APPEARANCE, SettingsDestination.APP -> onOpenWorldSettings()
         }
     }
     var settingsQuery by rememberSaveable { mutableStateOf("") }
-    var expandedSections by rememberSaveable { mutableStateOf(SettingsSection.entries.associateWith { true }) }
+    var expandedSections by rememberSaveable { mutableStateOf(SettingsSection.entries.associateWith { false }) }
     val searchResults = searchSettings(settingsQuery)
     val visibleSettings = if (settingsQuery.isBlank()) settings else searchResults.map { result ->
         settings.first { it.destination == result.destination }
@@ -1605,15 +1613,23 @@ private fun MeScreen(
             }
         }
         categorizedSettings.forEach { (categoryTag, category, entries) ->
-            item {
-                Text(
-                    category.name.replace('_', ' ').lowercase().replaceFirstChar { it.uppercase() },
-                    modifier = Modifier.testTag("settings-category-$categoryTag"),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                )
+            val rootVisible = settingsQuery.isBlank() || entries.isNotEmpty()
+            if (rootVisible) {
+                item {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().testTag("settings-root-$categoryTag").clickable {
+                            expandedSections = expandedSections + (category to !expandedSections.getValue(category))
+                        }.padding(vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(category.name.replace('_', ' ').lowercase().replaceFirstChar { it.uppercase() }, modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        Text(if (settingsQuery.isNotBlank() || expandedSections.getValue(category)) "−" else "+", style = MaterialTheme.typography.titleLarge)
+                    }
+                }
+                if (settingsQuery.isNotBlank() || expandedSections.getValue(category)) {
+                    item { SettingGroup(entries, ::openSetting) }
+                }
             }
-            item { SettingGroup(entries, ::openSetting) }
         }
         item {
             Row(

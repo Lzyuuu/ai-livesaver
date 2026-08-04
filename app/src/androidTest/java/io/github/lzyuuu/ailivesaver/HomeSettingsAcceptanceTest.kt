@@ -30,6 +30,11 @@ class HomeSettingsAcceptanceTest {
         rule.onNodeWithTag("desktop-dock-settings").performClick()
         rule.waitForIdle()
         rule.onNodeWithTag("me-settings-list").assertIsDisplayed()
+        val roots = listOf("chat_brain", "voice_calls", "image_generation", "you_personas", "app", "developer_about", "system_settings", "help_guide", "update")
+        roots.forEach { root ->
+            rule.onNodeWithTag("settings-root-$root").assertIsDisplayed().performClick()
+        }
+        rule.onNodeWithTag("me-setting-provider").assertIsDisplayed()
         rule.onNodeWithTag("settings-search").performTextInput("provider")
         rule.onNodeWithTag("me-setting-provider").assertIsDisplayed()
         rule.onNodeWithTag("settings-search").performTextInput("no-such-setting")
