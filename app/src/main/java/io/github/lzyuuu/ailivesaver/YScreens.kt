@@ -295,6 +295,7 @@ internal fun YScreen(
 ) {
     val context = LocalContext.current
     val yGenerating = stringResource(R.string.y_generating)
+    val yGenerateFailed = stringResource(R.string.y_generate_failed)
     val identity = remember(revision) { store.identity() }
     val character = remember(revision) { store.primaryCharacter() }
     val posts = remember(revision) { store.posts(Y_POST_KIND) }
@@ -381,7 +382,7 @@ internal fun YScreen(
                 status = null
             }.onFailure {
                 // Provider 失败不能产生未标识的 AI 帖子；保留离线历史并展示失败状态。
-                status = context.getString(R.string.y_generate_failed)
+                status = yGenerateFailed
             }
             generating = false
             onChanged()
