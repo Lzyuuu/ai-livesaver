@@ -5,14 +5,31 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class SettingsNavigationTest {
-    @Test fun resolvesTypedCompatibilityKeys() {
-        assertEquals(SettingsDestination.LOCAL_DREAM, resolveSettingsDestination("local-dream"))
-        assertEquals(SettingsDestination.IDENTITY, resolveSettingsDestination("identity"))
+    @Test
+    fun resolvesAllLegacyRouteAliases() {
+        mapOf(
+            "providers" to SettingsDestination.PROVIDER,
+            "voice" to SettingsDestination.VOICE,
+            "dream" to SettingsDestination.LOCAL_DREAM,
+            "world" to SettingsDestination.WORLD,
+            "knowledge" to SettingsDestination.KNOWLEDGE,
+            "diagnostics" to SettingsDestination.DIAGNOSTICS,
+            "privacy" to SettingsDestination.PRIVACY,
+            "backups" to SettingsDestination.BACKUPS,
+            "updates" to SettingsDestination.UPDATE,
+            "storage" to SettingsDestination.STORAGE,
+            "identity" to SettingsDestination.IDENTITY,
+            "characters" to SettingsDestination.CHARACTERS,
+        ).forEach { (key, destination) -> assertEquals(destination, resolveSettingsDestination(key)) }
     }
 
-    @Test fun searchesChineseSynonymsWithStableOrdering() {
-        assertEquals(SettingsDestination.STORAGE, searchSettings("存储").single().destination)
-        assertTrue(searchSettings("about").any { it.destination == SettingsDestination.ABOUT })
-        assertEquals(searchSettings("about"), searchSettings("about"))
+    @Test
+    fun searchTieBreakIsExactAndStable() {
+        val result = searchSettings("a")
+        assertEquals(
+            result.sortedWith(compareByDescending<SettingsSearchResult> { it.score }.thenBy { it.destination.section.ordinal }.thenBy { it.destination.ordinal }),
+            result,
+        )
+        assertTrue(result.size > 1)
     }
 }

@@ -334,8 +334,10 @@ internal data class MemberWorldContext(
 
 internal const val WORLD_DATABASE_VERSION = 24
 
-internal class WorldStore(context: Context) :
-    SQLiteOpenHelper(context, "world.db", null, WORLD_DATABASE_VERSION),
+internal class WorldStore(
+    context: Context,
+    databaseName: String = "world.db",
+) : SQLiteOpenHelper(context, databaseName, null, WORLD_DATABASE_VERSION),
     java.io.Closeable {
     private val databaseFile = context.getDatabasePath("world.db")
     private val mediaDirectory = File(context.filesDir, "media").canonicalFile

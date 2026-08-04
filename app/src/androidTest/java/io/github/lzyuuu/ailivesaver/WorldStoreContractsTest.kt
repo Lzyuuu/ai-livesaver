@@ -1,32 +1,97 @@
 package io.github.lzyuuu.ailivesaver
 
+import android.content.ContentValues
+import android.database.sqlite.SQLiteDatabase
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import java.util.UUID
+import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class WorldStoreContractsTest {
-    @Test fun freshSchemaSupportsGroupDraftCandidatesAndCreativeLineage() {
-        val context = InstrumentationRegistry.getInstrumentation().targetContext
-        context.deleteDatabase("world-contract-test.db")
-        WorldStore(context).use { store ->
-            val groupId = store.savePersistedMessengerGroup(PersistedMessengerGroup(0, "Crew", "prompt", emptyList()))
-            val updated = store.savePersistedMessengerGroup(PersistedMessengerGroup(groupId, "Crew 2", "prompt 2", emptyList()))
-            assertEquals(groupId, updated)
-            store.putBinderDraft(BinderDraft("draft", 1, "{}", 1))
-            store.putBinderDraft(BinderDraft("draft", 2, "{x:1}", 2))
-            assertEquals(2, store.getBinderDraft("draft")!!.step)
-            store.saveBinderCandidate(BinderCandidate("candidate", "draft", "{}", false))
-            store.confirmBinderCandidate("candidate")
-            assertNotNull(store.getConfirmedBinderCandidate("draft"))
-            val asset = CreativeAsset(0, "content://asset/1", "image", "local", "p", null, "", null, null, "ready", "", 3)
-            val id = store.saveCreativeAsset(asset)
-            assertTrue(store.queryCreativeAssets().any { it.id == id })
-            assertEquals(id, store.getCreativeAsset(id)!!.id)
+    private val context = InstrumentationRegistry.getInstrumentation().targetContext
+    private val databaseName = "world-contract-${UUID.randomUUID()}.db"
+
+    @After
+    fun deleteDatabase() {
+        context.deleteDatabase(databaseName)
+    }
+
+    @Test
+    fun freshSchemaSupportsGroupMembershipAndRollback() {
+        WorldStore(context, databaseName).use { store ->
+            val first = createCharacter(store, "One")
+            val second = createCharacter(store, "Two")
+            val groupId = store.savePersistedMessengerGroup(PersistedMessengerGroup(0, "Crew", "prompt", listOf(first, first, second)))
+            assertEquals(listOf(first, second), store.loadPersistedMessengerGroup(groupId)!!.memberIds)
+            store.savePersistedMessengerGroup(PersistedMessengerGroup(groupId, "Crew 2", "prompt 2", listOf(second)))
+            assertEquals(listOf(second), store.loadPersistedMessengerGroup(groupId)!!.memberIds)
+            try {
+                store.savePersistedMessengerGroup(PersistedMessengerGroup(groupId, "Broken", "", listOf(999999)))
+            } catch (_: Exception) {
+                // FK failure must roll back both row and membership replacement.
+            }
+            assertEquals("Crew 2", store.loadPersistedMessengerGroup(groupId)!!.name)
+            assertEquals(listOf(second), store.loadPersistedMessengerGroup(groupId)!!.memberIds)
         }
     }
+
+    @Test
+    fun v23UpgradePreservesExistingDataAndCreatesNewTables() {
+        WorldStore(context, databaseName).use { store ->
+            val characterId = createCharacter(store, "Legacy")
+            store.writableDatabase.execSQL("PRAGMA user_version = 23")
+            assertTrue(characterId > 0)
+        }
+        WorldStore(context, databaseName).use { store ->
+            assertEquals(24, store.writableDatabase.version)
+            assertEquals("Legacy", store.writableDatabase.query("characters", arrayOf("name"), "id=?", arrayOf("1"), null, null, null).use { cursor ->
+                assertTrue(cursor.moveToFirst())
+                cursor.getString(0)
+            })
+            assertNotNull(store.writableDatabase.query("messenger_groups", null, null, null, null, null, null))
+        }
+    }
+
+    @Test
+    fun binderConfirmationIsUniqueAndIdempotent() {
+        WorldStore(context, databaseName).use { store ->
+            store.putBinderDraft(BinderDraft("draft", 1, "{}", 1))
+            store.saveBinderCandidate(BinderCandidate("a", "draft", "a", false))
+            store.saveBinderCandidate(BinderCandidate("b", "draft", "b", false))
+            store.confirmBinderCandidate("a")
+            store.confirmBinderCandidate("a")
+            assertEquals("a", store.getConfirmedBinderCandidate("draft")!!.id)
+            store.confirmBinderCandidate("b")
+            assertEquals("b", store.getConfirmedBinderCandidate("draft")!!.id)
+        }
+    }
+
+    @Test
+    fun creativeSupportsLineageStatusFilterDeleteNullableAndIdempotentUri() {
+        WorldStore(context, databaseName).use { store ->
+            val source = store.saveCreativeAsset(CreativeAsset(0, "uri:source", "image", "local", "p", null, "", null, null, "failed", "network", 1))
+            val target = store.saveCreativeAsset(CreativeAsset(0, "uri:target", "image", "local", "p2", null, "", source, null, "ready", "", 2))
+            assertEquals(target, store.saveCreativeAsset(CreativeAsset(0, "uri:target", "image", "local", "changed", null, "", source, null, "ready", "", 3)))
+            assertEquals(source, store.getCreativeAsset(target)!!.sourceId)
+            store.updateCreativeAssetStatus(source, "ready")
+            assertEquals(2, store.queryCreativeAssets(status = "ready").size)
+            assertTrue(store.deleteCreativeAsset(source))
+            assertFalse(store.deleteCreativeAsset(source))
+            assertNull(store.getCreativeAsset(source))
+        }
+    }
+
+    private fun createCharacter(store: WorldStore, name: String): Long = store.writableDatabase.insertOrThrow("characters", null, ContentValues().apply {
+        put("name", name)
+        put("persona", "persona")
+        put("created_at", 1)
+    })
 }

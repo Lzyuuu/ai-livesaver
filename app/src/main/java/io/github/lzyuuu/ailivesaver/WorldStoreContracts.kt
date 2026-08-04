@@ -50,14 +50,63 @@ internal fun WorldStore.putBinderDraft(draft: BinderDraft) {
 internal fun WorldStore.getBinderDraft(id: String): BinderDraft? = writableDatabase.query("binder_drafts", null, "id=?", arrayOf(id), null, null, null).use { c ->
     if (!c.moveToFirst()) null else BinderDraft(c.getString(c.getColumnIndexOrThrow("id")), c.getInt(c.getColumnIndexOrThrow("step")), c.getString(c.getColumnIndexOrThrow("payload")), c.getLong(c.getColumnIndexOrThrow("updated_at")))
 }
-internal fun WorldStore.saveBinderCandidate(candidate: BinderCandidate) { writableDatabase.insertWithOnConflict("binder_candidates", null, ContentValues().apply { put("id", candidate.id); put("draft_id", candidate.draftId); put("payload", candidate.payload); put("confirmed", if (candidate.confirmed) 1 else 0) }, SQLiteDatabase.CONFLICT_REPLACE) }
-internal fun WorldStore.confirmBinderCandidate(id: String) { writableDatabase.update("binder_candidates", ContentValues().apply { put("confirmed", 1) }, "id=?", arrayOf(id)) }
+internal fun WorldStore.saveBinderCandidate(candidate: BinderCandidate) {
+    val result = writableDatabase.insertWithOnConflict(
+        "binder_candidates",
+        null,
+        ContentValues().apply {
+            put("id", candidate.id)
+            put("draft_id", candidate.draftId)
+            put("payload", candidate.payload)
+            put("confirmed", if (candidate.confirmed) 1 else 0)
+        },
+        SQLiteDatabase.CONFLICT_REPLACE,
+    )
+    check(result != -1L)
+}
+internal fun WorldStore.confirmBinderCandidate(id: String) {
+    val database = writableDatabase
+    database.beginTransaction()
+    try {
+        val draftId = database.query("binder_candidates", arrayOf("draft_id"), "id=?", arrayOf(id), null, null, null).use { cursor ->
+            check(cursor.moveToFirst()) { "Unknown binder candidate: $id" }
+            cursor.getString(0)
+        }
+        database.update("binder_candidates", ContentValues().apply { put("confirmed", 0) }, "draft_id=?", arrayOf(draftId))
+        check(database.update("binder_candidates", ContentValues().apply { put("confirmed", 1) }, "id=?", arrayOf(id)) == 1)
+        database.setTransactionSuccessful()
+    } finally {
+        database.endTransaction()
+    }
+}
 internal fun WorldStore.getConfirmedBinderCandidate(draftId: String): BinderCandidate? = writableDatabase.query("binder_candidates", null, "draft_id=? AND confirmed=1", arrayOf(draftId), null, null, "id").use { c -> if (!c.moveToFirst()) null else BinderCandidate(c.getString(c.getColumnIndexOrThrow("id")), c.getString(c.getColumnIndexOrThrow("draft_id")), c.getString(c.getColumnIndexOrThrow("payload")), true) }
 
-internal fun WorldStore.saveCreativeAsset(asset: CreativeAsset): Long = writableDatabase.insertWithOnConflict("creative_assets", null, ContentValues().apply { put("path_uri", asset.pathOrUri); put("kind", asset.kind); put("backend", asset.backend); put("prompt", asset.prompt); put("character_id", asset.characterId); put("character", asset.character); put("source_id", asset.sourceId); put("target_id", asset.targetId); put("status", asset.status); put("error", asset.error); put("created_at", asset.createdAt) }, SQLiteDatabase.CONFLICT_IGNORE).let { check(it != -1L); it }
+internal fun WorldStore.saveCreativeAsset(asset: CreativeAsset): Long {
+    val database = writableDatabase
+    val values = ContentValues().apply {
+        put("path_uri", asset.pathOrUri)
+        put("kind", asset.kind)
+        put("backend", asset.backend)
+        put("prompt", asset.prompt)
+        put("character_id", asset.characterId)
+        put("character", asset.character)
+        put("source_id", asset.sourceId)
+        put("target_id", asset.targetId)
+        put("status", asset.status)
+        put("error", asset.error)
+        put("created_at", asset.createdAt)
+    }
+    val inserted = database.insertWithOnConflict("creative_assets", null, values, SQLiteDatabase.CONFLICT_IGNORE)
+    if (inserted != -1L) return inserted
+    return database.query("creative_assets", arrayOf("id"), "path_uri=?", arrayOf(asset.pathOrUri), null, null, null).use { cursor ->
+        check(cursor.moveToFirst()) { "Creative asset insert failed: ${asset.pathOrUri}" }
+        cursor.getLong(0)
+    }
+}
 internal fun WorldStore.getCreativeAsset(id: Long): CreativeAsset? = queryCreative("id=?", arrayOf(id.toString())).firstOrNull()
 internal fun WorldStore.updateCreativeAssetStatus(id: Long, status: String, error: String = "") { check(writableDatabase.update("creative_assets", ContentValues().apply { put("status", status); put("error", error) }, "id=?", arrayOf(id.toString())) == 1) }
-internal fun WorldStore.deleteCreativeAsset(id: Long) { writableDatabase.delete("creative_assets", "id=?", arrayOf(id.toString())) }
+internal fun WorldStore.deleteCreativeAsset(id: Long): Boolean =
+    writableDatabase.delete("creative_assets", "id=?", arrayOf(id.toString())) == 1
 internal fun WorldStore.queryCreativeAssets(status: String? = null, characterId: Long? = null): List<CreativeAsset> {
     val clauses = mutableListOf<String>()
     val args = mutableListOf<String>()
