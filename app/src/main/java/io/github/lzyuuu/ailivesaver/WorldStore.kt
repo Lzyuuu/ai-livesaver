@@ -332,7 +332,7 @@ internal data class MemberWorldContext(
     val timeZone: String,
 )
 
-internal const val WORLD_DATABASE_VERSION = 24
+internal const val WORLD_DATABASE_VERSION = 25
 
 internal class WorldStore(
     context: Context,
@@ -432,6 +432,26 @@ internal class WorldStore(
         createSocialResponseQueueTable(database)
         createInteractionTables(database)
         createSettingsDomainTables(database)
+        createStoreTables(database)
+    }
+
+    private fun createStoreTables(database: SQLiteDatabase) {
+        database.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS app_install (
+                app_id TEXT PRIMARY KEY,
+                status TEXT NOT NULL,
+                installed_at INTEGER,
+                on_home INTEGER NOT NULL DEFAULT 0,
+                home_order INTEGER NOT NULL DEFAULT 0,
+                catalog_version TEXT NOT NULL DEFAULT '',
+                updated_at INTEGER NOT NULL
+            )
+            """.trimIndent(),
+        )
+        database.execSQL(
+            "CREATE INDEX IF NOT EXISTS idx_app_install_on_home ON app_install(on_home, home_order)",
+        )
     }
 
     private fun createSettingsDomainTables(database: SQLiteDatabase) {
@@ -528,6 +548,7 @@ internal class WorldStore(
             createRebbitSubredditTables(database)
         }
         if (oldVersion < 24) createSettingsDomainTables(database)
+        if (oldVersion < 25) createStoreTables(database)
     }
 
     private fun createRebbitSubredditTables(database: SQLiteDatabase) {

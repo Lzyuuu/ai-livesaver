@@ -25,6 +25,7 @@ class BinderFlowSmokeTest {
         WorldStore(context).use { store ->
             DesktopSeed.ensureDesktopWorld(store, "焰宇", "smoke", context)
         }
+        seedStoreInstallForSmoke(context, setOf("binder"))
         composeRule.activityRule.scenario.recreate()
         composeRule.waitForIdle()
     }

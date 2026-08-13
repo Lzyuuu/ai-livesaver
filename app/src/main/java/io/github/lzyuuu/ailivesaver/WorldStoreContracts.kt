@@ -9,6 +9,72 @@ internal data class BinderDraft(val id: String, val step: Int, val payload: Stri
 internal data class BinderCandidate(val id: String, val draftId: String, val payload: String, val confirmed: Boolean)
 internal data class CreativeAsset(val id: Long, val pathOrUri: String, val kind: String, val backend: String, val prompt: String, val characterId: Long?, val character: String, val sourceId: Long?, val targetId: Long?, val status: String, val error: String, val createdAt: Long)
 
+internal data class PersistedAppInstall(
+    val appId: String,
+    val status: InstallStatus,
+    val installedAt: Long?,
+    val onHome: Boolean,
+    val homeOrder: Int,
+    val catalogVersion: String,
+    val updatedAt: Long,
+)
+
+/** 写入或替换一个安装行。 */
+internal fun WorldStore.saveAppInstall(install: PersistedAppInstall) {
+    writableDatabase.insertWithOnConflict(
+        "app_install",
+        null,
+        ContentValues().apply {
+            put("app_id", install.appId)
+            put("status", install.status.name)
+            put("installed_at", install.installedAt)
+            put("on_home", if (install.onHome) 1 else 0)
+            put("home_order", install.homeOrder)
+            put("catalog_version", install.catalogVersion)
+            put("updated_at", install.updatedAt)
+        },
+        SQLiteDatabase.CONFLICT_REPLACE,
+    )
+}
+
+internal fun WorldStore.loadAppInstall(appId: String): PersistedAppInstall? =
+    writableDatabase.query("app_install", null, "app_id=?", arrayOf(appId), null, null, null).use { c ->
+        if (!c.moveToFirst()) null else PersistedAppInstall(
+            appId = c.getString(c.getColumnIndexOrThrow("app_id")),
+            status = InstallStatus.fromRaw(c.getString(c.getColumnIndexOrThrow("status"))),
+            installedAt = if (c.isNull(c.getColumnIndexOrThrow("installed_at"))) null else c.getLong(c.getColumnIndexOrThrow("installed_at")),
+            onHome = c.getInt(c.getColumnIndexOrThrow("on_home")) != 0,
+            homeOrder = c.getInt(c.getColumnIndexOrThrow("home_order")),
+            catalogVersion = c.getString(c.getColumnIndexOrThrow("catalog_version")),
+            updatedAt = c.getLong(c.getColumnIndexOrThrow("updated_at")),
+        )
+    }
+
+internal fun WorldStore.loadHomeApps(): List<PersistedAppInstall> =
+    writableDatabase.query("app_install", null, "on_home=1", null, null, null, "home_order").use { c ->
+        buildList {
+            while (c.moveToNext()) {
+                add(
+                    PersistedAppInstall(
+                        appId = c.getString(c.getColumnIndexOrThrow("app_id")),
+                        status = InstallStatus.fromRaw(c.getString(c.getColumnIndexOrThrow("status"))),
+                        installedAt = if (c.isNull(c.getColumnIndexOrThrow("installed_at"))) null else c.getLong(c.getColumnIndexOrThrow("installed_at")),
+                        onHome = true,
+                        homeOrder = c.getInt(c.getColumnIndexOrThrow("home_order")),
+                        catalogVersion = c.getString(c.getColumnIndexOrThrow("catalog_version")),
+                        updatedAt = c.getLong(c.getColumnIndexOrThrow("updated_at")),
+                    ),
+                )
+            }
+        }
+    }
+
+internal fun WorldStore.deleteAppInstall(appId: String): Boolean =
+    writableDatabase.delete("app_install", "app_id=?", arrayOf(appId)) > 0
+
+internal fun WorldStore.countAppInstalls(): Int =
+    writableDatabase.query("app_install", arrayOf("app_id"), null, null, null, null, null).use { it.count }
+
 /** Creates or replaces a group and its complete member set atomically. */
 internal fun WorldStore.savePersistedMessengerGroup(group: PersistedMessengerGroup): Long {
     val database = writableDatabase

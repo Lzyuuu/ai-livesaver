@@ -43,6 +43,7 @@ class MainActivitySmokeTest {
                 context = context,
             )
         }
+        seedStoreInstallForSmoke(context, setOf("ustagram", "games", "phone"))
         composeRule.activityRule.scenario.recreate()
         composeRule.waitForIdle()
     }

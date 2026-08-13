@@ -711,6 +711,7 @@ private fun iconFor(app: DesktopApp): ImageVector = when (app) {
     DesktopApp.Games -> Icons.Default.Star
     DesktopApp.AuraSwap -> Icons.Default.Favorite
     DesktopApp.Storage -> Icons.Default.Info
+    DesktopApp.Store -> Icons.Default.Star
 }
 
 @Composable
@@ -790,6 +791,29 @@ private fun DockGlyph(app: DesktopApp) {
                     androidx.compose.ui.geometry.Offset(size.width * .70f, size.height * .88f),
                     strokeWidth = size.width * .07f,
                 )
+            }
+            DesktopApp.Store -> {
+                // 商店：货架 + 袋子
+                drawRoundRect(
+                    white,
+                    topLeft = androidx.compose.ui.geometry.Offset(size.width * .14f, size.height * .32f),
+                    size = androidx.compose.ui.geometry.Size(size.width * .72f, size.height * .14f),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(size.width * .04f),
+                )
+                drawLine(
+                    white,
+                    androidx.compose.ui.geometry.Offset(size.width * .14f, size.height * .66f),
+                    androidx.compose.ui.geometry.Offset(size.width * .86f, size.height * .66f),
+                    strokeWidth = size.width * .06f,
+                )
+                val bag = Path().apply {
+                    moveTo(size.width * .30f, size.height * .56f)
+                    lineTo(size.width * .38f, size.height * .84f)
+                    lineTo(size.width * .62f, size.height * .84f)
+                    lineTo(size.width * .70f, size.height * .56f)
+                    close()
+                }
+                drawPath(bag, white)
             }
             else -> Unit
         }

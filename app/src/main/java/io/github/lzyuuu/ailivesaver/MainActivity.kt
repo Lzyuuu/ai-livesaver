@@ -399,6 +399,16 @@ private fun AiLivesaverApp(
     val homePresentation = homeRuntimePresentation(homeState)
     val activeDesktopApp = DesktopApp.fromRoute(desktopRouteKey)
     val activeHub = DesktopHub.fromRoute(activeHubRoute)
+    val storeCatalog = remember(worldRevision) { StoreRepository(context) }
+    val storeProducts = remember(worldRevision) { storeCatalog.loadProducts() }
+    val storeInstallStatus = remember(worldRevision) {
+        storeCatalog.loadInstallStatus(storeProducts)
+    }
+
+    fun isAppInstalled(app: DesktopApp): Boolean {
+        val productId = storeProducts.firstOrNull { it.launchTarget == app.route }?.id ?: return true
+        return storeInstallStatus[productId] == InstallStatus.INSTALLED
+    }
 
     fun resumeLocalDreamQueue() {
         LocalDreamQueue.resume(
@@ -433,8 +443,13 @@ private fun AiLivesaverApp(
                 desktopRouteKey = app.route
             }
             else -> {
+                // 商店安装态门控（T4）：未安装的目录 App 一律降级到商店。
+                val gated = DesktopNavigator.isOpenable(
+                    app = app,
+                    installed = isAppInstalled(app),
+                )
                 activeHubRoute = null
-                desktopRouteKey = app.route
+                desktopRouteKey = if (gated) app.route else DesktopApp.Store.route
             }
         }
     }
@@ -823,6 +838,13 @@ private fun AiLivesaverApp(
                     )
                 }
                 DesktopApp.Characters -> Unit
+                DesktopApp.Store -> FancyStoreScreen(
+                    contentPadding = padding,
+                    store = worldStore,
+                    onChanged = { worldRevision++ },
+                    onOpenApp = { app -> openDesktopApp(app) },
+                    onBack = { goDesktopHome() },
+                )
                 null -> Box(modifier = Modifier.fillMaxSize()) {
                     SystemDesktopScreen(
                         contentPadding = padding,

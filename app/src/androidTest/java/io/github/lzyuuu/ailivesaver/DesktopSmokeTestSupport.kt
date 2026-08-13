@@ -26,6 +26,27 @@ internal fun seedDesktopShellForSmoke(context: Context) {
     }
 }
 
+/** 为商店门控改造预装目录 App（T4）：先清空 app_install，再种子指定集合，保证确定性。 */
+internal fun seedStoreInstallForSmoke(context: Context, appIds: Set<String>) {
+    val now = System.currentTimeMillis()
+    WorldStore(context).use { store ->
+        store.writableDatabase.delete("app_install", null, null)
+        appIds.forEach { id ->
+            store.saveAppInstall(
+                PersistedAppInstall(
+                    appId = id,
+                    status = InstallStatus.INSTALLED,
+                    installedAt = now,
+                    onHome = false,
+                    homeOrder = 0,
+                    catalogVersion = "1.0",
+                    updatedAt = now,
+                ),
+            )
+        }
+    }
+}
+
 internal fun clearMomentPostsForSmoke(context: Context) {
     WorldStore(context).use { store ->
         store.clearPosts("moment")

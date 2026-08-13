@@ -7,11 +7,26 @@ import org.junit.Test
 
 class DesktopRoutesTest {
     @Test
-    fun `dock exposes messenger imaging gallery settings`() {
+    fun `dock exposes messenger imaging gallery store settings`() {
         assertEquals(
-            listOf("Messenger", "Imaging", "Gallery", "Settings"),
+            listOf("Messenger", "Imaging", "Gallery", "商店", "Settings"),
             DesktopDockApps.map { it.label },
         )
+        assertTrue(DesktopDockApps.contains(DesktopApp.Store))
+    }
+
+    @Test
+    fun `store gating opens shell apps always and gates catalog apps by install state`() {
+        // 壳层内置能力始终可达
+        assertTrue(DesktopNavigator.isOpenable(DesktopApp.Store, installed = false))
+        assertTrue(DesktopNavigator.isOpenable(DesktopApp.Messenger, installed = false))
+        assertTrue(DesktopNavigator.isOpenable(DesktopApp.Characters, installed = false))
+        // 目录 App：未安装不可达
+        assertFalse(DesktopNavigator.isOpenable(DesktopApp.Y, installed = false))
+        assertTrue(DesktopNavigator.isOpenable(DesktopApp.Y, installed = true))
+        // 即将开放的 Games 按安装态门控（旧数据已装则可达）
+        assertFalse(DesktopNavigator.isOpenable(DesktopApp.Games, installed = false))
+        assertTrue(DesktopNavigator.isOpenable(DesktopApp.Games, installed = true))
     }
 
     @Test

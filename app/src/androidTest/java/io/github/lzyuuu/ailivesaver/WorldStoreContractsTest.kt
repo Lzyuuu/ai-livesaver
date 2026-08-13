@@ -51,12 +51,55 @@ class WorldStoreContractsTest {
             assertTrue(characterId > 0)
         }
         WorldStore(context, databaseName).use { store ->
-            assertEquals(24, store.writableDatabase.version)
+            assertEquals(25, store.writableDatabase.version)
             assertEquals("Legacy", store.writableDatabase.query("characters", arrayOf("name"), "id=?", arrayOf("1"), null, null, null).use { cursor ->
                 assertTrue(cursor.moveToFirst())
                 cursor.getString(0)
             })
             assertNotNull(store.writableDatabase.query("messenger_groups", null, null, null, null, null, null))
+        }
+    }
+
+    @Test
+    fun v24UpgradePreservesWorldDataAndCreatesStoreTable() {
+        WorldStore(context, databaseName).use { store ->
+            val characterId = createCharacter(store, "LegacyStore")
+            store.writableDatabase.execSQL("PRAGMA user_version = 24")
+            assertTrue(characterId > 0)
+        }
+        WorldStore(context, databaseName).use { store ->
+            assertEquals(25, store.writableDatabase.version)
+            assertEquals("LegacyStore", store.writableDatabase.query("characters", arrayOf("name"), "id=?", arrayOf("1"), null, null, null).use { cursor ->
+                assertTrue(cursor.moveToFirst())
+                cursor.getString(0)
+            })
+            assertNotNull(store.writableDatabase.query("app_install", null, null, null, null, null, null))
+            // 商店自装决策：升级后默认无预装行。
+            assertEquals(0, store.countAppInstalls())
+        }
+    }
+
+    @Test
+    fun storeInstallStatePersistsHomeOrderAndDelete() {
+        WorldStore(context, databaseName).use { store ->
+            store.saveAppInstall(PersistedAppInstall("y", InstallStatus.INSTALLED, 10L, true, 2, "1.0", 11L))
+            store.saveAppInstall(PersistedAppInstall("rebbit", InstallStatus.INSTALLING, null, false, 0, "1.0", 12L))
+            assertEquals(2, store.countAppInstalls())
+
+            val y = store.loadAppInstall("y")!!
+            assertEquals(InstallStatus.INSTALLED, y.status)
+            assertEquals(10L, y.installedAt)
+            assertTrue(y.onHome)
+            assertEquals(2, y.homeOrder)
+
+            val home = store.loadHomeApps()
+            assertEquals(1, home.size)
+            assertEquals("y", home[0].appId)
+
+            assertTrue(store.deleteAppInstall("y"))
+            assertFalse(store.deleteAppInstall("y"))
+            assertNull(store.loadAppInstall("y"))
+            assertEquals(1, store.countAppInstalls())
         }
     }
 

@@ -25,6 +25,7 @@ enum class DesktopApp(
     Games("games", "Games"),
     AuraSwap("aura_swap", "Aura Swap"),
     Storage("storage", "Storage"),
+    Store("store", "商店"),
     ;
 
     companion object {
@@ -82,11 +83,12 @@ enum class DesktopHub(
     }
 }
 
-/** Dock 固定四入口，对齐 fancy-ai 系统桌面。 */
+/** Dock 固定四入口 + 商店，对齐 fancy-ai 系统桌面。 */
 val DesktopDockApps: List<DesktopApp> = listOf(
     DesktopApp.Messenger,
     DesktopApp.Imaging,
     DesktopApp.Gallery,
+    DesktopApp.Store,
     DesktopApp.Settings,
 )
 
@@ -159,6 +161,17 @@ object DesktopNavigator {
     fun openApp(app: DesktopApp): DesktopRoute {
         require(app.openEntry) { "入口 ${app.label} 被锁定，与开放入口约定冲突" }
         return DesktopRoute.App(app)
+    }
+
+    /**
+     * 商店安装态门控：目录 App 需要已安装才可达（未安装一律降级到商店）；
+     * coming_soon/upcoming 只影响商店内的获取按钮，不额外拦截已安装的旧数据。
+     */
+    fun isOpenable(app: DesktopApp, installed: Boolean): Boolean = when (app) {
+        DesktopApp.Store, DesktopApp.Messenger, DesktopApp.Imaging,
+        DesktopApp.Gallery, DesktopApp.Settings, DesktopApp.Characters,
+        -> true
+        else -> installed
     }
 
     fun backFrom(route: DesktopRoute): DesktopRoute = when (route) {

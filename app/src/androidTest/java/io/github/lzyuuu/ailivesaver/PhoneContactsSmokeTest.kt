@@ -30,6 +30,7 @@ class PhoneContactsSmokeTest {
             DesktopSeed.ensureDesktopWorld(store, "焰宇", "smoke", context)
             rootId = store.characters().first { it.name == "Root" }.id
         }
+        seedStoreInstallForSmoke(context, setOf("phone"))
         composeRule.activityRule.scenario.recreate()
         composeRule.waitForIdle()
     }

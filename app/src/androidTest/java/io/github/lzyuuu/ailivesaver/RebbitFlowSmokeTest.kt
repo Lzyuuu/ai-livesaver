@@ -48,6 +48,7 @@ class RebbitFlowSmokeTest {
             // by earlier suite runs (the "None" experiment below disables everything).
             store.setRebbitSubredditEnabled("general", true)
         }
+        seedStoreInstallForSmoke(context, setOf("rebbit"))
         composeRule.activityRule.scenario.recreate()
         composeRule.waitForIdle()
     }

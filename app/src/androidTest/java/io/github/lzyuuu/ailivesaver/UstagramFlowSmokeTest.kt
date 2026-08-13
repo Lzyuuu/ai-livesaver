@@ -48,6 +48,7 @@ class UstagramFlowSmokeTest {
         previousWorldPreferences = preferences.all.toMap()
         preferences.edit().putBoolean("enabled", false).commit()
         seedDesktopShellForSmoke(context)
+        seedStoreInstallForSmoke(context, setOf("ustagram"))
         clearMomentPostsForSmoke(context)
         composeRule.activityRule.scenario.recreate()
         composeRule.waitForIdle()
