@@ -5,6 +5,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import java.io.File
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -45,6 +46,11 @@ class WorldDataErasureSmokeTest {
             context,
             LocalDreamRunStats(1_000, 100, 512, 512, System.currentTimeMillis()),
         )
+        val now = System.currentTimeMillis()
+        store.saveAppInstall(
+            PersistedAppInstall("y", InstallStatus.INSTALLED, now, true, 1, "1.0", now),
+        )
+        assertEquals(InstallStatus.INSTALLED, store.loadAppInstall("y")!!.status)
 
         val finished = CountDownLatch(1)
         var result: Result<Unit>? = null
@@ -65,5 +71,9 @@ class WorldDataErasureSmokeTest {
         )
         assertTrue(ProviderStore(context).load().apiKey.isEmpty())
         assertNull(LocalDreamStatsStore.load(context))
+        WorldStore(context).use { fresh ->
+            assertEquals(0, fresh.countAppInstalls())
+            assertNull(fresh.loadAppInstall("y"))
+        }
     }
 }

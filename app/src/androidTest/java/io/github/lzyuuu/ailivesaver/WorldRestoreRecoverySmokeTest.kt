@@ -5,6 +5,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import android.database.sqlite.SQLiteDatabase
 import java.io.File
 import org.json.JSONObject
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -12,6 +13,34 @@ import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class WorldRestoreRecoverySmokeTest {
+    @Test
+    fun backupSnapshotIncludesAppInstallRows() {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val snapshot = File(context.cacheDir, "store-backup-${System.nanoTime()}.db")
+        val now = System.currentTimeMillis()
+        WorldStore(context).use { store ->
+            store.saveAppInstall(
+                PersistedAppInstall("y", InstallStatus.INSTALLED, now, true, 1, "1.0", now),
+            )
+            store.copyDatabaseForBackup(snapshot)
+        }
+        try {
+            SQLiteDatabase.openDatabase(snapshot.path, null, SQLiteDatabase.OPEN_READONLY).use { database ->
+                database.rawQuery(
+                    "SELECT status, on_home FROM app_install WHERE app_id = ?",
+                    arrayOf("y"),
+                ).use { cursor ->
+                    assertTrue(cursor.moveToFirst())
+                    assertEquals("INSTALLED", cursor.getString(0))
+                    assertEquals(1, cursor.getInt(1))
+                }
+            }
+        } finally {
+            WorldStore(context).use { it.deleteAppInstall("y") }
+            snapshot.delete()
+        }
+    }
+
     @Test
     fun copiesAReadableDatabaseSnapshotWhileTheStoreIsOpen() {
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
