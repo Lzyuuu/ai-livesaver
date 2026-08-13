@@ -1,0 +1,489 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fancy Store 商店 UI 原型（A/B/C 变体）</title>
+<!--
+PROTOTYPE — 丢弃型原型，勿进 main 生产代码。
+问题：Fancy Store 商店页长什么样？（布局参考 Apple AppStore，主题保持深蓝金）
+三种结构变体，?variant=A|B|C 切换（右侧悬浮条 ◀ ▶ 或键盘 ← →）：
+  A — 杂志流：精选大卡横滑 + 分类区块（每组标题 + 横滑卡），详情推入页
+  B — 网格：顶部分类 chips 过滤 + 两列产品网格，详情推入页
+  C — 列表：Store/Library 顶部分段 + 垂直列表，详情底部弹层
+共同交互：安装模拟下载、添加到首页、即将开放/即将推出 disabled、Library 空态引导。
+-->
+<style>
+:root{
+  --bg1:#070d16; --bg2:#0c1626; --gold:#d4af6a; --gold-dim:rgba(212,175,106,.35);
+  --cream:#f4efe4; --cream-dim:rgba(244,239,228,.72); --navy:#12233c; --navy-mid:#1a2f4a;
+  --line:rgba(212,175,106,.16); --card:rgba(255,255,255,.045); --err:#e08a8a; --ok:#9cc79a; --blue:#a9c4ec;
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{
+  background:#04060b; color:var(--cream);
+  font-family:-apple-system,"PingFang SC","Segoe UI",Roboto,sans-serif;
+  display:flex; align-items:center; justify-content:center; min-height:100vh;
+  background-image:radial-gradient(1200px 800px at 50% -10%, #101c30 0%, #04060b 60%);
+}
+#phone{
+  width:390px; height:844px; position:relative; overflow:hidden; border-radius:34px;
+  border:1px solid rgba(212,175,106,.25); box-shadow:0 30px 80px rgba(0,0,0,.6);
+  background:linear-gradient(160deg,var(--bg1),var(--bg2));
+}
+.serif{font-family:Georgia,"Times New Roman","Noto Serif SC","Songti SC",serif}
+.screen{position:absolute; inset:0; display:flex; flex-direction:column}
+.scroll{overflow-y:auto; flex:1; scrollbar-width:none}
+.scroll::-webkit-scrollbar{display:none}
+.pad{padding:16px 16px 30px}
+
+/* ---------- 通用 ---------- */
+.eyebrow{font-size:10px; letter-spacing:.22em; color:var(--gold); text-transform:uppercase; font-weight:600}
+.h-title{font-size:28px; font-weight:800; letter-spacing:-.01em}
+.gold-btn{background:var(--gold); color:#171008; border:none; border-radius:999px; padding:10px 18px; font-weight:700; font-size:13px; display:inline-flex; align-items:center; gap:6px; cursor:pointer}
+.ghost-btn{background:transparent; color:var(--gold); border:1px solid var(--gold-dim); border-radius:999px; padding:9px 15px; font-weight:600; font-size:12px; cursor:pointer}
+.plain-btn{background:var(--card); color:var(--cream); border:1px solid var(--line); border-radius:999px; padding:9px 15px; font-size:12px; font-weight:600; cursor:pointer}
+.disabled-btn{background:rgba(255,255,255,.05); color:rgba(244,239,228,.42); border:1px solid rgba(255,255,255,.08); border-radius:999px; padding:9px 15px; font-size:12px; font-weight:600; cursor:default}
+.chips{display:flex; gap:8px; overflow-x:auto; scrollbar-width:none; padding:4px 0}
+.chips::-webkit-scrollbar{display:none}
+.chip{
+  flex:0 0 auto; font-size:12.5px; border-radius:999px; padding:7px 14px; font-weight:700;
+  border:1px solid var(--line); color:var(--cream-dim); background:rgba(255,255,255,.04); cursor:pointer;
+}
+.chip.on{background:var(--gold); color:#171008; border-color:var(--gold)}
+.badge{font-size:9px; letter-spacing:.12em; font-weight:800; border-radius:6px; padding:3px 7px}
+.badge.added{background:rgba(212,175,106,.18); color:var(--gold)}
+.badge.inst{background:rgba(156,199,154,.16); color:var(--ok)}
+.badge.dl{background:rgba(120,160,220,.16); color:var(--blue)}
+.badge.soon{background:rgba(224,138,138,.14); color:var(--err)}
+.badge.up{background:rgba(255,255,255,.1); color:var(--cream-dim)}
+.section-label{font-size:11px; letter-spacing:.18em; color:var(--cream-dim); text-transform:uppercase; margin:20px 0 10px; display:flex; align-items:center; justify-content:space-between}
+.section-label .more{font-size:11px; color:var(--gold); letter-spacing:0}
+.sym-tile{
+  width:52px; height:52px; border-radius:15px; flex:0 0 auto;
+  background:linear-gradient(150deg,rgba(212,175,106,.2),rgba(255,255,255,.03));
+  border:1px solid var(--line); display:flex; align-items:center; justify-content:center;
+  font-size:22px; color:var(--gold);
+}
+.sym-tile.lg{width:72px; height:72px; border-radius:20px; font-size:30px}
+.empty{color:var(--cream-dim); font-size:12.5px; text-align:center; padding:34px 10px; line-height:1.8}
+.progress-ring{width:20px; height:20px; border-radius:50%; border:2.5px solid rgba(212,175,106,.25); border-top-color:var(--gold); animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ---------- 头部 ---------- */
+.store-head{display:flex; align-items:center; justify-content:space-between; margin-bottom:14px}
+.store-head .avatar{
+  width:38px; height:38px; border-radius:50%; border:1px solid var(--gold-dim);
+  display:flex; align-items:center; justify-content:center; font-size:17px; color:var(--gold); cursor:pointer;
+}
+.back-link{font-size:13px; color:var(--gold); cursor:pointer; display:inline-flex; align-items:center; gap:4px}
+.back-link::before{content:"‹"; font-size:20px; line-height:1}
+
+/* ---------- A：杂志流 ---------- */
+.feature-card{
+  position:relative; border-radius:22px; overflow:hidden; min-width:290px; height:170px;
+  border:1px solid var(--gold-dim); cursor:pointer; flex:0 0 auto;
+  background:linear-gradient(140deg,#1a2f4a,#0d1a2c);
+}
+.feature-card .sym{position:absolute; right:14px; top:14px; font-size:44px; color:var(--gold); opacity:.9}
+.feature-card .f-name{position:absolute; left:16px; bottom:44px; font-size:19px; font-weight:800}
+.feature-card .f-tag{position:absolute; left:16px; bottom:18px; font-size:11.5px; color:var(--cream-dim); max-width:75%}
+.feature-card .f-chip{position:absolute; left:16px; top:14px; font-size:9px; letter-spacing:.16em; color:var(--gold); font-weight:800}
+.hscroll{display:flex; gap:12px; overflow-x:auto; scrollbar-width:none; padding-bottom:4px}
+.hscroll::-webkit-scrollbar{display:none}
+.hcard{
+  flex:0 0 auto; width:150px; border-radius:18px; border:1px solid var(--line); background:var(--card);
+  padding:14px 12px; cursor:pointer;
+}
+.hcard .body{display:flex; align-items:center; gap:10px; margin-bottom:10px}
+.hcard .n{font-weight:700; font-size:13.5px; line-height:1.25}
+.hcard .t{font-size:10.5px; color:var(--cream-dim); margin-top:2px; line-height:1.35}
+.hcard .btn-wrap{display:flex; align-items:center; justify-content:space-between}
+
+/* ---------- B：网格 ---------- */
+.grid{display:grid; grid-template-columns:1fr 1fr; gap:12px}
+.gcard{
+  border-radius:20px; border:1px solid var(--line); background:var(--card);
+  padding:14px; cursor:pointer;
+}
+.gcard .body{display:flex; flex-direction:column; align-items:flex-start; gap:9px}
+.gcard .n{font-weight:700; font-size:14px; line-height:1.25}
+.gcard .t{font-size:11px; color:var(--cream-dim); line-height:1.4; min-height:30px}
+.gcard .btn-wrap{display:flex; align-items:center; justify-content:space-between; width:100%}
+.gcard .meta{font-size:10px; color:var(--cream-dim)}
+
+/* ---------- C：列表 ---------- */
+.seg{display:flex; background:rgba(255,255,255,.05); border:1px solid var(--line); border-radius:14px; padding:3px; gap:3px; margin-bottom:12px}
+.seg div{flex:1; text-align:center; font-size:13px; font-weight:700; padding:9px 4px; border-radius:11px; color:var(--cream-dim); cursor:pointer}
+.seg div.on{background:var(--gold); color:#171008}
+.lcard{
+  display:flex; gap:12px; align-items:center; background:var(--card); border:1px solid var(--line);
+  border-radius:16px; padding:12px; margin-bottom:9px; cursor:pointer;
+}
+.lcard .body{flex:1; min-width:0}
+.lcard .n{font-weight:700; font-size:14px; display:flex; align-items:center; gap:7px}
+.lcard .t{font-size:11.5px; color:var(--cream-dim); margin-top:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.lcard .meta{font-size:10px; color:var(--cream-dim); margin-top:2px}
+
+/* ---------- 详情 ---------- */
+.detail{
+  position:absolute; inset:0; z-index:60; background:linear-gradient(170deg,var(--bg1),var(--bg2));
+  display:flex; flex-direction:column; animation:slide .26s ease;
+}
+@keyframes slide{from{transform:translateX(40px);opacity:0}to{transform:none;opacity:1}}
+.detail .d-top{padding:14px 16px 4px; display:flex; align-items:center; gap:10px}
+.detail .d-hero{padding:18px 18px 4px; display:flex; gap:14px; align-items:center}
+.detail .d-body{padding:8px 18px 30px; overflow-y:auto; flex:1; scrollbar-width:none}
+.detail .d-body::-webkit-scrollbar{display:none}
+.d-name{font-size:24px; font-weight:800}
+.d-tag{font-size:12.5px; color:var(--cream-dim); margin-top:3px; line-height:1.5}
+.d-desc{font-size:13px; color:var(--cream-dim); line-height:1.65; margin:14px 0}
+.feat-item{display:flex; gap:8px; font-size:12.5px; color:var(--cream); margin:7px 0; line-height:1.5}
+.feat-item::before{content:"•"; color:var(--gold)}
+.req-item{display:flex; gap:8px; font-size:12px; color:var(--cream-dim); margin:6px 0}
+.req-item::before{content:"⚠"; color:var(--err)}
+.d-actions{
+  padding:14px 18px 24px; border-top:1px solid var(--line);
+  display:flex; gap:10px; align-items:center; background:rgba(7,13,22,.92);
+}
+.sheet{
+  position:absolute; left:0; right:0; bottom:0; top:110px; z-index:60;
+  background:linear-gradient(180deg,#0d1a2c,#091120); border-radius:26px 26px 0 0;
+  border:1px solid rgba(212,175,106,.2); border-bottom:none;
+  display:flex; flex-direction:column; padding:18px 16px 30px; animation:up .28s ease;
+  box-shadow:0 -20px 60px rgba(0,0,0,.55);
+}
+@keyframes up{from{transform:translateY(40px);opacity:0}to{transform:none;opacity:1}}
+.sheet-handle{width:42px; height:4px; border-radius:4px; background:rgba(212,175,106,.35); margin:0 auto 12px}
+
+/* ---------- 原型切换条 ---------- */
+#bar{
+  position:fixed; right:12px; top:50%; transform:translateY(-50%); z-index:999;
+  display:flex; flex-direction:column; align-items:center; gap:10px;
+  background:#0e1520; border:1px solid rgba(212,175,106,.3);
+  border-radius:18px; padding:12px 10px; box-shadow:0 12px 40px rgba(0,0,0,.6);
+  font-size:11px; color:var(--cream); user-select:none; max-width:210px;
+}
+#bar button{background:none; border:1px solid var(--gold-dim); color:var(--gold); border-radius:10px; width:30px; height:30px; cursor:pointer; font-size:14px; line-height:1}
+#bar .lbl{font-weight:700; color:var(--gold); text-align:center; line-height:1.4; max-width:170px}
+#bar .brain{cursor:pointer; border:1px solid var(--gold-dim); border-radius:999px; padding:6px 10px; color:var(--cream-dim); font-size:11px; text-align:center}
+#bar .brain.on{color:var(--gold)}
+@media (max-width:900px){
+  body{padding-top:64px}
+  #bar{right:50%; top:8px; transform:translateX(50%); flex-direction:row; max-width:96%; border-radius:999px; padding:7px 12px; gap:8px}
+  #bar .lbl{max-width:none; font-size:11px}
+}
+</style>
+</head>
+<body>
+<div id="phone"></div>
+<div id="bar">
+  <button id="prev" title="上一个变体">◀</button>
+  <span class="lbl" id="lbl">A — 杂志流</span>
+  <button id="next" title="下一个变体">▶</button>
+  <span class="brain" id="brain">首访：开启</span>
+</div>
+
+<script>
+/* ---------- 产品目录（对齐 research/fancy-store-catalog.md） ---------- */
+const PRODUCTS = [
+  {id:"y",        name:"Y",          sym:"Y",  cat:"Social",      tag:"角色时间线",            status:"available", size:0},
+  {id:"ustagram", name:"Ustagram",   sym:"◎",  cat:"Social",      tag:"她们的生活，用图说话",   status:"available", size:0},
+  {id:"rebbit",   name:"Rebbit",     sym:"r/", cat:"Social",      tag:"因你而生的社区",         status:"available", size:0},
+  {id:"binder",   name:"Binder",     sym:"♥︎", cat:"Characters",  tag:"邂逅意想不到的人",       status:"available", size:0},
+  {id:"storage",  name:"存储",       sym:"▰",  cat:"Tools",       tag:"看看 Fancy AI 存了什么", status:"available", size:0},
+  {id:"aura-swap",name:"形象交换",   sym:"◐",  cat:"Creative",    tag:"把一张脸放进新时刻",     status:"available", size:536},
+  {id:"games",    name:"Games",      sym:"♜",  cat:"Entertainment",tag:"七款游戏，各有人格",    status:"soon",      size:0},
+  {id:"phone",    name:"Phone",      sym:"☎︎", cat:"Entertainment",tag:"打给角色",               status:"soon",      size:0},
+  {id:"groups",   name:"Groups",     sym:"⁂",  cat:"Social",      tag:"所有人一个房间",         status:"upcoming",  size:0},
+  {id:"root-creator",name:"Root 造卡", sym:"◇", cat:"Characters", tag:"描述，Root 写卡",        status:"upcoming",  size:0},
+  {id:"aura",     name:"Aura",       sym:"❋",  cat:"Creative",    tag:"完全在设备上创作",       status:"upcoming",  size:0},
+  {id:"root-producer",name:"Root 制作人", sym:"♫", cat:"Creative",tag:"你的想法，Root 的录音棚", status:"upcoming", size:0},
+  {id:"benchmark",name:"Benchmark",  sym:"◈",  cat:"Tools",       tag:"测测你的本地大脑",       status:"upcoming",  size:0},
+  {id:"lorebook", name:"Lorebook",   sym:"▤",  cat:"Tools",       tag:"需要时调取的世界知识",   status:"upcoming",  size:0},
+  {id:"hd-upscalers",name:"高清放大包", sym:"4×", cat:"Packages", tag:"照片与画稿放大",         status:"upcoming",  size:41, pack:true},
+  {id:"face-enhance",name:"人脸增强包", sym:"◉", cat:"Packages",  tag:"面向 Aura 的人脸修正",   status:"upcoming",  size:25, pack:true},
+  {id:"memory-pack",name:"语义记忆包",  sym:"◆", cat:"Packages",  tag:"设备端改写感知回忆",     status:"upcoming",  size:44, pack:true},
+];
+const CATS = ["全部","Social","Characters","Creative","Entertainment","Tools","Packages"];
+
+let state = {
+  variant: new URLSearchParams(location.search).get("variant")?.toUpperCase() || "A",
+  firstVisit: true,             // 首访空态引导
+  installed: new Set(),         // 已安装
+  downloading: {},              // id -> progress
+  home: new Set(),              // 已添加到首页
+  cat: "全部",                  // B 网格分类过滤
+  seg: "store",                 // C 分段
+  detail: null,                 // 详情产品 id
+};
+if (!"ABC".includes(state.variant)) state.variant = "A";
+
+const $phone = document.getElementById("phone");
+const $lbl = document.getElementById("lbl");
+const $brain = document.getElementById("brain");
+const NAMES = { A:"A — 杂志流 · 精选+区块", B:"B — 网格 · 分类过滤", C:"C — 列表 · 分段+弹层详情" };
+const CAT_CN = {Social:"社交", Characters:"角色", Creative:"创作", Entertainment:"娱乐", Tools:"工具", Packages:"包"};
+
+function render(){
+  $lbl.textContent = NAMES[state.variant];
+  $brain.textContent = state.firstVisit ? "首访：开启" : "首访：已看过";
+  $brain.classList.toggle("on", !state.firstVisit);
+  if (state.detail) $phone.innerHTML = renderDetail();
+  else $phone.innerHTML = state.variant === "A" ? renderA() : state.variant === "B" ? renderB() : renderC();
+}
+function esc(s){ return s.replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+function h(tag, cls, html){ return `<${tag} class="${cls}">${html}</${tag}>`; }
+
+/* ---------- 头部 ---------- */
+function storeHead(){
+  return `<div class="store-head">
+    <div><div class="eyebrow">FANCY STORE</div><div class="h-title serif">应用商店</div></div>
+    <div class="avatar" data-act="home">R</div>
+  </div>`;
+}
+
+/* ---------- 状态按钮 ---------- */
+function statusBtn(p, big){
+  const cls = big ? "gold-btn" : "plain-btn";
+  let html = "";
+  if (state.downloading[p.id] != null){
+    html = `<span class="${big?"ghost-btn":"plain-btn"}" style="display:inline-flex;align-items:center;gap:6px"><span class="progress-ring"></span>${state.downloading[p.id]}%</span>`;
+  } else if (state.installed.has(p.id)){
+    html = `<span class="plain-btn" data-act="open:${p.id}">打开</span>`;
+  } else if (p.status === "soon"){
+    html = `<span class="disabled-btn">即将开放</span>`;
+  } else if (p.status === "upcoming"){
+    html = `<span class="disabled-btn">即将推出</span>`;
+  } else if (p.pack){
+    html = `<span class="gold-btn" data-act="install:${p.id}">☁ 下载 · ${p.size} MiB</span>`;
+  } else {
+    html = `<span class="gold-btn" data-act="install:${p.id}">获取</span>`;
+  }
+  return html;
+}
+function badgeFor(p){
+  if (state.downloading[p.id] != null) return `<span class="badge dl">下载中 ${state.downloading[p.id]}%</span>`;
+  if (state.installed.has(p.id)) return `<span class="badge inst">已安装</span>`;
+  if (state.home.has(p.id)) return `<span class="badge added">已添加</span>`;
+  if (p.status === "soon") return `<span class="badge soon">即将开放</span>`;
+  if (p.status === "upcoming") return `<span class="badge up">即将推出</span>`;
+  return "";
+}
+
+/* ---------- 空态 ---------- */
+function emptyLib(){
+  if (state.firstVisit){
+    return `<div class="empty">
+      <div style="font-size:30px;margin-bottom:10px">⌂</div>
+      <b style="color:var(--cream)">你的库还是空的</b><br>
+      从商店安装应用或包后，它们会出现在这里。<br><br>
+      <span class="gold-btn" data-act="firstvisit:store">去逛逛商店</span>
+    </div>`;
+  }
+  return `<div class="empty">你安装的应用和包会显示在这里。</div>`;
+}
+
+/* ---------- 变体 A：杂志流 ---------- */
+function renderA(){
+  const featured = PRODUCTS.find(p=>p.status==="available" && !state.installed.has(p.id)) || PRODUCTS[0];
+  const avail = PRODUCTS.filter(p=>p.status==="available");
+  const soon = PRODUCTS.filter(p=>p.status==="soon");
+  const upcoming = PRODUCTS.filter(p=>p.status==="upcoming");
+  return `<div class="screen">
+    <div class="scroll pad">
+      ${storeHead()}
+      <div class="feature-card" data-act="detail:${featured.id}">
+        <span class="f-chip">今日精选</span>
+        <span class="sym">${featured.sym}</span>
+        <span class="f-name">${featured.name}</span>
+        <span class="f-tag">${featured.tag}</span>
+      </div>
+      <div class="section-label">可获取 · ${avail.length}<span class="more" data-act="scroll:avail">全部 ›</span></div>
+      <div class="hscroll">
+        ${avail.map(p=>`<div class="hcard" data-act="detail:${p.id}">
+          <div class="body"><div class="sym-tile">${p.sym}</div><div><div class="n">${p.name}</div><div class="t">${p.tag}</div></div></div>
+          <div class="btn-wrap">${badgeFor(p)}${statusBtn(p)}</div>
+        </div>`).join("")}
+      </div>
+      <div class="section-label">即将开放 · ${soon.length}</div>
+      <div class="hscroll">
+        ${soon.map(p=>`<div class="hcard" data-act="detail:${p.id}" style="opacity:.75">
+          <div class="body"><div class="sym-tile">${p.sym}</div><div><div class="n">${p.name}</div><div class="t">${p.tag}</div></div></div>
+          <div class="btn-wrap">${badgeFor(p)}${statusBtn(p)}</div>
+        </div>`).join("")}
+      </div>
+      <div class="section-label">即将推出 · ${upcoming.length}</div>
+      <div class="hscroll">
+        ${upcoming.map(p=>`<div class="hcard" data-act="detail:${p.id}" style="opacity:.6">
+          <div class="body"><div class="sym-tile">${p.sym}</div><div><div class="n">${p.name}</div><div class="t">${p.tag}</div></div></div>
+          <div class="btn-wrap">${badgeFor(p)}${statusBtn(p)}</div>
+        </div>`).join("")}
+      </div>
+    </div>
+  </div>`;
+}
+
+/* ---------- 变体 B：网格 ---------- */
+function renderB(){
+  const list = PRODUCTS.filter(p => state.cat==="全部" || p.cat===state.cat);
+  return `<div class="screen">
+    <div class="scroll pad">
+      ${storeHead()}
+      <div class="chips">${CATS.map(c=>`<span class="chip ${state.cat===c?'on':''}" data-act="cat:${c}">${c==="全部"?"全部":CAT_CN[c]||c}</span>`).join("")}</div>
+      <div class="grid" style="margin-top:14px">
+        ${list.map(p=>`<div class="gcard" data-act="detail:${p.id}">
+          <div class="body">
+            <div class="sym-tile lg">${p.sym}</div>
+            <div><div class="n">${p.name}</div><div class="t">${p.tag}</div><div class="meta">${CAT_CN[p.cat]||p.cat}${p.size?` · ${p.size} MiB`:""}</div></div>
+            <div class="btn-wrap">${badgeFor(p)}${statusBtn(p)}</div>
+          </div>
+        </div>`).join("")}
+      </div>
+    </div>
+  </div>`;
+}
+
+/* ---------- 变体 C：列表 ---------- */
+function renderC(){
+  const lib = [...state.installed].map(id => PRODUCTS.find(p=>p.id===id)).filter(Boolean);
+  const avail = PRODUCTS.filter(p=>p.status==="available" && !state.installed.has(p.id));
+  const soon = PRODUCTS.filter(p=>p.status==="soon");
+  const upcoming = PRODUCTS.filter(p=>p.status==="upcoming");
+  const row = (p) => `<div class="lcard" data-act="detail:${p.id}">
+    <div class="sym-tile">${p.sym}</div>
+    <div class="body"><div class="n">${p.name} ${badgeFor(p)}</div><div class="t">${p.tag}</div><div class="meta">${CAT_CN[p.cat]||p.cat}${p.size?` · ${p.size} MiB`:""}</div></div>
+    ${statusBtn(p)}
+  </div>`;
+  let body;
+  if (state.seg === "lib"){
+    body = lib.length ? lib.map(row).join("") : emptyLib();
+    if (lib.length){
+      body += `<div class="section-label">已添加到首页 · ${state.home.size}</div>`;
+      body += [...state.home].map(id => {
+        const p = PRODUCTS.find(x=>x.id===id); if (!p) return "";
+        return `<div class="lcard" data-act="detail:${p.id}" style="opacity:.85">
+          <div class="sym-tile">${p.sym}</div>
+          <div class="body"><div class="n">${p.name} ${badgeFor(p)}</div><div class="t">${p.tag}</div></div>
+          <span class="ghost-btn" data-act="rmhome:${p.id}" style="padding:7px 12px;font-size:11px">移除</span>
+        </div>`;
+      }).join("");
+    }
+  } else {
+    body = `<div class="section-label">可获取 · ${avail.length}</div>` + avail.map(row).join("")
+      + `<div class="section-label">即将开放 · ${soon.length}</div>` + soon.map(p=>`<div style="opacity:.75">${row(p)}</div>`).join("")
+      + `<div class="section-label">即将推出 · ${upcoming.length}</div>` + upcoming.map(p=>`<div style="opacity:.6">${row(p)}</div>`).join("");
+  }
+  return `<div class="screen">
+    <div class="scroll pad">
+      ${storeHead()}
+      <div class="seg">
+        <div class="${state.seg==='store'?'on':''}" data-act="seg:store">商店</div>
+        <div class="${state.seg==='lib'?'on':''}" data-act="seg:lib">你的库</div>
+      </div>
+      ${body}
+    </div>
+  </div>`;
+}
+
+/* ---------- 详情（A/B 推入页；C 弹层） ---------- */
+function renderDetail(){
+  const p = PRODUCTS.find(x=>x.id===state.detail);
+  if (!p) { state.detail = null; return render(); }
+  const feats = {
+    y:["角色发帖","嵌套回复","@提及拉起其他角色"],
+    ustagram:["角色照片帖","评论与回复","你的图片指令"],
+    rebbit:["自定义 r/ 社区","强制图片帖","角色讨论"],
+    binder:["原创角色匹配","生成肖像","一键导入角色"],
+    storage:["应用存储浏览","文件导入导出","可选桌面磁贴"],
+    "aura-swap":["设备端处理","双照片工作流","导出到图库"],
+    games:["七款角色驱动游戏","共享 JSON 回复管线","每角色游戏配图"],
+    phone:["免提角色通话","实时与保存转录","设备或已装语音引擎"],
+  }[p.id] || ["即将推出","细节正在打磨","保持期待"];
+  const reqs = [];
+  if (p.size) reqs.push(`需要下载 ${p.size} MiB`);
+  if (p.id === "aura-swap") reqs.push("6 GB 或以上内存");
+  if (p.status === "soon") reqs.push("即将开放 · 暂不可下载");
+  if (p.status === "upcoming") reqs.push("即将推出 · 敬请期待");
+  const actions = `
+    <div class="d-actions">
+      ${statusBtn(p, true)}
+      ${state.installed.has(p.id) && !state.home.has(p.id) && p.status!=="soon" && p.status!=="upcoming"
+        ? `<span class="gold-btn" data-act="addhome:${p.id}">＋ 添加到首页</span>` : ""}
+      ${state.home.has(p.id) ? `<span class="badge added" style="font-size:11px">已添加</span>` : ""}
+      ${state.installed.has(p.id) ? `<span class="ghost-btn" data-act="uninstall:${p.id}">卸载</span>` : ""}
+    </div>`;
+  const inner = `
+    <div class="d-top"><span class="back-link" data-act="closedetail">返回</span><span style="flex:1"></span><span class="chip">${CAT_CN[p.cat]||p.cat}</span></div>
+    <div class="d-hero">
+      <div class="sym-tile lg">${p.sym}</div>
+      <div><div class="d-name serif">${p.name}</div><div class="d-tag">${p.tag}</div>${badgeFor(p)}</div>
+    </div>
+    <div class="d-body">
+      <div class="d-desc">${p.tag}。${p.cat} 分类。${p.size ? `安装大小 ${p.size} MiB。` : "安装即用。"}</div>
+      <div class="section-label" style="margin-top:6px">功能</div>
+      ${feats.map(f=>`<div class="feat-item">${f}</div>`).join("")}
+      ${reqs.length ? `<div class="section-label">要求</div>${reqs.map(r=>`<div class="req-item">${r}</div>`).join("")}` : ""}
+    </div>
+    ${actions}`;
+  if (state.variant === "C"){
+    return `<div class="screen">${renderC()}<div class="sheet"><div class="sheet-handle"></div><div style="overflow-y:auto;flex:1;scrollbar-width:none">${inner.replace('<div class="d-top">','<div class="d-top" style="padding-top:0">')}</div></div></div>`;
+  }
+  return `<div class="screen"><div class="detail">${inner}</div></div>`;
+}
+
+/* ---------- 交互 ---------- */
+$phone.addEventListener("click", e => {
+  const el = e.target.closest("[data-act]");
+  if (!el) return;
+  const [act, arg] = el.dataset.act.split(":");
+  switch (act){
+    case "detail": state.detail = arg; break;
+    case "closedetail": state.detail = null; break;
+    case "install": startDownload(arg); return;
+    case "open": break; // 原型无真实导航
+    case "addhome": state.home.add(arg); break;
+    case "rmhome": state.home.delete(arg); break;
+    case "uninstall": state.installed.delete(arg); state.home.delete(arg); break;
+    case "cat": state.cat = arg; break;
+    case "seg": state.seg = arg; break;
+    case "firstvisit": state.firstVisit = false; state.seg = "store"; break;
+    case "home": break; // 回桌面占位
+    case "scroll": break;
+  }
+  render();
+});
+function startDownload(id){
+  if (state.downloading[id] != null) return;
+  state.downloading[id] = 0;
+  const timer = setInterval(() => {
+    state.downloading[id] += 20;
+    if (state.downloading[id] >= 100){
+      clearInterval(timer);
+      delete state.downloading[id];
+      state.installed.add(id);
+    }
+    render();
+  }, 260);
+  render();
+}
+$brain.addEventListener("click", () => { state.firstVisit = !state.firstVisit; render(); });
+document.getElementById("prev").addEventListener("click", () => cycle(-1));
+document.getElementById("next").addEventListener("click", () => cycle(1));
+function cycle(d){
+  const idx = ["A","B","C"].indexOf(state.variant);
+  state.variant = ["A","B","C"][(idx + d + 3) % 3];
+  history.replaceState(null, "", "?variant=" + state.variant);
+  render();
+}
+window.addEventListener("keydown", e => {
+  const t = e.target.tagName;
+  if (t === "INPUT" || t === "TEXTAREA" || e.target.isContentEditable) return;
+  if (e.key === "ArrowLeft") cycle(-1);
+  if (e.key === "ArrowRight") cycle(1);
+});
+render();
+</script>
+</body>
+</html>
