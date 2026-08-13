@@ -1,18 +1,69 @@
 package io.github.lzyuuu.ailivesaver
 
+import android.net.Uri
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import android.database.sqlite.SQLiteDatabase
 import java.io.File
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class WorldRestoreRecoverySmokeTest {
+    @Test
+    fun exportRestoreRoundtripRestoresAppInstall() {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val zip = File(context.filesDir, "app-install-roundtrip-${System.nanoTime()}.zip")
+        val uri = Uri.fromFile(zip)
+        val now = System.currentTimeMillis()
+        try {
+            val store = WorldStore(context)
+            store.saveAppInstall(
+                PersistedAppInstall("y", InstallStatus.INSTALLED, now, true, 3, "1.0", now),
+            )
+
+            val exported = CountDownLatch(1)
+            var exportResult: Result<Unit>? = null
+            WorldBackup.export(context, store, uri, includeMedia = false) {
+                exportResult = it
+                exported.countDown()
+            }
+            assertTrue("export timed out", exported.await(20, TimeUnit.SECONDS))
+            exportResult!!.getOrThrow()
+            assertTrue(zip.isFile && zip.length() > 0)
+
+            assertTrue(store.deleteAppInstall("y"))
+            assertNull(store.loadAppInstall("y"))
+
+            val restored = CountDownLatch(1)
+            var restoreResult: Result<Unit>? = null
+            WorldBackup.restore(context, store, uri) {
+                restoreResult = it
+                restored.countDown()
+            }
+            assertTrue("restore timed out", restored.await(30, TimeUnit.SECONDS))
+            restoreResult!!.getOrThrow()
+
+            WorldStore(context).use { fresh ->
+                val y = fresh.loadAppInstall("y")
+                assertTrue(y != null)
+                assertEquals(InstallStatus.INSTALLED, y!!.status)
+                assertTrue(y.onHome)
+                assertEquals(3, y.homeOrder)
+            }
+        } finally {
+            zip.delete()
+            WorldStore(context).use { it.deleteAppInstall("y") }
+        }
+    }
+
     @Test
     fun backupSnapshotIncludesAppInstallRows() {
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
