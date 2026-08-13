@@ -7,6 +7,8 @@
 > 当前分支：`codex/prototype-world-entry`
 >
 > 当前提交：发布提交见 `v0.1.0-m110`
+>
+> 进行中（2026-08-13）：分支 `prototype/v450-shell` 落地 Fancy Store 商店形态 T1–T6（#39–#44），提交 `096f495`。商店作为 Dock 入口，目录 17 产品，安装态持久化，入口门控。尚未打新 milestone。
 
 ## 1. 当前交付
 
