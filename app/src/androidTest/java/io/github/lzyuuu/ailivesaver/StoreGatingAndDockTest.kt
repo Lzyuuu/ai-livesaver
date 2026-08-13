@@ -109,6 +109,41 @@ class StoreGatingAndDockTest {
     }
 
     @Test
+    fun addedHomeAppAppearsOnDockAndDisappearsWhenRemoved() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val now = System.currentTimeMillis()
+        WorldStore(context).use { store ->
+            store.writableDatabase.delete("app_install", null, null)
+            store.saveAppInstall(
+                PersistedAppInstall("ustagram", InstallStatus.INSTALLED, now, true, 1, "1.0", now),
+            )
+        }
+        composeRule.activityRule.scenario.recreate()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("system-desktop").assertIsDisplayed()
+        composeRule.onNodeWithTag("desktop-dock-store").assertIsDisplayed()
+        composeRule.onNodeWithTag("desktop-dock-ustagram").assertIsDisplayed()
+        composeRule.onNodeWithTag("desktop-dock-ustagram").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("ustagram-screen", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("ustagram-back", useUnmergedTree = true).performClick()
+        composeRule.waitForIdle()
+        WorldStore(context).use { store ->
+            store.saveAppInstall(
+                PersistedAppInstall("ustagram", InstallStatus.INSTALLED, now, false, 0, "1.0", now),
+            )
+        }
+        composeRule.activityRule.scenario.recreate()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("system-desktop").assertIsDisplayed()
+        composeRule.onNodeWithTag("desktop-dock-store").assertIsDisplayed()
+        assertTrue(
+            composeRule.onAllNodesWithTag("desktop-dock-ustagram", useUnmergedTree = true)
+                .fetchSemanticsNodes().isEmpty(),
+        )
+    }
+
+    @Test
     fun comingSoonGamesIsGatedEvenWhenNotInstalled() {
         // 未预装 Games：从 Entertainment Hub 打开应降级到商店（不可直接进 Games Hub）
         composeRule.onNodeWithTag("desktop-hub-entertainment").performClick()

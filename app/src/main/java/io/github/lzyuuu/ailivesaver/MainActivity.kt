@@ -404,6 +404,12 @@ private fun AiLivesaverApp(
     val storeInstallStatus = remember(worldRevision) {
         storeCatalog.loadInstallStatus(storeProducts)
     }
+    val homeDesktopApps = remember(worldRevision) {
+        worldStore.loadHomeApps().mapNotNull { install ->
+            storeProducts.firstOrNull { it.id == install.appId }
+                ?.let { DesktopApp.fromRoute(it.launchTarget) }
+        }
+    }
 
     fun isAppInstalled(app: DesktopApp): Boolean {
         val productId = storeProducts.firstOrNull { it.launchTarget == app.route }?.id ?: return true
@@ -865,6 +871,7 @@ private fun AiLivesaverApp(
                         },
                         onOpenHub = { hub -> activeHubRoute = hub.route },
                         onOpenApp = { app -> openDesktopApp(app) },
+                        homeApps = homeDesktopApps,
                     )
                     if (activeHub != null) {
                         DesktopHubSheet(

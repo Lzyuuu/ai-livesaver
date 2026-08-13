@@ -80,6 +80,7 @@ internal fun SystemDesktopScreen(
     onOpenRoot: () -> Unit,
     onOpenHub: (DesktopHub) -> Unit,
     onOpenApp: (DesktopApp) -> Unit,
+    homeApps: List<DesktopApp> = emptyList(),
 ) {
     val now = remember { Date() }
     val time = remember(now) {
@@ -234,7 +235,7 @@ internal fun SystemDesktopScreen(
                 .testTag("desktop-dock"),
             horizontalArrangement = Arrangement.SpaceEvenly,
         ) {
-            DesktopDockApps.forEach { app ->
+            DesktopNavigator.composeDock(homeApps).forEach { app ->
                 DockIcon(app = app, onClick = { onOpenApp(app) })
             }
         }

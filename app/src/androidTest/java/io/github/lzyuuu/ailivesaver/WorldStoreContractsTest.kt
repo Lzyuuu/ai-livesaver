@@ -80,6 +80,25 @@ class WorldStoreContractsTest {
     }
 
     @Test
+    fun storeInstallSurvivesReopenAndIsClearedWhenDatabaseDeleted() {
+        WorldStore(context, databaseName).use { store ->
+            store.saveAppInstall(PersistedAppInstall("y", InstallStatus.INSTALLED, 10L, true, 1, "1.0", 11L))
+            assertEquals(1, store.countAppInstalls())
+        }
+        WorldStore(context, databaseName).use { store ->
+            val y = store.loadAppInstall("y")!!
+            assertEquals(InstallStatus.INSTALLED, y.status)
+            assertTrue(y.onHome)
+            assertEquals(1, y.homeOrder)
+        }
+        assertTrue(context.deleteDatabase(databaseName))
+        WorldStore(context, databaseName).use { store ->
+            assertEquals(0, store.countAppInstalls())
+            assertNull(store.loadAppInstall("y"))
+        }
+    }
+
+    @Test
     fun storeInstallStatePersistsHomeOrderAndDelete() {
         WorldStore(context, databaseName).use { store ->
             store.saveAppInstall(PersistedAppInstall("y", InstallStatus.INSTALLED, 10L, true, 2, "1.0", 11L))
