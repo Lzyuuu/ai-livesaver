@@ -1,0 +1,769 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>v4.50 壳层原型 — 4 Tab + Root + Fancy Store（A/B/C 变体）</title>
+<!--
+PROTOTYPE — 丢弃型原型，勿进 main 生产代码。
+问题：4 Tab 壳层（Root 全屏 + Chat/Characters/Gallery/Settings）到底长什么样？
+三种结构变体，?variant=A|B|C|D|E 切换（底栏 ◀ ▶ 或键盘 ← →）：
+  A — 全屏英雄 · 商店为推入页（对齐 v4.50 参考）
+  B — 分区横幅 · 商店为角色页内分段
+  C — 舞台 + 浮动 CTA · 商店为底部弹层
+  D — 首页中枢（B 修正版）· Root 横幅 + 应用图标行 + 商店入口，角色 tab 纯净（v4.50 忠实结构）
+  E — 模拟手机桌面（保留当前形态）· 时钟 + Root 卡 + 商店 App 图标 + 快速入口 + 手机 Dock
+附带：脑状态切换（未连接/已连接）、商店安装/添加到首页内存态。
+-->
+<style>
+:root{
+  --bg1:#070d16; --bg2:#0c1626; --gold:#d4af6a; --gold-dim:rgba(212,175,106,.35);
+  --cream:#f4efe4; --cream-dim:rgba(244,239,228,.72); --navy:#12233c; --navy-mid:#1a2f4a;
+  --line:rgba(212,175,106,.16); --card:rgba(255,255,255,.045); --err:#e08a8a; --ok:#9cc79a;
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{
+  background:#04060b; color:var(--cream);
+  font-family:-apple-system,"PingFang SC","Segoe UI",Roboto,sans-serif;
+  display:flex; align-items:center; justify-content:center; min-height:100vh;
+  background-image:radial-gradient(1200px 800px at 50% -10%, #101c30 0%, #04060b 60%);
+}
+#phone{
+  width:390px; height:844px; position:relative; overflow:hidden; border-radius:34px;
+  border:1px solid rgba(212,175,106,.25); box-shadow:0 30px 80px rgba(0,0,0,.6);
+  background:linear-gradient(160deg,var(--bg1),var(--bg2));
+}
+.serif{font-family:Georgia,"Times New Roman","Noto Serif SC","Songti SC",serif}
+.screen{position:absolute; inset:0; display:flex; flex-direction:column}
+.scroll{overflow-y:auto; flex:1; scrollbar-width:none}
+.scroll::-webkit-scrollbar{display:none}
+.pad{padding:18px 16px}
+
+/* ---------- 通用小件 ---------- */
+.eyebrow{font-size:10px; letter-spacing:.22em; color:var(--gold); text-transform:uppercase; font-weight:600}
+.h-title{font-size:26px; font-weight:700}
+.gold-btn{
+  background:var(--gold); color:#171008; border:none; border-radius:14px;
+  padding:11px 16px; font-weight:700; font-size:14px; display:inline-flex; align-items:center; gap:6px;
+}
+.ghost-btn{
+  background:transparent; color:var(--gold); border:1px solid var(--gold-dim); border-radius:14px;
+  padding:10px 14px; font-weight:600; font-size:13px;
+}
+.plain-btn{
+  background:var(--card); color:var(--cream); border:1px solid var(--line); border-radius:12px;
+  padding:8px 12px; font-size:12px; font-weight:600;
+}
+.disabled-btn{
+  background:rgba(255,255,255,.05); color:rgba(244,239,228,.45); border:1px solid rgba(255,255,255,.08);
+  border-radius:12px; padding:8px 12px; font-size:12px; font-weight:600;
+}
+.chip{
+  font-size:11px; border-radius:999px; padding:4px 10px; font-weight:700; letter-spacing:.06em;
+  border:1px solid var(--line); color:var(--cream-dim); background:rgba(255,255,255,.04);
+}
+.chip.gold{color:var(--gold); border-color:var(--gold-dim)}
+
+/* ---------- Tab 栏 ---------- */
+.tabbar{
+  position:absolute; left:0; right:0; bottom:0; height:74px; z-index:50;
+  display:flex; background:rgba(8,13,22,.88); backdrop-filter:blur(14px);
+  border-top:1px solid rgba(212,175,106,.14); padding-bottom:14px;
+}
+.tab{
+  flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px;
+  color:rgba(244,239,228,.5); font-size:11px; cursor:pointer; user-select:none;
+}
+.tab .ico{font-size:19px; line-height:1}
+.tab.on{color:var(--gold)}
+.tab.on .ico{text-shadow:0 0 14px rgba(212,175,106,.6)}
+
+/* ---------- Hero 三态 ---------- */
+.hero{position:relative; overflow:hidden}
+.hero-bg{
+  position:absolute; inset:0;
+  background:
+    radial-gradient(340px 340px at 50% 34%, rgba(212,175,106,.22) 0%, rgba(212,175,106,0) 62%),
+    radial-gradient(900px 500px at 50% 110%, #16283f 0%, rgba(22,40,63,0) 70%),
+    linear-gradient(170deg,#0a1322 0%,#0d1b2e 60%,#0a1526 100%);
+}
+.hero::after{
+  content:""; position:absolute; inset:0; pointer-events:none;
+  background:linear-gradient(180deg, rgba(4,6,11,.15) 0%, rgba(4,6,11,0) 30%, rgba(4,6,11,.92) 100%);
+}
+.hero-seal{
+  position:absolute; left:50%; top:32%; transform:translate(-50%,-50%);
+  width:150px; height:150px; border-radius:50%; border:1px solid var(--gold-dim);
+  display:flex; align-items:center; justify-content:center;
+}
+.hero-seal .r{font-size:64px; color:var(--gold); font-family:Georgia,serif; opacity:.92}
+.hero-seal::before{
+  content:""; position:absolute; inset:-14px; border-radius:50%;
+  border:1px dashed rgba(212,175,106,.25);
+}
+.hero-info{position:absolute; left:0; right:0; bottom:16px; padding:0 20px}
+.hero-name{font-size:30px; letter-spacing:.12em; font-weight:700}
+.hero-status{font-size:12.5px; color:var(--cream-dim); margin-top:4px; line-height:1.55; max-width:86%}
+.hero-cta{margin-top:12px; display:flex; align-items:center; gap:10px}
+.hero-cta .arr{font-size:22px; color:var(--gold)}
+
+/* ---------- A：全屏英雄 ---------- */
+#va .hero{flex:1; min-height:0}
+#va .hero-seal{top:38%}
+
+/* ---------- B：横幅 ---------- */
+#vb .hero{flex:0 0 auto; height:250px; margin:14px 14px 0; border-radius:22px; border:1px solid var(--line)}
+#vb .hero-seal{top:46%; width:110px; height:110px}
+#vb .hero-seal .r{font-size:46px}
+#vb .hero-name{font-size:22px}
+#vb .hero-info{bottom:12px}
+#vb .content{flex:1; min-height:0}
+
+/* ---------- D：首页中枢（B 修正版） ---------- */
+#vd .hero{flex:0 0 auto; height:170px; margin:14px 14px 10px; border-radius:20px; border:1px solid var(--line)}
+#vd .hero-seal{top:50%; width:82px; height:82px; left:70px}
+#vd .hero-seal .r{font-size:34px}
+#vd .hero-name{font-size:19px}
+#vd .hero-info{bottom:10px; padding:0 14px}
+#vd .hero-info .eyebrow{font-size:9px}
+#vd .hero-status{font-size:11px}
+#vd .hero-cta{margin-top:7px}
+#vd .hero-cta .gold-btn, #vd .hero-cta .ghost-btn{padding:7px 11px; font-size:11.5px}
+#vd .content{flex:1; min-height:0}
+.home-section{font-size:11px; letter-spacing:.18em; color:var(--cream-dim); text-transform:uppercase; margin:12px 0 8px}
+.storewide{
+  flex:0 0 auto; width:58px; display:flex; flex-direction:column; align-items:center; gap:5px; cursor:pointer;
+}
+.storewide .tile{
+  width:50px; height:50px; border-radius:14px; border:1px solid var(--gold-dim);
+  background:linear-gradient(150deg,rgba(212,175,106,.3),rgba(255,255,255,.05));
+  display:flex; align-items:center; justify-content:center; font-size:20px; color:var(--gold);
+}
+.storewide span{font-size:10px; color:var(--gold); text-align:center}
+
+/* ---------- C：舞台 ---------- */
+#vc .hero{flex:1; min-height:0}
+#vc .hero-seal{top:36%}
+#vc .hero-fab{
+  position:absolute; right:18px; bottom:20px; z-index:60;
+  border-radius:999px; padding:12px 18px; font-weight:700; font-size:13px;
+  background:var(--gold); color:#171008; box-shadow:0 8px 24px rgba(212,175,106,.35);
+}
+#vc .dock{
+  position:absolute; left:14px; right:14px; bottom:14px; height:64px; z-index:60;
+  border-radius:22px; background:rgba(10,16,27,.9); backdrop-filter:blur(16px);
+  border:1px solid rgba(212,175,106,.2); display:flex; align-items:stretch; overflow:hidden;
+}
+#vc .dock .tab{padding:6px 0}
+#vc .dock .store-mid{
+  flex:1.15; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px;
+  color:var(--cream-dim); font-size:11px; cursor:pointer;
+  border-left:1px solid rgba(212,175,106,.12); border-right:1px solid rgba(212,175,106,.12);
+}
+#vc .dock .store-mid .ico{font-size:20px; color:var(--gold)}
+
+/* ---------- 页面内容 ---------- */
+.page-head{display:flex; align-items:center; justify-content:space-between; margin-bottom:14px}
+.page-title{font-size:22px; font-weight:700}
+.actions{display:flex; gap:8px; flex-wrap:wrap}
+.approw{display:flex; gap:10px; overflow-x:auto; margin:12px 0; scrollbar-width:none; padding-bottom:4px}
+.approw::-webkit-scrollbar{display:none}
+.appcell{
+  flex:0 0 auto; width:58px; display:flex; flex-direction:column; align-items:center; gap:5px;
+  cursor:pointer;
+}
+.appcell .tile{
+  width:50px; height:50px; border-radius:14px; border:1px solid var(--line);
+  background:linear-gradient(150deg,rgba(212,175,106,.16),rgba(255,255,255,.03));
+  display:flex; align-items:center; justify-content:center; font-size:20px; color:var(--gold);
+}
+.appcell span{font-size:10px; color:var(--cream-dim); text-align:center; max-width:60px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.card{
+  background:var(--card); border:1px solid var(--line); border-radius:18px;
+  padding:14px; display:flex; gap:12px; align-items:center; margin-bottom:10px;
+}
+.card .sym{
+  width:46px; height:46px; border-radius:13px; flex:0 0 auto;
+  background:linear-gradient(150deg,rgba(212,175,106,.2),rgba(255,255,255,.03));
+  border:1px solid var(--line); display:flex; align-items:center; justify-content:center;
+  font-size:20px; color:var(--gold);
+}
+.card .body{flex:1; min-width:0}
+.card .name{font-weight:700; font-size:14.5px}
+.card .sub{font-size:11.5px; color:var(--cream-dim); margin-top:2px; line-height:1.4}
+.card .side{flex:0 0 auto; display:flex; flex-direction:column; align-items:flex-end; gap:6px}
+.badge{font-size:9px; letter-spacing:.14em; font-weight:800; border-radius:6px; padding:3px 7px}
+.badge.added{background:rgba(212,175,106,.18); color:var(--gold)}
+.badge.inst{background:rgba(156,199,154,.16); color:var(--ok)}
+.badge.dl{background:rgba(120,160,220,.16); color:#a9c4ec}
+.badge.soon{background:rgba(224,138,138,.14); color:var(--err)}
+.section-label{font-size:11px; letter-spacing:.18em; color:var(--cream-dim); text-transform:uppercase; margin:16px 0 8px}
+.seg{display:flex; background:rgba(255,255,255,.05); border:1px solid var(--line); border-radius:14px; padding:3px; gap:3px}
+.seg div{
+  flex:1; text-align:center; font-size:12.5px; font-weight:700; padding:8px 4px; border-radius:11px;
+  color:var(--cream-dim); cursor:pointer;
+}
+.seg div.on{background:var(--gold); color:#171008}
+.search{
+  display:flex; align-items:center; gap:8px; background:rgba(255,255,255,.05);
+  border:1px solid var(--line); border-radius:13px; padding:9px 12px; font-size:12.5px; color:rgba(244,239,228,.5);
+}
+.empty{color:var(--cream-dim); font-size:12.5px; text-align:center; padding:34px 10px; line-height:1.7}
+.fab{
+  position:absolute; right:18px; bottom:92px; width:54px; height:54px; border-radius:50%;
+  background:var(--gold); color:#171008; font-size:26px; font-weight:400;
+  display:flex; align-items:center; justify-content:center; box-shadow:0 10px 26px rgba(212,175,106,.35); z-index:55;
+}
+.back-link{font-size:13px; color:var(--gold); cursor:pointer; display:inline-flex; align-items:center; gap:4px}
+.back-link::before{content:"‹"; font-size:20px; line-height:1}
+.sheet{
+  position:absolute; left:0; right:0; bottom:0; top:120px; z-index:70;
+  background:linear-gradient(180deg,#0d1a2c,#091120); border-radius:26px 26px 0 0;
+  border:1px solid rgba(212,175,106,.2); border-bottom:none;
+  display:flex; flex-direction:column; padding:18px 16px 90px; animation:up .28s ease;
+  box-shadow:0 -20px 60px rgba(0,0,0,.55);
+}
+@keyframes up{from{transform:translateY(40px);opacity:0}to{transform:none;opacity:1}}
+.sheet-handle{width:42px; height:4px; border-radius:4px; background:rgba(212,175,106,.35); margin:0 auto 12px}
+
+/* ---------- E：模拟手机桌面（保留当前形态 + 商店 App + 手机 Dock） ---------- */
+#ve .desktop-top{
+  position:absolute; top:26px; left:0; right:0; z-index:5; text-align:center; pointer-events:none;
+}
+#ve .clock{font-size:52px; font-weight:200; letter-spacing:.03em; color:var(--cream); font-variant-numeric:tabular-nums}
+#ve .date{font-size:11px; letter-spacing:.2em; color:var(--cream-dim); margin-top:2px; text-transform:uppercase}
+#ve .desk-hero{flex:1; min-height:0}
+#ve .desk-hero .hero{flex:1}
+#ve .quick-label{font-size:10px; letter-spacing:.2em; color:var(--cream-dim); text-transform:uppercase; margin:12px 16px 8px}
+#ve .quick-row{display:flex; gap:10px; padding:0 16px; margin-bottom:12px}
+#ve .quick-cell{
+  flex:1; border-radius:16px; border:1px solid var(--line); background:var(--card);
+  padding:12px 6px 10px; text-align:center; cursor:pointer;
+}
+#ve .quick-cell .t{font-size:17px; color:var(--gold); margin-bottom:4px}
+#ve .quick-cell .n{font-size:10.5px; color:var(--cream-dim)}
+#ve .dock{
+  position:absolute; left:16px; right:16px; bottom:14px; height:72px; z-index:60;
+  border-radius:24px; background:rgba(10,16,27,.82); backdrop-filter:blur(18px);
+  border:1px solid rgba(212,175,106,.22); display:flex; align-items:stretch; overflow:hidden;
+}
+#ve .dock .tab{padding:8px 0}
+#ve .dock .sep{width:1px; background:rgba(212,175,106,.14); margin:14px 0}
+
+/* ---------- 原型切换条（桌面右侧竖排，不遮挡手机框） ---------- */
+#bar{
+  position:fixed; right:12px; top:50%; transform:translateY(-50%); z-index:999;
+  display:flex; flex-direction:column; align-items:center; gap:10px;
+  background:#0e1520; border:1px solid rgba(212,175,106,.3);
+  border-radius:18px; padding:12px 10px; box-shadow:0 12px 40px rgba(0,0,0,.6);
+  font-size:11px; color:var(--cream); user-select:none; max-width:210px;
+}
+#bar button{
+  background:none; border:1px solid var(--gold-dim); color:var(--gold); border-radius:10px;
+  width:30px; height:30px; cursor:pointer; font-size:14px; line-height:1;
+}
+#bar .lbl{font-weight:700; color:var(--gold); text-align:center; line-height:1.4; max-width:170px}
+#bar .brain{cursor:pointer; border:1px solid var(--gold-dim); border-radius:999px; padding:6px 10px; color:var(--cream-dim); font-size:11px; text-align:center}
+#bar .brain.on{color:var(--gold)}
+@media (max-width:900px){
+  /* 窄屏：条移到顶部横排，手机框整体下移留出空间 */
+  body{padding-top:64px}
+  #bar{
+    right:50%; top:8px; transform:translateX(50%); flex-direction:row; max-width:96%;
+    border-radius:999px; padding:7px 12px; gap:8px;
+  }
+  #bar .lbl{max-width:none; font-size:11px}
+}
+</style>
+</head>
+<body>
+<div id="phone"></div>
+<div id="bar">
+  <button id="prev" title="上一个变体">◀</button>
+  <span class="lbl" id="lbl">E — 模拟手机桌面 · 商店 App + 手机 Dock</span>
+  <button id="next" title="下一个变体">▶</button>
+  <span class="brain" id="brain">脑：未连接</span>
+</div>
+
+<script>
+/* ---------- 产品目录（来自 research/fancy-store-catalog.md） ---------- */
+const PRODUCTS = [
+  {id:"y",        name:"Y",          sym:"Y",  cat:"Social",      tag:"角色时间线",            status:"available", size:0},
+  {id:"ustagram", name:"Ustagram",   sym:"◎",  cat:"Social",      tag:"她们的生活，用图说话",   status:"available", size:0},
+  {id:"rebbit",   name:"Rebbit",     sym:"r/", cat:"Social",      tag:"因你而生的社区",         status:"available", size:0},
+  {id:"binder",   name:"Binder",     sym:"♥︎", cat:"Characters",  tag:"邂逅意想不到的人",       status:"available", size:0},
+  {id:"storage",  name:"存储",       sym:"▰",  cat:"Tools",       tag:"看看 Fancy AI 存了什么", status:"available", size:0},
+  {id:"aura-swap",name:"形象交换",   sym:"◐",  cat:"Creative",    tag:"把一张脸放进新时刻",     status:"available", size:536},
+  {id:"games",    name:"Games",      sym:"♜",  cat:"Entertainment",tag:"七款游戏，各有人格",    status:"soon",      size:0},
+  {id:"phone",    name:"Phone",      sym:"☎︎", cat:"Entertainment",tag:"打给角色",               status:"soon",      size:0},
+  {id:"groups",   name:"Groups",     sym:"⁂",  cat:"Social",      tag:"所有人一个房间",         status:"upcoming",  size:0},
+  {id:"root-creator",name:"Root 造卡", sym:"◇", cat:"Characters", tag:"描述，Root 写卡",        status:"upcoming",  size:0},
+  {id:"aura",     name:"Aura",       sym:"❋",  cat:"Creative",    tag:"完全在设备上创作",       status:"upcoming",  size:0},
+  {id:"root-producer",name:"Root 制作人", sym:"♫", cat:"Creative",tag:"你的想法，Root 的录音棚", status:"upcoming", size:0},
+  {id:"benchmark",name:"Benchmark",  sym:"◈",  cat:"Tools",       tag:"测测你的本地大脑",       status:"upcoming",  size:0},
+  {id:"lorebook", name:"Lorebook",   sym:"▤",  cat:"Tools",       tag:"需要时调取的世界知识",   status:"upcoming",  size:0},
+  {id:"hd-upscalers",name:"高清放大包", sym:"4×", cat:"Packages", tag:"照片与画稿放大",         status:"upcoming",  size:41, pack:true},
+  {id:"face-enhance",name:"人脸增强包", sym:"◉", cat:"Packages",  tag:"面向 Aura 的人脸修正",   status:"upcoming",  size:25, pack:true},
+  {id:"memory-pack",name:"语义记忆包",  sym:"◆", cat:"Packages",  tag:"设备端改写感知回忆",     status:"upcoming",  size:44, pack:true},
+];
+const SHELL_TABS = [
+  {id:"chat", ico:"✦", name:"聊天"},
+  {id:"characters", ico:"◍", name:"角色"},
+  {id:"gallery", ico:"▣", name:"图库"},
+  {id:"settings", ico:"⚙", name:"设置"},
+];
+
+let state = {
+  variant: new URLSearchParams(location.search).get("variant")?.toUpperCase() || "E",
+  tab: "home",                    // E 默认桌面；A/B/C/D 将 home 视为 chat
+  brain: false,
+  installed: new Set(),          // 已安装（模拟下载完成）
+  downloading: {},               // id -> progress
+  home: new Set(["chat","characters","gallery","settings"]), // 添加到首页
+  seg: "chars",                  // B 变体分段
+  sheet: false,                  // C 变体弹层
+  storePage: null,               // A/D/E 变体推入页
+};
+if (!"ABCDE".includes(state.variant)) state.variant = "E";
+
+const $phone = document.getElementById("phone");
+const $lbl = document.getElementById("lbl");
+const $brain = document.getElementById("brain");
+const NAMES = {
+  A: "A — 全屏英雄 · 商店推入",
+  B: "B — 分区横幅 · 角色页内商店",
+  C: "C — 舞台 Dock · 商店弹层",
+  D: "D — 首页中枢 · 商店图标 + 纯净角色页",
+  E: "E — 模拟手机桌面 · 商店 App + 手机 Dock",
+};
+
+/* ---------- 渲染入口 ---------- */
+function render(){
+  $lbl.textContent = NAMES[state.variant];
+  $brain.textContent = state.brain ? "脑：已连接" : "脑：未连接";
+  $brain.classList.toggle("on", state.brain);
+  $phone.innerHTML = state.variant === "A" ? renderA() : state.variant === "B" ? renderB() : state.variant === "D" ? renderD() : state.variant === "E" ? renderE() : renderC();
+}
+function h(tag, cls, html){ return `<${tag} class="${cls}">${html}</${tag}>`; }
+function esc(s){ return s.replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+
+/* ---------- Root 英雄 ---------- */
+function hero(full){
+  const status = state.brain
+    ? "云端 Chat brain 已连接" : "还没有连接 Chat brain";
+  const cta = state.brain
+    ? `<span class="ghost-btn">打开 Messenger</span>`
+    : `<span class="gold-btn">连接 Provider</span>`;
+  const info = `
+    <div class="hero-info">
+      <div class="eyebrow">Fancy OS · 开放入口</div>
+      <div class="hero-name serif">ROOT</div>
+      <div class="hero-status">${status}</div>
+      <div class="hero-cta">${cta}<span class="arr">›</span></div>
+    </div>`;
+  const seal = `<div class="hero-seal"><span class="r">R</span></div>`;
+  return `<div class="hero ${full?'':'bn'}">${seal}<div class="hero-bg"></div>${info}</div>`;
+}
+
+/* ---------- 页头 / Tab 栏 ---------- */
+function tabsBar(){
+  return `<div class="tabbar">` + SHELL_TABS.map(t =>
+    `<div class="tab ${state.tab===t.id?'on':''}" data-act="tab:${t.id}">
+       <span class="ico">${t.ico}</span><span>${t.name}</span>
+     </div>`).join("") + `</div>`;
+}
+
+/* ---------- 商店卡片 ---------- */
+function productCard(p){
+  const st = p.status;
+  let badge = "", side = "";
+  if (state.downloading[p.id] != null){
+    badge = `<span class="badge dl">下载中 ${state.downloading[p.id]}%</span>`;
+    side = `<div class="disabled-btn" style="padding:6px 10px">${state.downloading[p.id]}%</div>`;
+  } else if (state.installed.has(p.id)){
+    badge = `<span class="badge inst">已安装</span>`;
+    side = `<div class="plain-btn" data-act="open:${p.id}">打开</div>
+            <div class="ghost-btn" style="padding:6px 10px;font-size:11px" data-act="addhome:${p.id}">＋ 添加到首页</div>`;
+  } else if (st === "soon"){
+    badge = `<span class="badge soon">即将开放</span>`;
+    side = `<div class="disabled-btn">即将开放</div>`;
+  } else if (st === "upcoming"){
+    badge = `<span class="badge soon">即将推出</span>`;
+    side = `<div class="disabled-btn">即将推出</div>`;
+  } else if (st === "available"){
+    const label = p.pack ? `☁ 下载 · ${p.size} MiB` : `获取`;
+    side = `<div class="gold-btn" style="padding:8px 12px;font-size:12px" data-act="install:${p.id}">${label}</div>`;
+  }
+  if (state.home.has(p.id)) badge = `<span class="badge added">已添加</span>`;
+  return `<div class="card">
+    <div class="sym">${p.sym}</div>
+    <div class="body"><div class="name">${p.name}</div><div class="sub">${p.tag}</div>
+      <div style="margin-top:5px;font-size:10px;color:var(--cream-dim)">${p.cat}${p.size?` · ${p.size} MiB`:""}</div></div>
+    <div class="side">${badge}${side}</div>
+  </div>`;
+}
+
+/* ---------- 已装应用行（角色页顶栏） ---------- */
+function installedRow(){
+  const apps = PRODUCTS.filter(p => state.installed.has(p.id) || state.home.has(p.id));
+  if (!apps.length) return `<div class="empty" style="padding:14px 6px">从 Fancy Store 安装或添加到首页后，应用图标会出现在这里。</div>`;
+  return `<div class="approw">` + apps.map(p =>
+    `<div class="appcell" data-act="open:${p.id}">
+       <div class="tile">${p.sym}</div><span>${p.name}</span>
+     </div>`).join("") + `</div>`;
+}
+
+/* ---------- 角色页 ---------- */
+function charactersPage(){
+  return `<div class="pad" style="padding-bottom:90px">
+    <div class="page-head">
+      <div class="page-title serif">角色</div>
+      <div class="actions">
+        <span class="gold-btn" style="padding:9px 13px" data-act="store">⌂ Fancy Store</span>
+        <span class="ghost-btn" data-act="newchar">新角色</span>
+        <span class="ghost-btn" data-act="import">导入</span>
+      </div>
+    </div>
+    <div class="section-label">已添加的应用</div>
+    ${installedRow()}
+    <div class="section-label">我的角色</div>
+    <div class="card">
+      <div class="sym" style="font-size:26px">R</div>
+      <div class="body">
+        <div class="name">Root Sudo</div>
+        <div class="sub">@root · 机敏、讽刺、优雅、从容、严谨、内敛</div>
+      </div>
+      <div class="side"><span style="font-size:20px;color:var(--gold)">›</span></div>
+    </div>
+    <div class="card" style="opacity:.55">
+      <div class="sym">✦</div>
+      <div class="body"><div class="name">Jett</div><div class="sub">@jett · 夜间电台主理人</div></div>
+      <div class="side"><span style="font-size:20px;color:var(--gold)">›</span></div>
+    </div>
+  </div>`;
+}
+
+/* ---------- 聊天 / 图库 / 设置 ---------- */
+function chatPage(){
+  return `<div class="pad" style="padding-bottom:90px">
+    <div class="page-head">
+      <div><div class="eyebrow">MESSAGES</div><div class="page-title serif">聊天</div></div>
+      <span class="gold-btn" style="padding:9px 13px" data-act="newchat">＋ 新建</span>
+    </div>
+    <div class="card">
+      <div class="sym" style="font-size:26px">R</div>
+      <div class="body"><div class="name">Root Sudo</div><div class="sub">还没有消息 · 0 分钟前</div></div>
+      <div class="side"><span style="font-size:20px;color:var(--gold)">›</span></div>
+    </div>
+    <div class="empty">${state.brain ? "点开 Root，开始你们的第一段对话。" : "先连接 Chat brain，再和 Root 说话。"}</div>
+  </div>`;
+}
+function galleryPage(){
+  return `<div class="pad" style="padding-bottom:90px">
+    <div class="page-head"><div><div class="eyebrow">YOUR CREATIONS</div><div class="page-title serif">图库</div></div></div>
+    <div class="empty">还没有图片<br><br>你创作的图片会出现在这里。</div>
+    <div class="card"><div class="sym">◱</div><div class="body"><div class="name">选择图片</div><div class="sub">从设备导入创作素材</div></div></div>
+    <div class="card"><div class="sym">❋</div><div class="body"><div class="name">用 Local Dream 创作</div><div class="sub">Local Dream 已就绪</div></div></div>
+  </div>`;
+}
+function settingsPage(){
+  const items = [
+    ["通用","自动社交帖 关"],
+    ["模型与引擎","还没有选择模型"],
+    ["云端 LLM 与图像","Custom endpoint · 未选模型"],
+    ["语音与通话","识别、声音与回放"],
+    ["指令","Roleplay"],
+    ["生成","Balanced · temperature 0.80"],
+    ["记忆","自动 · 每 8 条消息"],
+    ["备份与恢复","角色、会话、设置与媒体"],
+    ["开发者与关于","版本 0.1.0 · logging Off"],
+  ];
+  return `<div class="pad" style="padding-bottom:90px">
+    <div class="page-head"><div><div class="eyebrow">SYSTEM</div><div class="page-title serif">设置</div></div></div>
+    ${items.map(i => `<div class="card"><div class="body"><div class="name">${i[0]}</div><div class="sub">${i[1]}</div></div><div class="side"><span style="font-size:20px;color:var(--gold)">›</span></div></div>`).join("")}
+  </div>`;
+}
+
+/* ---------- 商店（A 推入页 / C 弹层共用内容） ---------- */
+function storeContent(tab){
+  const lib = state.installed.size ? [...state.installed].map(id => PRODUCTS.find(p=>p.id===id)) : [];
+  const avail = PRODUCTS.filter(p=>p.status==="available" && !state.installed.has(p.id));
+  const soon = PRODUCTS.filter(p=>p.status!=="available");
+  const head = `<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+      <span class="back-link" data-act="storeback">返回</span>
+      <div style="flex:1">
+        <div class="eyebrow">FANCY STORE</div>
+        <div class="page-title serif">应用商店</div>
+      </div>
+    </div>
+    <div class="search" style="margin-bottom:12px">🔍 搜索 Fancy Store</div>
+    <div class="seg" style="margin-bottom:14px">
+      <div class="${tab==='lib'?'on':''}" data-act="storetab:lib">你的库</div>
+      <div class="${tab==='store'?'on':''}" data-act="storetab:store">商店</div>
+    </div>`;
+  if (tab === "lib"){
+    return head + `<div class="section-label">已安装</div>
+      ${lib.length ? lib.map(productCard).join("") : `<div class="empty">你安装的应用和包会显示在这里。</div>`}
+      <div class="section-label">已添加到首页</div>
+      ${[...state.home].map(id=>{const p=PRODUCTS.find(x=>x.id===id)||SHELL_TABS.find(t=>t.id===id);return p?`<div class="card"><div class="sym">${p.sym||p.ico}</div><div class="body"><div class="name">${p.name}</div></div><div class="side"><span class="ghost-btn" style="padding:6px 10px;font-size:11px" data-act="rmhome:${p.id}">移除</span></div></div>`:""}).join("")}`;
+  }
+  return head + `
+    <div class="section-label">可获取 · ${avail.length}</div>
+    ${avail.map(productCard).join("")}
+    <div class="section-label">即将开放 · 2</div>
+    ${soon.filter(p=>p.status==="soon").map(productCard).join("")}
+    <div class="section-label">即将推出 · ${soon.filter(p=>p.status==="upcoming").length}</div>
+    ${soon.filter(p=>p.status==="upcoming").map(productCard).join("")}`;
+}
+
+/* ---------- 变体 A ---------- */
+function renderA(){
+  let main;
+  if (state.storePage){
+    main = `<div class="scroll pad" style="padding-bottom:90px">${storeContent(state.storePage)}</div>`;
+  } else if (state.tab==="chat") main = `<div class="scroll">${chatPage()}</div>`;
+  else if (state.tab==="characters") main = `<div class="scroll">${charactersPage()}</div>`;
+  else if (state.tab==="gallery") main = `<div class="scroll">${galleryPage()}</div>`;
+  else main = `<div class="scroll">${settingsPage()}</div>`;
+  return `<div class="screen" id="va">
+    <div class="hero" style="flex:1">${hero(true)}</div>
+    ${main}
+    ${tabsBar()}
+  </div>`;
+}
+
+/* ---------- 变体 B ---------- */
+function renderB(){
+  let main;
+  if (state.tab==="chat") main = chatPage();
+  else if (state.tab==="gallery") main = galleryPage();
+  else if (state.tab==="settings") main = settingsPage();
+  else {
+    main = `<div class="pad" style="padding-bottom:90px">
+      <div class="page-head">
+        <div class="page-title serif">角色</div>
+        <div class="actions"><span class="ghost-btn" data-act="newchar">新角色</span><span class="ghost-btn" data-act="import">导入</span></div>
+      </div>
+      <div class="seg" style="margin-bottom:14px">
+        <div class="${state.seg==='chars'?'on':''}" data-act="seg:chars">角色</div>
+        <div class="${state.seg==='apps'?'on':''}" data-act="seg:apps">已装应用</div>
+        <div class="${state.seg==='store'?'on':''}" data-act="seg:store">商店</div>
+      </div>
+      ${state.seg==='chars' ? charactersList() : state.seg==='apps' ? appsList() : storeContent('store')}
+    </div>`;
+  }
+  return `<div class="screen" id="vb">
+    ${hero(false)}
+    <div class="scroll content">${main}</div>
+    ${tabsBar()}
+  </div>`;
+}
+function charactersList(){
+  return `<div class="card"><div class="sym" style="font-size:26px">R</div><div class="body"><div class="name">Root Sudo</div><div class="sub">@root · 机敏、讽刺、优雅、从容、严谨、内敛</div></div><div class="side"><span style="font-size:20px;color:var(--gold)">›</span></div></div>`;
+}
+function appsList(){
+  return `<div class="section-label">已添加到首页</div>${installedRow()}`;
+}
+
+/* ---------- 变体 D（B 修正版：首页中枢） ---------- */
+function renderD(){
+  const homeIcons = () => {
+    const shell = SHELL_TABS.filter(t => state.home.has(t.id));
+    const apps = PRODUCTS.filter(p => state.home.has(p.id) && !["chat","characters","gallery","settings"].includes(p.id));
+    return `<div class="approw">
+      ${shell.map(t => `<div class="appcell" data-act="tab:${t.id}"><div class="tile">${t.ico}</div><span>${t.name}</span></div>`).join("")}
+      <div class="storewide" data-act="store"><div class="tile">⌂</div><span>商店</span></div>
+      ${apps.map(p => `<div class="appcell" data-act="open:${p.id}"><div class="tile">${p.sym}</div><span>${p.name}</span></div>`).join("")}
+    </div>`;
+  };
+  const homeContent = `
+    <div class="pad" style="padding-bottom:90px">
+      <div class="home-section">你的世界 · 快速入口</div>
+      ${homeIcons()}
+      <div class="home-section">今天</div>
+      <div class="card"><div class="sym">R</div><div class="body"><div class="name">Root Sudo</div><div class="sub">${state.brain ? "世界在运转，回到你们的对话。" : "Root 在等你完成大脑配置。"}</div></div><div class="side"><span class="gold-btn" style="padding:8px 12px;font-size:12px" data-act="tab:chat">聊</span></div></div>
+      <div class="card" style="opacity:.7"><div class="sym">◎</div><div class="body"><div class="name">Ustagram</div><div class="sub">${state.installed.has("ustagram") ? "有新动态，去看看吧。" : "还未安装，从商店获取。"}</div></div></div>
+      <div class="card" style="opacity:.7"><div class="sym">✦</div><div class="body"><div class="name">Jett</div><div class="sub">Jett 今晚的电台开场白已经写好了。</div></div></div>
+    </div>`;
+  const storeMain = `<div class="scroll pad" style="padding-bottom:90px">${storeContent(state.storePage || "store")}</div>`;
+  let main;
+  if (state.storePage) main = storeMain;
+  else if (state.tab === "chat") main = `<div class="scroll">${chatPage()}</div>`;
+  else if (state.tab === "characters") main = `<div class="scroll">${charactersPage()}</div>`;
+  else if (state.tab === "gallery") main = `<div class="scroll">${galleryPage()}</div>`;
+  else if (state.tab === "settings") main = `<div class="scroll">${settingsPage()}</div>`;
+  else main = `<div class="scroll">${homeContent}</div>`;
+  return `<div class="screen" id="vd">
+    ${state.tab === "home" ? heroD() : ""}
+    <div class="scroll content">${main}</div>
+    ${tabsBar()}
+  </div>`;
+}
+function heroD(){
+  const status = state.brain ? "云端 Chat brain 已连接" : "还没有连接 Chat brain";
+  const cta = state.brain
+    ? `<span class="ghost-btn">打开 Messenger</span>`
+    : `<span class="gold-btn">连接 Provider</span>`;
+  return `<div class="hero" style="flex:0 0 auto; height:170px; margin:14px 14px 10px; border-radius:20px; border:1px solid var(--line)">
+    <div class="hero-bg"></div>
+    <div class="hero-seal"><span class="r">R</span></div>
+    <div class="hero-info">
+      <div class="eyebrow">Fancy OS · 开放入口</div>
+      <div class="hero-name serif">ROOT</div>
+      <div class="hero-status">${status}</div>
+      <div class="hero-cta">${cta}<span class="arr">›</span></div>
+    </div>
+  </div>`;
+}
+
+function backHomeBar(){
+  return `<div style="padding:10px 16px 0"><span class="back-link" data-act="home">‹ 返回桌面</span></div>`;
+}
+/* ---------- 变体 E（模拟手机桌面：保留当前形态 + 商店 App + Dock） ---------- */
+function renderE(){
+  const now = new Date();
+  const hh = String(now.getHours()).padStart(2,"0");
+  const mm = String(now.getMinutes()).padStart(2,"0");
+  const dateStr = now.toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"}).toUpperCase();
+  const dockApps = [
+    ...SHELL_TABS.filter(t => state.home.has(t.id)),
+    {id:"store", ico:"⌂", name:"商店", sym:"⌂"},
+    ...PRODUCTS.filter(p => state.home.has(p.id) && !["chat","characters","gallery","settings"].includes(p.id)),
+  ].slice(0,5);
+  const quickRow = `
+    <div class="quick-label">快速入口</div>
+    <div class="quick-row">
+      <div class="quick-cell" data-act="open:ustagram"><div class="t">◎</div><div class="n">Ustagram</div></div>
+      <div class="quick-cell" data-act="open:rebbit"><div class="t">r/</div><div class="n">Rebbit</div></div>
+      <div class="quick-cell" data-act="open:y"><div class="t">Y</div><div class="n">Y</div></div>
+      <div class="quick-cell" data-act="open:binder"><div class="t">♥︎</div><div class="n">Binder</div></div>
+    </div>`;
+  const sub = (inner) => `<div style="display:flex;flex-direction:column;flex:1;min-height:0">${backHomeBar()}<div class="scroll">${inner}</div></div>`;
+  let main;
+  if (state.storePage){
+    main = sub(`<div class="pad" style="padding-bottom:100px">${storeContent(state.storePage)}</div>`);
+  } else if (state.tab === "characters"){
+    main = sub(charactersPage());
+  } else if (state.tab === "gallery"){
+    main = sub(galleryPage());
+  } else if (state.tab === "settings"){
+    main = sub(settingsPage());
+  } else if (state.tab === "chat"){
+    main = sub(chatPage());
+  } else {
+    const status = state.brain ? "云端 Chat brain 已连接" : "还没有连接 Chat brain";
+    const cta = state.brain
+      ? `<span class="ghost-btn">打开 Messenger</span>`
+      : `<span class="gold-btn">连接 Provider</span>`;
+    main = `
+      <div class="desktop-top">
+        <div class="clock">${hh}:${mm}</div>
+        <div class="date">${dateStr}</div>
+      </div>
+      <div class="desk-hero">
+        <div class="hero">
+          <div class="hero-bg"></div>
+          <div class="hero-seal"><span class="r">R</span></div>
+          <div class="hero-info">
+            <div class="eyebrow">Fancy OS · 开放入口</div>
+            <div class="hero-name serif">ROOT</div>
+            <div class="hero-status">${status}</div>
+            <div class="hero-cta">${cta}<span class="arr">›</span></div>
+          </div>
+        </div>
+      </div>
+      ${quickRow}`;
+  }
+  const dock = `<div class="dock">
+    ${dockApps.map((a,i) => {
+      const act = a.id === "store" ? "store" : (SHELL_TABS.some(t=>t.id===a.id) ? `tab:${a.id}` : `open:${a.id}`);
+      const mid = a.id === "store" || (SHELL_TABS.some(t=>t.id===a.id) && a.id!=="home");
+      return `${i>0 && (a.id==="store"||a.id==="settings") ? `<div class="sep"></div>`:""}
+        <div class="tab ${state.tab===a.id?'on':''}" data-act="${act}"><span class="ico">${a.sym||a.ico}</span><span>${a.name}</span></div>`;
+    }).join("")}
+  </div>`;
+  return `<div class="screen" id="ve">
+    ${main}
+    ${dock}
+  </div>`;
+}
+
+/* ---------- 变体 C ---------- */
+function renderC(){
+  let main;
+  if (state.tab==="chat") main = `<div class="scroll">${chatPage()}</div>`;
+  else if (state.tab==="gallery") main = `<div class="scroll">${galleryPage()}</div>`;
+  else if (state.tab==="settings") main = `<div class="scroll">${settingsPage()}</div>`;
+  else main = `<div class="scroll">${charactersPage()}</div>`;
+  const dock = `<div class="dock">
+    ${SHELL_TABS.map(t => `<div class="tab ${state.tab===t.id?'on':''}" data-act="tab:${t.id}"><span class="ico">${t.ico}</span><span>${t.name}</span></div>`).join("")}
+    <div class="store-mid" data-act="store"><span class="ico">⌂</span><span>商店</span></div>
+  </div>`;
+  const sheet = state.sheet ? `<div class="sheet">${storeContent("store")}</div>` : "";
+  return `<div class="screen" id="vc">
+    <div class="hero" style="flex:1">${hero(true)}<span class="hero-fab" data-act="store">⌂ 商店</span></div>
+    ${main}
+    ${dock}
+    ${sheet}
+  </div>`;
+}
+
+/* ---------- 交互 ---------- */
+$phone.addEventListener("click", e => {
+  const el = e.target.closest("[data-act]");
+  if (!el) return;
+  const [act, arg] = el.dataset.act.split(":");
+  switch (act){
+    case "home":
+      state.tab = "home"; state.storePage = null; state.sheet = false;
+      break;
+    case "tab":
+      if (state.variant === "D" && arg === "home") { state.tab = "home"; state.storePage = null; }
+      else { state.tab = arg; state.storePage = null; state.sheet = false; }
+      break;
+    case "store": state.storePage = "store"; state.sheet = true; state.seg = "store"; break;
+    case "storeback": state.storePage = null; state.sheet = false; break;
+    case "storetab": state.storePage = arg; break;
+    case "seg": state.seg = arg; break;
+    case "install": startDownload(arg); return;
+    case "open": break; // 原型：无真实导航
+    case "addhome": state.home.add(arg); break;
+    case "rmhome": state.home.delete(arg); break;
+    case "newchar": case "import": case "newchat": break; // 原型占位
+  }
+  render();
+});
+function startDownload(id){
+  if (state.downloading[id] != null) return;
+  state.downloading[id] = 0;
+  const timer = setInterval(() => {
+    state.downloading[id] += 20;
+    if (state.downloading[id] >= 100){
+      clearInterval(timer);
+      delete state.downloading[id];
+      state.installed.add(id);
+    }
+    render();
+  }, 260);
+  render();
+}
+$brain.addEventListener("click", () => { state.brain = !state.brain; render(); });
+document.getElementById("prev").addEventListener("click", () => cycle(-1));
+document.getElementById("next").addEventListener("click", () => cycle(1));
+function cycle(d){
+  const idx = ["A","B","C","D","E"].indexOf(state.variant);
+  state.variant = ["A","B","C","D","E"][(idx + d + 5) % 5];
+  history.replaceState(null, "", "?variant=" + state.variant);
+  render();
+}
+window.addEventListener("keydown", e => {
+  const t = e.target.tagName;
+  if (t === "INPUT" || t === "TEXTAREA" || e.target.isContentEditable) return;
+  if (e.key === "ArrowLeft") cycle(-1);
+  if (e.key === "ArrowRight") cycle(1);
+});
+render();
+</script>
+</body>
+</html>
