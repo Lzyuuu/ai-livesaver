@@ -1,21 +1,19 @@
 # AI Livesaver 开发进展报告与后续计划
 
-> 更新日期：2026-07-29
+> 更新日期：2026-08-14
 >
-> 当前版本：`0.1.0-m110`
+> 当前版本：`0.1.0-m112`
 >
-> 当前分支：`codex/prototype-world-entry`
+> 当前分支：`prototype/v450-shell`
 >
-> 当前提交：发布提交见 `v0.1.0-m110`
->
-> 进行中（2026-08-13）：分支 `prototype/v450-shell` 落地 Fancy Store 商店形态 T1–T6（#39–#44），提交 `096f495`。商店作为 Dock 入口，目录 17 产品，安装态持久化，入口门控。尚未打新 milestone。
+> 当前提交：发布提交见 `v0.1.0-m112`
 
 ## 1. 当前交付
 
-- GitHub Release：[AI Livesaver 0.1.0-m110](https://github.com/Lzyuuu/ai-livesaver/releases/tag/v0.1.0-m110)
-- APK：[app-release.apk](https://github.com/Lzyuuu/ai-livesaver/releases/download/v0.1.0-m110/app-release.apk)
-- APK SHA-256：`4e0f40010f16e0c8f845266c0ce7da78206782f1d59b48f7b4c8e961c0227d82`
-- 签名证书：与 m109 相同的 Android Debug 测试证书，可覆盖安装 m109；正式发布前必须替换为正式发布 keystore。
+- GitHub Release：[AI Livesaver 0.1.0-m112](https://github.com/Lzyuuu/ai-livesaver/releases/tag/v0.1.0-m112)
+- APK：[app-release.apk](https://github.com/Lzyuuu/ai-livesaver/releases/download/v0.1.0-m112/app-release.apk)
+- APK SHA-256：`e50a647c6d9b8fbb60cfcf5b855fb49bb6478415ed8aedd5f958c0146c2293dd`
+- 签名证书：Android Debug 测试证书，可覆盖安装 m111；正式发布前必须替换为正式发布 keystore。
 - 规格与进度跟踪：[GitHub Issue #1](https://github.com/Lzyuuu/ai-livesaver/issues/1)
 
 `m110` 已完成模拟器验证、UI 交互验收和 GitHub 预发布，并已使用与 m109 相同的测试证书生成可安装 Release。
