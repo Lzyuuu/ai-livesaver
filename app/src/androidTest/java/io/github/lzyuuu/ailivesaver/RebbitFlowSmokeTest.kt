@@ -48,7 +48,7 @@ class RebbitFlowSmokeTest {
             // by earlier suite runs (the "None" experiment below disables everything).
             store.setRebbitSubredditEnabled("general", true)
         }
-        seedStoreInstallForSmoke(context, setOf("rebbit"))
+        seedInstallOnHomeForSmoke(context, listOf("rebbit"))
         composeRule.activityRule.scenario.recreate()
         composeRule.waitForIdle()
     }
@@ -71,9 +71,7 @@ class RebbitFlowSmokeTest {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val postBody = "Rebbit compose smoke ${System.nanoTime()}"
 
-        composeRule.onNodeWithTag("desktop-hub-social_hub").performClick()
-        composeRule.waitForIdle()
-        composeRule.onNodeWithTag("hub-app-rebbit").performClick()
+        composeRule.onNodeWithTag("desktop-grid-rebbit").performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("rebbit-screen").assertIsDisplayed()
 

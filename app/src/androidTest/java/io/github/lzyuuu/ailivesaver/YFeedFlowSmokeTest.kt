@@ -53,6 +53,7 @@ class YFeedFlowSmokeTest {
             ),
         )
         writeWelcomeGuideCompleted(context, true)
+        seedInstallOnHomeForSmoke(context, listOf("y"))
         WorldStore(context).use { store ->
             DesktopSeed.ensureDesktopWorld(
                 store = store,
@@ -65,6 +66,7 @@ class YFeedFlowSmokeTest {
                 else store.deleteAiPost(post.id)
             }
         }
+        seedInstallOnHomeForSmoke(context, listOf("y"))
         composeRule.activityRule.scenario.recreate()
         composeRule.waitForIdle()
     }
@@ -78,9 +80,7 @@ class YFeedFlowSmokeTest {
 
     @Test
     fun opensYComposePostsNestedRepliesGenerateAndReturns() {
-        composeRule.onNodeWithTag("desktop-hub-social_hub").performClick()
-        composeRule.waitForIdle()
-        composeRule.onNodeWithTag("hub-app-y").performClick()
+        composeRule.onNodeWithTag("desktop-grid-y").performClick()
         composeRule.waitForIdle()
 
         composeRule.onNodeWithTag("y-screen").assertIsDisplayed()

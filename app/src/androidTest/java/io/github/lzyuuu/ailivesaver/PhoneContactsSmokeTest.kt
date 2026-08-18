@@ -30,15 +30,14 @@ class PhoneContactsSmokeTest {
             DesktopSeed.ensureDesktopWorld(store, "焰宇", "smoke", context)
             rootId = store.characters().first { it.name == "Root" }.id
         }
-        seedStoreInstallForSmoke(context, setOf("phone"))
+        seedInstallOnHomeForSmoke(context, listOf("phone"))
         composeRule.activityRule.scenario.recreate()
         composeRule.waitForIdle()
     }
 
     @Test
     fun phoneContactDialsIntoMatchingMessengerConversation() {
-        composeRule.onNodeWithTag("desktop-hub-social_hub").performClick()
-        composeRule.onNodeWithTag("hub-app-phone").performClick()
+        openDesktopAppFromGrid(composeRule, "phone")
         composeRule.waitForIdle()
 
         composeRule.onNodeWithText("Phone", useUnmergedTree = true).assertIsDisplayed()

@@ -48,7 +48,7 @@ class UstagramFlowSmokeTest {
         previousWorldPreferences = preferences.all.toMap()
         preferences.edit().putBoolean("enabled", false).commit()
         seedDesktopShellForSmoke(context)
-        seedStoreInstallForSmoke(context, setOf("ustagram"))
+        seedInstallOnHomeForSmoke(context, listOf("ustagram"))
         clearMomentPostsForSmoke(context)
         composeRule.activityRule.scenario.recreate()
         composeRule.waitForIdle()
@@ -84,9 +84,7 @@ class UstagramFlowSmokeTest {
                 .toSet()
         }
 
-        composeRule.onNodeWithTag("desktop-hub-social_hub").performClick()
-        composeRule.waitForIdle()
-        composeRule.onNodeWithTag("hub-app-ustagram").performClick()
+        composeRule.onNodeWithTag("desktop-grid-ustagram").performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("ustagram-screen", useUnmergedTree = true).assertIsDisplayed()
 

@@ -190,4 +190,50 @@ object DesktopNavigator {
         val extras = homeApps.filter { it !in DesktopDockApps }
         return DesktopDockApps + extras
     }
+
+    /**
+     * 首页应用网格：Characters 固定首位，其后为 on_home 商店 App（按 home_order）。
+     */
+    internal fun composeHomeGrid(
+        homeInstalls: List<PersistedAppInstall>,
+        products: List<StoreProduct>,
+    ): List<DesktopHomeGridEntry> {
+        val productById = products.associateBy { it.id }
+        val homeEntries = homeInstalls
+            .filter { it.onHome }
+            .sortedBy { it.homeOrder }
+            .mapNotNull { install ->
+                val product = productById[install.appId] ?: return@mapNotNull null
+                val app = DesktopApp.fromRoute(product.launchTarget) ?: return@mapNotNull null
+                if (app == DesktopApp.Characters) return@mapNotNull null
+                DesktopHomeGridEntry(
+                    app = app,
+                    label = product.name,
+                    symbol = product.symbol,
+                    productId = install.appId,
+                )
+            }
+        return listOf(
+            DesktopHomeGridEntry(
+                app = DesktopApp.Characters,
+                label = DesktopApp.Characters.label,
+                symbol = null,
+                productId = null,
+            ),
+        ) + homeEntries
+    }
+}
+
+/** 系统桌面首页网格单元：内置 Characters 或已添加到首页的商店 App。 */
+data class DesktopHomeGridEntry(
+    val app: DesktopApp,
+    val label: String,
+    val symbol: String?,
+    /** 商店 product id；仅已添加到首页的商店 App 有值，用于长按管理。 */
+    val productId: String? = null,
+) {
+    val testTag: String = "desktop-grid-${app.route}"
+
+    /** 商店安装且已添加到首页的网格项才支持长按菜单。 */
+    val supportsLongPressMenu: Boolean get() = productId != null
 }

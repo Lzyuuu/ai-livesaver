@@ -1,11 +1,13 @@
 package io.github.lzyuuu.ailivesaver
 
 import androidx.activity.ComponentActivity
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,6 +22,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -34,6 +40,10 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
@@ -80,7 +90,10 @@ internal fun SystemDesktopScreen(
     onOpenRoot: () -> Unit,
     onOpenHub: (DesktopHub) -> Unit,
     onOpenApp: (DesktopApp) -> Unit,
+    onRemoveFromHome: (String) -> Unit = {},
+    onUninstallHomeApp: (String) -> Unit = {},
     homeApps: List<DesktopApp> = emptyList(),
+    homeGridApps: List<DesktopHomeGridEntry> = emptyList(),
 ) {
     val now = remember { Date() }
     val time = remember(now) {
@@ -89,6 +102,8 @@ internal fun SystemDesktopScreen(
     val date = remember(now) {
         SimpleDateFormat("EEEE, MMMM d", Locale.US).format(now).uppercase(Locale.US)
     }
+
+    val dockBottomPadding = 88.dp + contentPadding.calculateBottomPadding()
 
     Box(
         modifier = Modifier
@@ -101,125 +116,126 @@ internal fun SystemDesktopScreen(
             .padding(contentPadding)
             .testTag("system-desktop"),
     ) {
-        Column(
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(4),
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 14.dp),
+                .fillMaxSize()
+                .testTag("desktop-app-grid"),
+            contentPadding = PaddingValues(
+                start = 14.dp,
+                end = 14.dp,
+                top = 44.dp,
+                bottom = dockBottomPadding,
+            ),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            Spacer(modifier = Modifier.height(44.dp))
-            Text(
-                time,
-                color = FancyCream,
-                fontFamily = FontFamily.Serif,
-                fontSize = 78.sp,
-                fontWeight = FontWeight.Normal,
-                modifier = Modifier.align(Alignment.CenterHorizontally),
-            )
-            Text(
-                date,
-                color = Color(0xFFB9BFCA),
-                fontSize = 11.sp,
-                letterSpacing = 1.8.sp,
-                modifier = Modifier.align(Alignment.CenterHorizontally),
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Row(
-                modifier = Modifier.align(Alignment.CenterHorizontally),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(6.dp)
-                        .clip(CircleShape)
-                        .background(Color(0xFF1BE8C0)),
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    "FANCY OS · 开放入口",
-                    color = FancyGold,
-                    fontSize = 10.sp,
-                    letterSpacing = .8.sp,
-                )
-            }
-            Spacer(modifier = Modifier.height(48.dp))
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(18.dp))
-                    .border(1.dp, FancyGold.copy(alpha = 0.55f), RoundedCornerShape(18.dp))
-                    .background(
-                        Brush.horizontalGradient(
-                            listOf(Color(0xFF20201B), Color(0xFF151715)),
-                        ),
-                    )
-                    .clickable(onClick = onOpenRoot)
-                    .padding(horizontal = 14.dp, vertical = 16.dp)
-                    .testTag("desktop-root-card"),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                RootPortrait(
-                    appearance = rootAppearance,
-                    modifier = Modifier
-                        .size(52.dp)
-                        .clip(CircleShape)
-                        .border(1.dp, Color(0xFF2D7C78), CircleShape),
-                )
-                Spacer(modifier = Modifier.width(14.dp))
-                Column(modifier = Modifier.weight(1f)) {
+            item(span = { GridItemSpan(4) }) {
+                Column(modifier = Modifier.fillMaxWidth()) {
                     Text(
-                        rootName,
+                        time,
                         color = FancyCream,
                         fontFamily = FontFamily.Serif,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 21.sp,
+                        fontSize = 78.sp,
+                        fontWeight = FontWeight.Normal,
+                        modifier = Modifier.align(Alignment.CenterHorizontally),
                     )
                     Text(
-                        rootStatus,
-                        color = Color(0xFFBEC2CB),
-                        fontSize = 12.sp,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
+                        date,
+                        color = Color(0xFFB9BFCA),
+                        fontSize = 11.sp,
+                        letterSpacing = 1.8.sp,
+                        modifier = Modifier.align(Alignment.CenterHorizontally),
                     )
-                    Spacer(modifier = Modifier.height(3.dp))
-                    Text(rootActionLabel, color = FancyGold, fontWeight = FontWeight.SemiBold)
-                }
-                Box(
-                    modifier = Modifier
-                        .size(width = 28.dp, height = 22.dp)
-                        .clip(RoundedCornerShape(11.dp))
-                        .background(Color(0xFF2B2A20)),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(
-                        Icons.AutoMirrored.Filled.ArrowForward,
-                        contentDescription = null,
-                        tint = FancyGold,
-                        modifier = Modifier.size(15.dp),
-                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier.align(Alignment.CenterHorizontally),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(6.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFF1BE8C0)),
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            "FANCY OS · 开放入口",
+                            color = FancyGold,
+                            fontSize = 10.sp,
+                            letterSpacing = .8.sp,
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(48.dp))
                 }
             }
 
-            Spacer(modifier = Modifier.height(18.dp))
-            Text(
-                "快速入口",
-                color = Color(0xFFADB4C2),
-                fontSize = 12.sp,
-                fontWeight = FontWeight.SemiBold,
-                letterSpacing = 1.sp,
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                DesktopHub.entries.forEach { hub ->
-                    HubFolder(
-                        hub = hub,
-                        onClick = { onOpenHub(hub) },
-                        modifier = Modifier.weight(1f),
+            item(span = { GridItemSpan(4) }) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(18.dp))
+                        .border(1.dp, FancyGold.copy(alpha = 0.55f), RoundedCornerShape(18.dp))
+                        .background(
+                            Brush.horizontalGradient(
+                                listOf(Color(0xFF20201B), Color(0xFF151715)),
+                            ),
+                        )
+                        .clickable(onClick = onOpenRoot)
+                        .padding(horizontal = 14.dp, vertical = 16.dp)
+                        .testTag("desktop-root-card"),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    RootPortrait(
+                        appearance = rootAppearance,
+                        modifier = Modifier
+                            .size(52.dp)
+                            .clip(CircleShape)
+                            .border(1.dp, Color(0xFF2D7C78), CircleShape),
                     )
+                    Spacer(modifier = Modifier.width(14.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            rootName,
+                            color = FancyCream,
+                            fontFamily = FontFamily.Serif,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 21.sp,
+                        )
+                        Text(
+                            rootStatus,
+                            color = Color(0xFFBEC2CB),
+                            fontSize = 12.sp,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Spacer(modifier = Modifier.height(3.dp))
+                        Text(rootActionLabel, color = FancyGold, fontWeight = FontWeight.SemiBold)
+                    }
+                    Box(
+                        modifier = Modifier
+                            .size(width = 28.dp, height = 22.dp)
+                            .clip(RoundedCornerShape(11.dp))
+                            .background(Color(0xFF2B2A20)),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowForward,
+                            contentDescription = null,
+                            tint = FancyGold,
+                            modifier = Modifier.size(15.dp),
+                        )
+                    }
                 }
+            }
+
+            items(homeGridApps, key = { it.app.route }) { entry ->
+                DesktopGridTile(
+                    entry = entry,
+                    onClick = { onOpenApp(entry.app) },
+                    onRemoveFromHome = onRemoveFromHome,
+                    onUninstallHomeApp = onUninstallHomeApp,
+                )
             }
         }
 
@@ -238,6 +254,139 @@ internal fun SystemDesktopScreen(
             DesktopNavigator.composeDock(homeApps).forEach { app ->
                 DockIcon(app = app, onClick = { onOpenApp(app) })
             }
+        }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun DesktopGridTile(
+    entry: DesktopHomeGridEntry,
+    onClick: () -> Unit,
+    onRemoveFromHome: (String) -> Unit,
+    onUninstallHomeApp: (String) -> Unit,
+) {
+    var menuOpen by remember { mutableStateOf(false) }
+    var showUninstallConfirm by remember { mutableStateOf(false) }
+    val productId = entry.productId
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(
+                if (entry.supportsLongPressMenu && productId != null) {
+                    Modifier.combinedClickable(
+                        onClick = onClick,
+                        onLongClick = { menuOpen = true },
+                    )
+                } else {
+                    Modifier.clickable(onClick = onClick)
+                },
+            )
+            .testTag(entry.testTag),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Box {
+            DesktopGridIcon(entry = entry)
+            if (entry.supportsLongPressMenu && productId != null) {
+                DropdownMenu(
+                    expanded = menuOpen,
+                    onDismissRequest = { menuOpen = false },
+                    modifier = Modifier.testTag("desktop-grid-menu-${entry.app.route}"),
+                ) {
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.desktop_grid_menu_open)) },
+                        onClick = {
+                            menuOpen = false
+                            onClick()
+                        },
+                        modifier = Modifier.testTag("desktop-grid-menu-open-${entry.app.route}"),
+                    )
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.desktop_grid_menu_remove_from_home)) },
+                        onClick = {
+                            menuOpen = false
+                            onRemoveFromHome(productId)
+                        },
+                        modifier = Modifier.testTag("desktop-grid-menu-remove-${entry.app.route}"),
+                    )
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.desktop_grid_menu_uninstall)) },
+                        onClick = {
+                            menuOpen = false
+                            showUninstallConfirm = true
+                        },
+                        modifier = Modifier.testTag("desktop-grid-menu-uninstall-${entry.app.route}"),
+                    )
+                }
+            }
+        }
+        Spacer(modifier = Modifier.height(6.dp))
+        Text(
+            entry.label,
+            color = FancyCream,
+            fontSize = 11.sp,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            textAlign = TextAlign.Center,
+            lineHeight = 13.sp,
+        )
+    }
+
+    if (showUninstallConfirm && productId != null) {
+        AlertDialog(
+            onDismissRequest = { showUninstallConfirm = false },
+            title = { Text(stringResource(R.string.desktop_grid_uninstall_title, entry.label)) },
+            text = { Text(stringResource(R.string.desktop_grid_uninstall_message, entry.label)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showUninstallConfirm = false
+                        onUninstallHomeApp(productId)
+                    },
+                    modifier = Modifier.testTag("desktop-grid-uninstall-confirm-${entry.app.route}"),
+                ) {
+                    Text(stringResource(R.string.desktop_grid_menu_uninstall))
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { showUninstallConfirm = false },
+                    modifier = Modifier.testTag("desktop-grid-uninstall-cancel-${entry.app.route}"),
+                ) {
+                    Text(stringResource(R.string.cancel))
+                }
+            },
+            modifier = Modifier.testTag("desktop-grid-uninstall-dialog-${entry.app.route}"),
+        )
+    }
+}
+
+@Composable
+private fun DesktopGridIcon(entry: DesktopHomeGridEntry) {
+    Box(
+        modifier = Modifier
+            .size(58.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .border(1.dp, Color.White.copy(alpha = .16f), RoundedCornerShape(16.dp))
+            .background(Color(0xFF292B2E)),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (entry.symbol.isNullOrBlank()) {
+            Icon(
+                Icons.Default.Person,
+                contentDescription = entry.label,
+                tint = FancyCream,
+                modifier = Modifier.size(26.dp),
+            )
+        } else {
+            Text(
+                entry.symbol,
+                color = FancyGold,
+                fontSize = 24.sp,
+                fontWeight = FontWeight.SemiBold,
+                textAlign = TextAlign.Center,
+            )
         }
     }
 }
@@ -409,11 +558,30 @@ internal fun DesktopHubSheet(
 }
 
 @Composable
-internal fun DesktopBackBar(onBack: () -> Unit, title: String) {
+internal fun DesktopBackBar(
+    onBack: () -> Unit,
+    title: String,
+    useThemeColors: Boolean = false,
+) {
+    val backgroundColor = if (useThemeColors) {
+        MaterialTheme.colorScheme.surfaceContainerHigh
+    } else {
+        FancyNavy
+    }
+    val accentColor = if (useThemeColors) {
+        MaterialTheme.colorScheme.primary
+    } else {
+        FancyGold
+    }
+    val titleColor = if (useThemeColors) {
+        MaterialTheme.colorScheme.onSurface
+    } else {
+        FancyCream
+    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(FancyNavy)
+            .background(backgroundColor)
             .statusBarsPadding()
             .padding(horizontal = 4.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -422,11 +590,11 @@ internal fun DesktopBackBar(onBack: () -> Unit, title: String) {
             onClick = onBack,
             modifier = Modifier.testTag("desktop-back-bar"),
         ) {
-            Text(stringResource(R.string.desktop_back_to_home), color = FancyGold)
+            Text(stringResource(R.string.desktop_back_to_home), color = accentColor)
         }
         Text(
             title,
-            color = FancyCream,
+            color = titleColor,
             fontFamily = FontFamily.Serif,
             fontWeight = FontWeight.Bold,
         )

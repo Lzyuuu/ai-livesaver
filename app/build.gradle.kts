@@ -18,7 +18,7 @@ android {
             abiFilters += "arm64-v8a"
         }
 
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        testInstrumentationRunner = "io.github.lzyuuu.ailivesaver.InstrumentationTestRunner"
     }
 
     buildTypes {

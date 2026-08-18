@@ -26,14 +26,14 @@ class BinderFlowSmokeTest {
             DesktopSeed.ensureDesktopWorld(store, "焰宇", "smoke", context)
         }
         seedStoreInstallForSmoke(context, setOf("binder"))
+        seedInstallOnHomeForSmoke(context, listOf("binder"))
         composeRule.activityRule.scenario.recreate()
         composeRule.waitForIdle()
     }
 
     @Test
     fun binderRejectsBlankThenBuildsMatchAndOpensMessenger() {
-        composeRule.onNodeWithTag("desktop-hub-social_hub").performClick()
-        composeRule.onNodeWithTag("hub-app-binder").performClick()
+        composeRule.onNodeWithTag("desktop-grid-binder").performClick()
         composeRule.onNodeWithText("Binder", useUnmergedTree = true).assertIsDisplayed()
         composeRule.onNodeWithTag("binder-field-relationship").performTextInput("长期陪伴")
         composeRule.onNodeWithTag("binder-next").performClick()

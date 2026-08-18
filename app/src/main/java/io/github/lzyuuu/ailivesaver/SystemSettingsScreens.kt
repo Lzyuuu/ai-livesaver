@@ -89,7 +89,9 @@ internal fun StorageScreen(
     val appBytes = context.filesDir.walkTopDown().filter { it.isFile }.sumOf { it.length() }
     val freeBytes = StatFs(context.filesDir.path).availableBytes
     LazyColumn(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier
+            .fillMaxSize()
+            .testTag("storage-settings-screen"),
         contentPadding = PaddingValues(
             start = 20.dp,
             top = contentPadding.calculateTopPadding() + 12.dp,

@@ -7,7 +7,9 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToNode
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.assertTrue
@@ -42,11 +44,12 @@ class StoreGatingAndDockTest {
     }
 
     @Test
-    fun uninstalledAppIsGatedToStoreFromHub() {
-        // 未预装 Ustagram：从 Social Hub 打开应降级到商店
-        composeRule.onNodeWithTag("desktop-hub-social_hub").performClick()
+    fun uninstalledAppIsGatedToStoreFromGrid() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        seedHomeGridForSmoke(context, listOf("ustagram"), installed = false)
+        composeRule.activityRule.scenario.recreate()
         composeRule.waitForIdle()
-        composeRule.onNodeWithTag("hub-app-ustagram").performClick()
+        composeRule.onNodeWithTag("desktop-grid-ustagram").performClick()
         composeRule.waitForIdle()
         // 商店屏出现而非 Ustagram 屏
         composeRule.onNodeWithTag("store-seg-store").assertIsDisplayed()
@@ -58,14 +61,13 @@ class StoreGatingAndDockTest {
     }
 
     @Test
-    fun installedAppOpensNormallyFromHub() {
+    fun installedAppOpensNormallyFromGrid() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         seedStoreInstallForSmoke(context, setOf("ustagram"))
+        seedHomeDesktopAppsForSmoke(context, setOf("ustagram"))
         composeRule.activityRule.scenario.recreate()
         composeRule.waitForIdle()
-        composeRule.onNodeWithTag("desktop-hub-social_hub").performClick()
-        composeRule.waitForIdle()
-        composeRule.onNodeWithTag("hub-app-ustagram").performClick()
+        composeRule.onNodeWithTag("desktop-grid-ustagram").performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("ustagram-screen", useUnmergedTree = true).assertIsDisplayed()
     }
@@ -145,12 +147,18 @@ class StoreGatingAndDockTest {
 
     @Test
     fun comingSoonGamesIsGatedEvenWhenNotInstalled() {
-        // 未预装 Games：从 Entertainment Hub 打开应降级到商店（不可直接进 Games Hub）
-        composeRule.onNodeWithTag("desktop-hub-entertainment").performClick()
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        WorldStore(context).use { store ->
+            store.writableDatabase.delete("app_install", null, null)
+        }
+        composeRule.activityRule.scenario.recreate()
         composeRule.waitForIdle()
-        composeRule.onNodeWithTag("hub-app-games").performClick()
+        composeRule.onNodeWithTag("desktop-dock-store").performClick()
         composeRule.waitForIdle()
-        composeRule.onNodeWithTag("store-seg-store").assertIsDisplayed()
+        composeRule.onNodeWithTag("store-list").performScrollToNode(hasTestTag("store-row-games"))
+        composeRule.onNodeWithTag("store-row-games").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("store-detail-coming-soon").assertIsDisplayed()
         assertTrue(
             composeRule.onAllNodesWithTag("games-hub", useUnmergedTree = true)
                 .fetchSemanticsNodes().isEmpty(),

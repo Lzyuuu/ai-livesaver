@@ -32,4 +32,30 @@ class SettingsNavigationTest {
         )
         assertTrue(result.size > 1)
     }
+
+    @Test
+    fun imageGenerationEntriesRouteToDistinctDestinations() {
+        assertEquals(SettingsDestination.LOCAL_DREAM, resolveSettingsDestination("dream"))
+        assertEquals(SettingsDestination.IMAGING, resolveSettingsDestination("imaging"))
+        assertEquals(
+            R.string.settings_entry_imaging,
+            settingsDestinationTitleRes(SettingsDestination.IMAGING),
+        )
+        assertEquals(
+            R.string.local_dream_settings,
+            settingsDestinationTitleRes(SettingsDestination.LOCAL_DREAM),
+        )
+    }
+
+    @Test
+    fun appearanceAndAppShareThemeSummary() {
+        assertEquals(
+            R.string.appearance_settings_summary,
+            settingsDestinationSummaryRes(SettingsDestination.APPEARANCE),
+        )
+        assertEquals(
+            R.string.appearance_settings_summary,
+            settingsDestinationSummaryRes(SettingsDestination.APP),
+        )
+    }
 }

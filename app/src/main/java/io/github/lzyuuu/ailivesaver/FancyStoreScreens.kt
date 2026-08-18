@@ -216,7 +216,7 @@ internal fun FancyStoreScreen(
                                 downloading = false,
                                 onRowClick = { detailId = p.id },
                                 onAction = {
-                                    catalog.setOnHome(p.id, false)
+                                    catalog.removeFromHome(p.id)
                                     onChanged()
                                     refreshInstalls()
                                 },
@@ -374,7 +374,7 @@ internal fun FancyStoreScreen(
                             }
                             OutlinedButton(
                                 onClick = {
-                                    store.deleteAppInstall(id)
+                                    catalog.uninstallApp(id)
                                     onChanged()
                                     refreshInstalls()
                                     detailId = null
@@ -405,6 +405,13 @@ internal fun FancyStoreScreen(
                                 color = FancyCream.copy(alpha = .45f),
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier.testTag(
+                                    if (product.availability == StoreAvailability.COMING_SOON) {
+                                        "store-detail-coming-soon"
+                                    } else {
+                                        "store-detail-upcoming"
+                                    },
+                                ),
                             )
                         }
                     }
@@ -620,20 +627,43 @@ internal class StoreRepository(private val context: android.content.Context) {
     }
 
     fun setOnHome(appId: String, onHome: Boolean) {
+        if (onHome) {
+            addToHome(appId)
+        } else {
+            removeFromHome(appId)
+        }
+    }
+
+    fun addToHome(appId: String) {
         WorldStore(context).use { store ->
-            val existing = store.loadAppInstall(appId)
-            val nextOrder = if (onHome) (store.loadHomeApps().maxOfOrNull { it.homeOrder } ?: 0) + 1 else 0
+            val existing = store.loadAppInstall(appId) ?: return
+            val nextOrder = (store.loadHomeApps().maxOfOrNull { it.homeOrder } ?: 0) + 1
             store.saveAppInstall(
-                PersistedAppInstall(
-                    appId = appId,
-                    status = existing?.status ?: InstallStatus.NOT_INSTALLED,
-                    installedAt = existing?.installedAt,
-                    onHome = onHome,
+                existing.copy(
+                    onHome = true,
                     homeOrder = nextOrder,
-                    catalogVersion = existing?.catalogVersion ?: "1.0",
                     updatedAt = System.currentTimeMillis(),
                 ),
             )
+        }
+    }
+
+    fun removeFromHome(appId: String) {
+        WorldStore(context).use { store ->
+            val existing = store.loadAppInstall(appId) ?: return
+            store.saveAppInstall(
+                existing.copy(
+                    onHome = false,
+                    homeOrder = 0,
+                    updatedAt = System.currentTimeMillis(),
+                ),
+            )
+        }
+    }
+
+    fun uninstallApp(appId: String) {
+        WorldStore(context).use { store ->
+            store.deleteAppInstall(appId)
         }
     }
 

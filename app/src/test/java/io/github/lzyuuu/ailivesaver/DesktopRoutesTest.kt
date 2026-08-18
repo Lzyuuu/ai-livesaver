@@ -26,6 +26,94 @@ class DesktopRoutesTest {
     }
 
     @Test
+    fun `composeHomeGrid keeps characters first and orders on_home apps by home_order`() {
+        val products = listOf(
+            StoreProduct(
+                id = "y",
+                name = "Y",
+                symbol = "Y",
+                tagline = "t",
+                description = "d",
+                category = "Social",
+                launchTarget = "y",
+                kind = "app",
+                builtIn = true,
+                version = "1.0",
+                features = emptyList(),
+                requirements = emptyList(),
+                requiredDownloadBytes = 0L,
+                featured = false,
+                availability = StoreAvailability.AVAILABLE,
+            ),
+            StoreProduct(
+                id = "ustagram",
+                name = "Ustagram",
+                symbol = "◎",
+                tagline = "t",
+                description = "d",
+                category = "Social",
+                launchTarget = "ustagram",
+                kind = "app",
+                builtIn = true,
+                version = "1.0",
+                features = emptyList(),
+                requirements = emptyList(),
+                requiredDownloadBytes = 0L,
+                featured = false,
+                availability = StoreAvailability.AVAILABLE,
+            ),
+        )
+        val installs = listOf(
+            PersistedAppInstall("ustagram", InstallStatus.INSTALLED, 20L, true, 2, "1.0", 1L),
+            PersistedAppInstall("y", InstallStatus.INSTALLED, 10L, true, 1, "1.0", 1L),
+        )
+        val grid = DesktopNavigator.composeHomeGrid(installs, products)
+        assertEquals(listOf("characters", "y", "ustagram"), grid.map { it.app.route })
+        assertEquals("Characters", grid[0].label)
+        assertEquals(null, grid[0].symbol)
+        assertEquals("Y", grid[1].label)
+        assertEquals("Y", grid[1].symbol)
+        assertEquals("Ustagram", grid[2].label)
+        assertEquals("◎", grid[2].symbol)
+        assertEquals("desktop-grid-characters", grid[0].testTag)
+        assertEquals("desktop-grid-y", grid[1].testTag)
+        assertEquals(null, grid[0].productId)
+        assertFalse(grid[0].supportsLongPressMenu)
+        assertEquals("y", grid[1].productId)
+        assertTrue(grid[1].supportsLongPressMenu)
+    }
+
+    @Test
+    fun `composeHomeGrid omits non home and unknown catalog apps`() {
+        val products = listOf(
+            StoreProduct(
+                id = "rebbit",
+                name = "Rebbit",
+                symbol = "r/",
+                tagline = "t",
+                description = "d",
+                category = "Social",
+                launchTarget = "rebbit",
+                kind = "app",
+                builtIn = true,
+                version = "1.0",
+                features = emptyList(),
+                requirements = emptyList(),
+                requiredDownloadBytes = 0L,
+                featured = false,
+                availability = StoreAvailability.AVAILABLE,
+            ),
+        )
+        val installs = listOf(
+            PersistedAppInstall("rebbit", InstallStatus.INSTALLED, 1L, false, 0, "1.0", 1L),
+            PersistedAppInstall("missing", InstallStatus.INSTALLED, 2L, true, 1, "1.0", 1L),
+        )
+        val grid = DesktopNavigator.composeHomeGrid(installs, products)
+        assertEquals(1, grid.size)
+        assertEquals(DesktopApp.Characters, grid[0].app)
+    }
+
+    @Test
     fun `store gating opens shell apps always and gates catalog apps by install state`() {
         // 壳层内置能力始终可达
         assertTrue(DesktopNavigator.isOpenable(DesktopApp.Store, installed = false))

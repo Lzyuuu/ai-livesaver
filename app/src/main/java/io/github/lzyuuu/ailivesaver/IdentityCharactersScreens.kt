@@ -25,6 +25,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import java.io.File
@@ -87,7 +88,10 @@ internal fun IdentityScreen(
         }
     }
 
-    SettingsList(contentPadding) {
+    SettingsList(
+        contentPadding = contentPadding,
+        modifier = Modifier.testTag("identity-screen"),
+    ) {
         item {
             ScreenHeading(onBack, R.string.user_identity, R.string.user_identity_summary)
         }
@@ -166,10 +170,11 @@ internal fun IdentityScreen(
 @Composable
 private fun SettingsList(
     contentPadding: PaddingValues,
+    modifier: Modifier = Modifier,
     content: androidx.compose.foundation.lazy.LazyListScope.() -> Unit,
 ) {
     LazyColumn(
-        modifier = Modifier.fillMaxSize(),
+        modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(
             start = 20.dp,
             top = contentPadding.calculateTopPadding() + 12.dp,

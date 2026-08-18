@@ -64,9 +64,7 @@ class CharactersImportPersistenceSmokeTest {
 
     @Test
     fun opensCharactersFromSocialHub() {
-        composeRule.onNodeWithTag("desktop-hub-social_hub").performClick()
-        composeRule.waitForIdle()
-        composeRule.onNodeWithTag("hub-app-characters").performClick()
+        composeRule.onNodeWithTag("desktop-grid-characters").performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("characters-app").assertIsDisplayed()
         composeRule.onNodeWithText("Characters", useUnmergedTree = true).assertIsDisplayed()
@@ -140,9 +138,7 @@ class CharactersImportPersistenceSmokeTest {
 
         composeRule.activityRule.scenario.recreate()
         composeRule.waitForIdle()
-        composeRule.onNodeWithTag("desktop-hub-social_hub").performClick()
-        composeRule.waitForIdle()
-        composeRule.onNodeWithTag("hub-app-characters").performClick()
+        composeRule.onNodeWithTag("desktop-grid-characters").performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("characters-app").assertIsDisplayed()
         composeRule.onNodeWithText("SmokeXml", useUnmergedTree = true).assertIsDisplayed()
@@ -170,9 +166,7 @@ class CharactersImportPersistenceSmokeTest {
 
     @Test
     fun newCharacterPersistsAfterEditorSave() {
-        composeRule.onNodeWithTag("desktop-hub-social_hub").performClick()
-        composeRule.waitForIdle()
-        composeRule.onNodeWithTag("hub-app-characters").performClick()
+        composeRule.onNodeWithTag("desktop-grid-characters").performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("characters-new").performClick()
         composeRule.waitForIdle()
@@ -214,9 +208,7 @@ class CharactersImportPersistenceSmokeTest {
                 .fetchSemanticsNodes()
                 .isNotEmpty()
         if (!onCharacters) {
-            composeRule.onNodeWithTag("desktop-hub-social_hub").performClick()
-            composeRule.waitForIdle()
-            composeRule.onNodeWithTag("hub-app-characters").performClick()
+            composeRule.onNodeWithTag("desktop-grid-characters").performClick()
             composeRule.waitForIdle()
         } else if (
             composeRule.onAllNodesWithTag("character-editor").fetchSemanticsNodes().isNotEmpty()

@@ -39,8 +39,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -125,8 +129,7 @@ internal const val VOICE_ENABLED_KEY = "voice_enabled"
 internal const val WELCOME_GUIDE_COMPLETED_KEY = "welcome_guide_completed"
 internal const val OPEN_DESKTOP_APP_EXTRA = "open_desktop_app"
 internal const val ROOT_APPEARANCE_KEY = "root_appearance_id"
-private const val THEME_MODE_KEY = "theme_mode"
-private const val DYNAMIC_COLOR_KEY = "dynamic_color"
+
 
 internal fun readWelcomeGuideCompleted(context: android.content.Context): Boolean =
     context.getSharedPreferences(APP_PREFERENCES, android.content.Context.MODE_PRIVATE)
@@ -143,38 +146,6 @@ internal fun writeRootAppearance(context: android.content.Context, appearanceId:
     context.getSharedPreferences(APP_PREFERENCES, android.content.Context.MODE_PRIVATE)
         .edit()
         .putString(ROOT_APPEARANCE_KEY, appearanceId)
-        .apply()
-}
-
-private enum class ThemeMode {
-    System,
-    Light,
-    Dark,
-}
-
-private fun readThemeMode(context: android.content.Context): ThemeMode =
-    runCatching {
-        ThemeMode.valueOf(
-            context.getSharedPreferences(APP_PREFERENCES, android.content.Context.MODE_PRIVATE)
-                .getString(THEME_MODE_KEY, ThemeMode.System.name) ?: ThemeMode.System.name,
-        )
-    }.getOrDefault(ThemeMode.System)
-
-private fun writeThemeMode(context: android.content.Context, mode: ThemeMode) {
-    context.getSharedPreferences(APP_PREFERENCES, android.content.Context.MODE_PRIVATE)
-        .edit()
-        .putString(THEME_MODE_KEY, mode.name)
-        .apply()
-}
-
-private fun readDynamicColor(context: android.content.Context): Boolean =
-    context.getSharedPreferences(APP_PREFERENCES, android.content.Context.MODE_PRIVATE)
-        .getBoolean(DYNAMIC_COLOR_KEY, false)
-
-private fun writeDynamicColor(context: android.content.Context, enabled: Boolean) {
-    context.getSharedPreferences(APP_PREFERENCES, android.content.Context.MODE_PRIVATE)
-        .edit()
-        .putBoolean(DYNAMIC_COLOR_KEY, enabled)
         .apply()
 }
 
@@ -292,51 +263,12 @@ private fun AiLivesaverTheme(
     content: @Composable () -> Unit,
 ) {
     val context = LocalContext.current
-    val dark = when (themeMode) {
-        ThemeMode.System -> isSystemInDarkTheme()
-        ThemeMode.Light -> false
-        ThemeMode.Dark -> true
-    }
-    val scheme: ColorScheme = if (dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-        if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-    } else if (dark) {
-        // Fancy OS：深蓝 / 金色主皮肤（ADR-0061）
-        darkColorScheme(
-            primary = FancyGold,
-            onPrimary = FancyInk,
-            primaryContainer = Color(0xFF3A2F16),
-            onPrimaryContainer = FancyCream,
-            secondary = Color(0xFF9BB0D8),
-            secondaryContainer = FancyNavyMid,
-            onSecondaryContainer = FancyCream,
-            background = FancyInk,
-            surface = FancyNavy,
-            surfaceVariant = Color(0xFF1F2738),
-            onSurface = FancyCream,
-            onSurfaceVariant = FancyCream.copy(alpha = 0.72f),
-            surfaceContainerLowest = Color(0xFF05070D),
-            surfaceContainerLow = Color(0xFF0E1422),
-            surfaceContainer = FancyNavyMid,
-            surfaceContainerHigh = Color(0xFF1C2436),
-            surfaceContainerHighest = Color(0xFF252E42),
-            outline = FancyGoldDim,
-            outlineVariant = Color(0xFF333B4F),
-        )
-    } else {
-        lightColorScheme(
-            primary = Color(0xFF5C6F00),
-            onPrimary = Color.White,
-            primaryContainer = Color(0xFFE2F5A4),
-            onPrimaryContainer = Color(0xFF2C3905),
-            secondary = Color(0xFF4F609E),
-            secondaryContainer = Color(0xFFE7EAf5),
-            onSecondaryContainer = Color(0xFF26376F),
-            background = Color(0xFFFAFBF3),
-            surface = Color(0xFFFFFCF5),
-            surfaceVariant = Color(0xFFEDEFE4),
-            onSurfaceVariant = Color(0xFF5A5D52),
-        )
-    }
+    val scheme = buildAiLivesaverColorScheme(
+        context = context,
+        themeMode = themeMode,
+        dynamicColor = dynamicColor,
+        systemDark = isSystemInDarkTheme(),
+    )
     MaterialTheme(
         colorScheme = scheme,
         shapes = Shapes(
@@ -376,7 +308,9 @@ private fun AiLivesaverApp(
     var showWorldSettings by rememberSaveable { mutableStateOf(false) }
     var showWorldKnowledge by rememberSaveable { mutableStateOf(false) }
     var showWorldChronicle by rememberSaveable { mutableStateOf(false) }
-    var showLocalDream by rememberSaveable { mutableStateOf(false) }
+    var showImageGeneration by rememberSaveable { mutableStateOf(false) }
+    var showImagingStudio by rememberSaveable { mutableStateOf(false) }
+    var showSettingsAppearance by rememberSaveable { mutableStateOf(false) }
     var showDiagnostics by rememberSaveable { mutableStateOf(false) }
     var showPrivacy by rememberSaveable { mutableStateOf(false) }
     var showBackups by rememberSaveable { mutableStateOf(false) }
@@ -399,16 +333,23 @@ private fun AiLivesaverApp(
     val homePresentation = homeRuntimePresentation(homeState)
     val activeDesktopApp = DesktopApp.fromRoute(desktopRouteKey)
     val activeHub = DesktopHub.fromRoute(activeHubRoute)
-    val storeCatalog = remember(worldRevision) { StoreRepository(context) }
+    val storeCatalog = remember { StoreRepository(context) }
     val storeProducts = remember(worldRevision) { storeCatalog.loadProducts() }
     val storeInstallStatus = remember(worldRevision) {
         storeCatalog.loadInstallStatus(storeProducts)
     }
-    val homeDesktopApps = remember(worldRevision) {
-        worldStore.loadHomeApps().mapNotNull { install ->
+    val homeInstalls = remember(worldRevision) { worldStore.loadHomeApps() }
+    val homeDesktopApps = remember(worldRevision, homeInstalls, storeProducts) {
+        homeInstalls.mapNotNull { install ->
             storeProducts.firstOrNull { it.id == install.appId }
                 ?.let { DesktopApp.fromRoute(it.launchTarget) }
         }
+    }
+    val homeGridApps = remember(worldRevision, homeInstalls, storeProducts) {
+        DesktopNavigator.composeHomeGrid(
+            homeInstalls = homeInstalls,
+            products = storeProducts,
+        )
     }
 
     fun isAppInstalled(app: DesktopApp): Boolean {
@@ -550,9 +491,9 @@ private fun AiLivesaverApp(
     }
 
     val settingsOpen = showUpdates || showProviders || showWorldSettings || showWorldKnowledge ||
-        showWorldChronicle || showLocalDream ||
+        showWorldChronicle || showImageGeneration || showImagingStudio || showSettingsAppearance ||
         showDiagnostics || showPrivacy || showBackups || showIdentity || showCharacters ||
-            showVoiceCalls || showStorage || showWelcomeGuide
+        showVoiceCalls || showStorage || showWelcomeGuide
 
     BackHandler(enabled = settingsOpen || activeDesktopApp != null || activeHub != null || activeGameId != null) {
         when {
@@ -563,7 +504,9 @@ private fun AiLivesaverApp(
                 showWorldSettings = false
                 showWorldKnowledge = false
                 showWorldChronicle = false
-                showLocalDream = false
+                showImageGeneration = false
+                showImagingStudio = false
+                showSettingsAppearance = false
                 showDiagnostics = false
                 showPrivacy = false
                 showBackups = false
@@ -581,7 +524,7 @@ private fun AiLivesaverApp(
     }
 
     Scaffold(
-        containerColor = FancyInk,
+        containerColor = MaterialTheme.colorScheme.background,
         bottomBar = {},
     ) { padding ->
         if (showWelcomeGuide) {
@@ -640,16 +583,30 @@ private fun AiLivesaverApp(
                     openWorldEvent(event)
                 },
             )
-        } else if (showLocalDream) {
+        } else if (showImageGeneration) {
             LocalDreamSettingsScreen(
                 contentPadding = padding,
                 store = worldStore,
                 revision = worldRevision,
                 onBack = {
-                    showLocalDream = false
+                    showImageGeneration = false
                     worldRevision++
                 },
                 onChanged = { worldRevision++ },
+            )
+        } else if (showImagingStudio) {
+            ImagingStudioScreen(
+                contentPadding = padding,
+                onBack = { showImagingStudio = false },
+            )
+        } else if (showSettingsAppearance) {
+            SettingsAppearanceScreen(
+                contentPadding = padding,
+                themeMode = themeMode,
+                dynamicColor = dynamicColor,
+                onThemeModeChanged = onThemeModeChanged,
+                onDynamicColorChanged = onDynamicColorChanged,
+                onBack = { showSettingsAppearance = false },
             )
         } else if (showDiagnostics) {
             DiagnosticsScreen(
@@ -815,8 +772,12 @@ private fun AiLivesaverApp(
                     onChanged = { worldRevision++ },
                     onOpenMessenger = ::openMessenger,
                 )
-                DesktopApp.Settings -> Column(Modifier.fillMaxSize()) {
-                    DesktopBackBar(onBack = { goDesktopHome() }, title = "Settings")
+                DesktopApp.Settings -> Column(
+                    Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.background),
+                ) {
+                    DesktopBackBar(onBack = { goDesktopHome() }, title = stringResource(R.string.settings_title))
                     MeScreen(
                         contentPadding = PaddingValues(bottom = padding.calculateBottomPadding()),
                         identity = identity,
@@ -832,7 +793,9 @@ private fun AiLivesaverApp(
                         onOpenProviders = { showProviders = true },
                         onOpenWorldSettings = { showWorldSettings = true },
                         onOpenWorldKnowledge = { showWorldKnowledge = true },
-                        onOpenLocalDream = { showLocalDream = true },
+                        onOpenLocalDream = { showImageGeneration = true },
+                        onOpenImagingStudio = { showImagingStudio = true },
+                        onOpenAppearance = { showSettingsAppearance = true },
                         onOpenDiagnostics = { showDiagnostics = true },
                         onOpenPrivacy = { showPrivacy = true },
                         onOpenBackups = { showBackups = true },
@@ -871,7 +834,16 @@ private fun AiLivesaverApp(
                         },
                         onOpenHub = { hub -> activeHubRoute = hub.route },
                         onOpenApp = { app -> openDesktopApp(app) },
+                        onRemoveFromHome = { appId ->
+                            storeCatalog.removeFromHome(appId)
+                            worldRevision++
+                        },
+                        onUninstallHomeApp = { appId ->
+                            storeCatalog.uninstallApp(appId)
+                            worldRevision++
+                        },
                         homeApps = homeDesktopApps,
+                        homeGridApps = homeGridApps,
                     )
                     if (activeHub != null) {
                         DesktopHubSheet(
@@ -1544,6 +1516,94 @@ internal fun ScreenBackButton(onBack: () -> Unit) {
 }
 
 @Composable
+private fun SettingsAppearanceScreen(
+    contentPadding: PaddingValues,
+    themeMode: ThemeMode,
+    dynamicColor: Boolean,
+    onThemeModeChanged: (ThemeMode) -> Unit,
+    onDynamicColorChanged: (Boolean) -> Unit,
+    onBack: () -> Unit,
+) {
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxSize()
+            .testTag("settings-appearance-screen"),
+        contentPadding = PaddingValues(
+            start = 20.dp,
+            top = contentPadding.calculateTopPadding() + 12.dp,
+            end = 20.dp,
+            bottom = contentPadding.calculateBottomPadding() + 24.dp,
+        ),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        item {
+            ScreenBackButton(onBack)
+            Text(
+                stringResource(R.string.appearance_settings),
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(
+                stringResource(R.string.appearance_settings_summary),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        item {
+            Card(
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                ),
+            ) {
+                Column(
+                    modifier = Modifier.padding(18.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        ThemeMode.entries.forEach { option ->
+                            FilterChip(
+                                selected = themeMode == option,
+                                onClick = { onThemeModeChanged(option) },
+                                modifier = Modifier.testTag(
+                                    when (option) {
+                                        ThemeMode.System -> "settings-theme-system"
+                                        ThemeMode.Light -> "settings-theme-light"
+                                        ThemeMode.Dark -> "settings-theme-dark"
+                                    },
+                                ),
+                                label = {
+                                    Text(
+                                        stringResource(
+                                            when (option) {
+                                                ThemeMode.System -> R.string.theme_system
+                                                ThemeMode.Light -> R.string.theme_light
+                                                ThemeMode.Dark -> R.string.theme_dark
+                                            },
+                                        ),
+                                    )
+                                },
+                            )
+                        }
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                            FilterChip(
+                                selected = dynamicColor,
+                                onClick = { onDynamicColorChanged(!dynamicColor) },
+                                modifier = Modifier.testTag("settings-theme-dynamic"),
+                                label = { Text(stringResource(R.string.theme_dynamic_color)) },
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun MeScreen(
     contentPadding: PaddingValues,
     identity: UserIdentity,
@@ -1560,6 +1620,8 @@ private fun MeScreen(
     onOpenWorldSettings: () -> Unit,
     onOpenWorldKnowledge: () -> Unit,
     onOpenLocalDream: () -> Unit,
+    onOpenImagingStudio: () -> Unit,
+    onOpenAppearance: () -> Unit,
     onOpenDiagnostics: () -> Unit,
     onOpenPrivacy: () -> Unit,
     onOpenBackups: () -> Unit,
@@ -1591,22 +1653,24 @@ private fun MeScreen(
             SettingsDestination.PROVIDER -> onOpenProviders()
             SettingsDestination.CHAT_BRAIN -> onOpenProviders()
             SettingsDestination.VOICE, SettingsDestination.CALLS -> onOpenVoiceCalls()
-            SettingsDestination.LOCAL_DREAM, SettingsDestination.IMAGING -> onOpenLocalDream()
+            SettingsDestination.LOCAL_DREAM -> onOpenLocalDream()
+            SettingsDestination.IMAGING -> onOpenImagingStudio()
             SettingsDestination.IDENTITY -> onOpenIdentity()
             SettingsDestination.CHARACTERS -> onOpenCharacters()
+            SettingsDestination.APPEARANCE -> onOpenAppearance()
             SettingsDestination.WORLD -> onOpenWorldSettings()
             SettingsDestination.KNOWLEDGE -> onOpenWorldKnowledge()
             SettingsDestination.PRIVACY -> onOpenPrivacy()
+            SettingsDestination.APP -> onOpenAppearance()
             SettingsDestination.BACKUPS -> onOpenBackups()
             SettingsDestination.DIAGNOSTICS, SettingsDestination.RUNTIME, SettingsDestination.ABOUT -> onOpenDiagnostics()
             SettingsDestination.STORAGE, SettingsDestination.SYSTEM -> onOpenStorage()
             SettingsDestination.HELP -> onOpenHelpGuide()
             SettingsDestination.UPDATE -> onOpenUpdates()
-            SettingsDestination.APPEARANCE, SettingsDestination.APP -> onOpenWorldSettings()
         }
     }
     var settingsQuery by rememberSaveable { mutableStateOf("") }
-    var expandedSections by rememberSaveable { mutableStateOf(SettingsSection.entries.associateWith { false }) }
+    var expandedSections by rememberSaveable { mutableStateOf(defaultExpandedSettingsSections()) }
     val searchResults = searchSettings(settingsQuery)
     val visibleSettings = if (settingsQuery.isBlank()) settings else searchResults.map { result ->
         settings.first { it.destination == result.destination }
@@ -1615,7 +1679,10 @@ private fun MeScreen(
         Triple(section.name.lowercase(), section, visibleSettings.filter { it.destination.section == section })
     }
     LazyColumn(
-        modifier = Modifier.fillMaxSize().testTag("me-settings-list"),
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+            .testTag("me-settings-list"),
         contentPadding = PaddingValues(
             start = 20.dp,
             top = contentPadding.calculateTopPadding() + 24.dp,
@@ -1635,101 +1702,67 @@ private fun MeScreen(
                 value = settingsQuery,
                 onValueChange = { settingsQuery = it },
                 modifier = Modifier.fillMaxWidth().testTag("settings-search"),
-                label = { Text("Search settings") },
+                label = { Text(stringResource(R.string.settings_search_label)) },
                 trailingIcon = {
-                    if (settingsQuery.isNotEmpty()) TextButton(onClick = { settingsQuery = "" }) { Text("Clear") }
+                    if (settingsQuery.isNotEmpty()) {
+                        TextButton(onClick = { settingsQuery = "" }) {
+                            Text(stringResource(R.string.settings_search_clear))
+                        }
+                    }
                 },
                 singleLine = true,
             )
             if (settingsQuery.isNotBlank() && searchResults.isEmpty()) {
-                Text("No settings found", modifier = Modifier.testTag("settings-no-results"), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(
+                    stringResource(R.string.settings_search_no_results),
+                    modifier = Modifier.testTag("settings-no-results"),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
         categorizedSettings.forEach { (categoryTag, category, entries) ->
             val rootVisible = settingsQuery.isBlank() || entries.isNotEmpty()
             if (rootVisible) {
+                val expanded = settingsQuery.isNotBlank() || expandedSections.getValue(category)
                 item {
-                    Row(
-                        modifier = Modifier.fillMaxWidth().testTag("settings-root-$categoryTag").clickable {
-                            expandedSections = expandedSections + (category to !expandedSections.getValue(category))
-                        }.padding(vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(category.name.replace('_', ' ').lowercase().replaceFirstChar { it.uppercase() }, modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                        Text(if (settingsQuery.isNotBlank() || expandedSections.getValue(category)) "−" else "+", style = MaterialTheme.typography.titleLarge)
-                    }
-                }
-                if (settingsQuery.isNotBlank() || expandedSections.getValue(category)) {
-                    item { SettingGroup(entries, ::openSetting) }
-                }
-            }
-        }
-        item {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(14.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Avatar(identity.name.take(1).uppercase(), 56.dp, identity.avatarPath)
-                Column {
-                    Eyebrow(stringResource(R.string.me_eyebrow))
-                    Text(
-                        identity.name,
-                        style = MaterialTheme.typography.headlineMedium,
-                        fontWeight = FontWeight.Bold,
-                    )
-                    Text(
-                        identity.bio.ifBlank { stringResource(R.string.me_description) },
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-        }
-        item {
-            Card(
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-                ),
-            ) {
-                Column(
-                    modifier = Modifier.padding(18.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    Text(stringResource(R.string.appearance_settings), fontWeight = FontWeight.Bold)
-                    Text(
-                        stringResource(R.string.appearance_settings_summary),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            .testTag("settings-root-$categoryTag")
+                            .clickable {
+                                expandedSections = expandedSections + (category to !expandedSections.getValue(category))
+                            }
+                            .padding(vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        ThemeMode.entries.forEach { option ->
-                            FilterChip(
-                                selected = themeMode == option,
-                                onClick = { onThemeModeChanged(option) },
-                                label = {
-                                    Text(
-                                        stringResource(
-                                            when (option) {
-                                                ThemeMode.System -> R.string.theme_system
-                                                ThemeMode.Light -> R.string.theme_light
-                                                ThemeMode.Dark -> R.string.theme_dark
-                                            },
-                                        ),
-                                    )
-                                },
-                            )
-                        }
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                            FilterChip(
-                                selected = dynamicColor,
-                                onClick = { onDynamicColorChanged(!dynamicColor) },
-                                label = { Text(stringResource(R.string.theme_dynamic_color)) },
-                            )
-                        }
+                        Text(
+                            settingsSectionTitle(category),
+                            modifier = Modifier.weight(1f),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        Text(
+                            if (expanded) "−" else "+",
+                            modifier = Modifier.testTag("settings-section-toggle-$categoryTag"),
+                            style = MaterialTheme.typography.titleLarge,
+                        )
                     }
+                }
+                if (expanded) {
+                    item {
+                        SettingGroup(
+                            settings = entries,
+                            identity = identity,
+                            onOpen = ::openSetting,
+                            expandAllSections = settingsQuery.isNotBlank(),
+                        )
+                    }
+                }
+                item {
+                    HorizontalDivider(
+                        modifier = Modifier.testTag("settings-section-divider-$categoryTag"),
+                        color = MaterialTheme.colorScheme.outlineVariant,
+                    )
                 }
             }
         }
@@ -1797,7 +1830,9 @@ private fun MeScreen(
 @Composable
 private fun SettingGroup(
     settings: List<SettingRow>,
+    identity: UserIdentity,
     onOpen: (SettingsDestination) -> Unit,
+    @Suppress("UNUSED_PARAMETER") expandAllSections: Boolean,
 ) {
     Card(
         colors = CardDefaults.cardColors(
@@ -1806,6 +1841,15 @@ private fun SettingGroup(
     ) {
         Column {
             settings.forEachIndexed { index, setting ->
+                val titleRes = settingsDestinationTitleRes(setting.destination)
+                val summaryRes = settingsDestinationSummaryRes(setting.destination)
+                val isIdentity = setting.destination == SettingsDestination.IDENTITY
+                val displayName = identity.name.ifBlank { stringResource(R.string.me_title) }
+                val displaySummary = when {
+                    isIdentity && identity.bio.isNotBlank() -> identity.bio
+                    isIdentity -> stringResource(R.string.me_description)
+                    else -> stringResource(summaryRes)
+                }
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -1816,25 +1860,47 @@ private fun SettingGroup(
                         .padding(horizontal = 16.dp, vertical = 14.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Surface(
-                        modifier = Modifier.size(40.dp),
-                        shape = RoundedCornerShape(12.dp),
-                        color = MaterialTheme.colorScheme.secondaryContainer,
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                setting.icon,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(20.dp),
-                            )
+                    if (isIdentity) {
+                        Avatar(
+                            displayName.take(1).uppercase(),
+                            40.dp,
+                            identity.avatarPath.takeIf { it.isNotBlank() },
+                        )
+                    } else {
+                        Surface(
+                            modifier = Modifier.size(40.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            color = MaterialTheme.colorScheme.secondaryContainer,
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    setting.icon,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(20.dp),
+                                )
+                            }
                         }
                     }
                     Spacer(Modifier.width(14.dp))
                     Column(Modifier.weight(1f)) {
-                        Text(setting.destination.title, fontWeight = FontWeight.Bold)
                         Text(
-                            setting.destination.synonyms.firstOrNull() ?: "设置与配置",
+                            if (isIdentity) {
+                                displayName
+                            } else if (titleRes == 0) {
+                                setting.destination.title
+                            } else {
+                                stringResource(titleRes)
+                            },
+                            fontWeight = FontWeight.Bold,
+                        )
+                        Text(
+                            displaySummary,
+                            modifier = if (isIdentity) {
+                                Modifier.testTag("me-setting-identity-summary")
+                            } else {
+                                Modifier
+                            },
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis,
@@ -2113,7 +2179,9 @@ private fun LocalDreamSettingsScreen(
     val unavailable = stringResource(R.string.local_dream_unavailable)
 
     LazyColumn(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier
+            .fillMaxSize()
+            .testTag("local-dream-settings-screen"),
         contentPadding = PaddingValues(
             start = 20.dp,
             top = contentPadding.calculateTopPadding() + 12.dp,

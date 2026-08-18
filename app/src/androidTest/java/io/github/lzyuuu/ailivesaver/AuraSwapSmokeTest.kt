@@ -38,15 +38,14 @@ class AuraSwapSmokeTest {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         writeWelcomeGuideCompleted(context, true)
         WorldStore(context).use { DesktopSeed.ensureDesktopWorld(it, "焰宇", "issue-30") }
-        seedStoreInstallForSmoke(context, setOf("aura-swap"))
+        seedInstallOnHomeForSmoke(context, listOf("aura-swap"))
         composeRule.activityRule.scenario.recreate()
         composeRule.waitForIdle()
     }
 
     @Test
     fun opensAuraSwapAndModelStoreEmptyDirectoryPath() {
-        composeRule.onNodeWithTag("desktop-hub-creative_suite").performClick()
-        composeRule.onNodeWithTag("hub-app-aura_swap").performClick()
+        composeRule.onNodeWithTag("desktop-grid-aura_swap").performClick()
         composeRule.onNodeWithTag("aura-swap-screen").assertIsDisplayed()
         composeRule.onNodeWithTag("aura-run").performClick()
         composeRule.onNodeWithTag("aura-status").assertIsDisplayed()

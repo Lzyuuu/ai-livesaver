@@ -44,6 +44,7 @@ class MainActivitySmokeTest {
             )
         }
         seedStoreInstallForSmoke(context, setOf("ustagram", "games", "phone"))
+        seedHomeAppsForSmoke(context, listOf("ustagram", "games", "phone"))
         composeRule.activityRule.scenario.recreate()
         composeRule.waitForIdle()
     }
@@ -66,29 +67,20 @@ class MainActivitySmokeTest {
     }
 
     @Test
-    fun opensSocialHubAppAndReturnsToDesktop() {
-        composeRule.onNodeWithTag("desktop-hub-social_hub").performClick()
-        composeRule.waitForIdle()
-        composeRule.onNodeWithTag("hub-app-ustagram").performClick()
+    fun opensInstalledAppFromGridAndReturnsToDesktop() {
+        composeRule.onNodeWithTag("desktop-grid-ustagram").performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithText("Ustagram", useUnmergedTree = true).assertIsDisplayed()
         composeRule.onNodeWithTag("ustagram-screen", useUnmergedTree = true).assertIsDisplayed()
         composeRule.onNodeWithTag("ustagram-back", useUnmergedTree = true).performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("system-desktop").assertIsDisplayed()
-        assertTrue(
-            composeRule.onAllNodesWithTag("desktop-hub-sheet", useUnmergedTree = true)
-                .fetchSemanticsNodes()
-                .isEmpty(),
-        )
     }
 
     @Test
     fun opensGamesHubWithoutPaywall() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
-        composeRule.onNodeWithTag("desktop-hub-entertainment").performClick()
-        composeRule.waitForIdle()
-        composeRule.onNodeWithTag("hub-app-games").performClick()
+        composeRule.onNodeWithTag("desktop-grid-games").performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("games-hub").assertIsDisplayed()
         composeRule.onNodeWithText("Games Hub", useUnmergedTree = true).assertIsDisplayed()
@@ -114,19 +106,13 @@ class MainActivitySmokeTest {
         ).performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("system-desktop").assertIsDisplayed()
-        assertTrue(
-            composeRule.onAllNodesWithTag("desktop-hub-sheet", useUnmergedTree = true)
-                .fetchSemanticsNodes()
-                .isEmpty(),
-        )
     }
 
     @Test
     fun opensAllSixGamePlaceholdersWithoutPaywall() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
-        composeRule.onNodeWithTag("desktop-hub-entertainment").performClick()
+        composeRule.onNodeWithTag("desktop-grid-games").performClick()
         composeRule.waitForIdle()
-        composeRule.onNodeWithTag("hub-app-games").performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("games-hub").assertIsDisplayed()
         assertNoPaywall()
@@ -164,8 +150,7 @@ class MainActivitySmokeTest {
 
     @Test
     fun presetsRootInPhone() {
-        composeRule.onNodeWithTag("desktop-hub-social_hub").performClick()
-        composeRule.onNodeWithTag("hub-app-phone").performClick()
+        composeRule.onNodeWithTag("desktop-grid-phone").performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("desktop-back-bar").assertIsDisplayed()
         composeRule.onNodeWithText("Phone", useUnmergedTree = true).assertIsDisplayed()
