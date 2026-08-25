@@ -39,6 +39,7 @@ import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
@@ -189,15 +190,20 @@ internal fun CharacterManagerScreen(
             firstMessage = card.firstMessage,
             relationship = card.relationship,
             avatarPath = avatarPath,
+            visualStyle = card.visualStyle,
+            gender = card.gender,
+            appearancePrompt = card.appearancePrompt,
+            clothing = card.clothing,
+            negativePrompt = card.negativePrompt,
         )
         val cardJson = CharacterCardV2.buildCardJson(card.name, fields, card.rawJson)
         val id = store.addCharacter(
             card.name,
             CharacterCardV2.composePersona(fields).ifBlank { card.persona },
             "resident",
-            "",
-            "",
-            "",
+            card.appearancePrompt,
+            card.clothing,
+            card.negativePrompt,
             cardJson,
         )
         if (card.firstMessage.isNotBlank()) store.addMessage(id, "assistant", card.firstMessage)
@@ -220,10 +226,18 @@ internal fun CharacterManagerScreen(
             firstMessage = card.firstMessage.ifBlank { current.firstMessage },
             relationship = card.relationship.ifBlank { current.relationship },
             avatarPath = persistAvatar(card).ifBlank { current.avatarPath },
+            visualStyle = card.visualStyle.ifBlank { current.visualStyle },
+            gender = card.gender.ifBlank { current.gender },
+            appearancePrompt = card.appearancePrompt.ifBlank { current.appearancePrompt },
+            clothing = card.clothing.ifBlank { current.clothing },
+            negativePrompt = card.negativePrompt.ifBlank { current.negativePrompt },
         )
         store.updateCharacter(
             existing.copy(
                 persona = CharacterCardV2.composePersona(fields).ifBlank { card.persona },
+                appearance = fields.appearancePrompt.ifBlank { existing.appearance },
+                clothing = fields.clothing.ifBlank { existing.clothing },
+                negativePrompt = fields.negativePrompt.ifBlank { existing.negativePrompt },
                 cardJson = CharacterCardV2.buildCardJson(existing.name, fields, existing.cardJson),
             ),
         )
@@ -610,6 +624,10 @@ private fun CharacterEditor(
     val initial = remember(character?.id, character?.cardJson) {
         character?.let(CharacterCardV2::profileFields) ?: CharacterProfileFields()
     }
+    val isRoot = character?.name.equals("Root", ignoreCase = true) ||
+        initial.handle.equals("root", ignoreCase = true) ||
+        character?.name.equals(DesktopSeed.ROOT_NAME, ignoreCase = true)
+
     var name by rememberSaveable(character?.id) { mutableStateOf(character?.name.orEmpty()) }
     var handle by rememberSaveable(character?.id) {
         mutableStateOf(initial.handle.ifBlank { CharacterCardV2.slugHandle(character?.name.orEmpty()) })
@@ -626,19 +644,23 @@ private fun CharacterEditor(
         mutableStateOf(character?.attentionTier ?: "resident")
     }
     var appearance by rememberSaveable(character?.id) {
-        mutableStateOf(character?.appearance.orEmpty())
+        mutableStateOf(initial.appearancePrompt.ifBlank { character?.appearance.orEmpty() })
     }
     var clothing by rememberSaveable(character?.id) {
-        mutableStateOf(character?.clothing.orEmpty())
+        mutableStateOf(initial.clothing.ifBlank { character?.clothing.orEmpty() })
     }
     var negative by rememberSaveable(character?.id) {
-        mutableStateOf(character?.negativePrompt.orEmpty())
+        mutableStateOf(initial.negativePrompt.ifBlank { character?.negativePrompt.orEmpty() })
     }
+    var visualStyle by rememberSaveable(character?.id) { mutableStateOf(initial.visualStyle) }
+    var gender by rememberSaveable(character?.id) { mutableStateOf(initial.gender) }
+    var editorTab by rememberSaveable(character?.id) { mutableStateOf(0) }
+    var extractingAppearance by remember { mutableStateOf(false) }
     var transferStatus by remember { mutableStateOf<String?>(null) }
     var deleteConfirmation by rememberSaveable(character?.id) { mutableStateOf("") }
     var showDeleteConfirmation by rememberSaveable(character?.id) { mutableStateOf(false) }
     var exportMenuOpen by remember { mutableStateOf(false) }
-    val handleLocked = character != null
+    val handleLocked = character != null || isRoot
     val exported = stringResource(R.string.character_card_exported)
     val exportFailed = stringResource(R.string.character_card_export_failed)
     val avatarInvalid = stringResource(R.string.identity_avatar_invalid)
@@ -703,7 +725,6 @@ private fun CharacterEditor(
             .onFailure { transferStatus = "$exportFailed：${it.message.orEmpty()}" }
     }
 
-
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -743,8 +764,7 @@ private fun CharacterEditor(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            // Live v4.47 viewer chrome: Back + title + Share only.
-            // New Character editor: Create. Existing editor keeps Save/Delete for maintenance.
+            // Live viewer / editor chrome: Back + title + Share. Existing editor keeps Delete for maintenance.
             if (character != null) {
                 val editingCharacter = character
                 Box {
@@ -772,7 +792,7 @@ private fun CharacterEditor(
                     }
                 }
             }
-            if (!readOnly && character != null && onDelete != null) {
+            if (!readOnly && character != null && onDelete != null && !isRoot) {
                 IconButton(onClick = { showDeleteConfirmation = true }) {
                     Icon(Icons.Default.Delete, contentDescription = null, tint = CharactersDanger)
                 }
@@ -782,15 +802,21 @@ private fun CharacterEditor(
                     onClick = {
                         val fields = CharacterProfileFields(
                             handle = if (handleLocked) initial.handle else handle,
-                            description = description,
-                            personality = personality,
-                            scenario = scenario,
-                            firstMessage = firstMessage,
-                            relationship = relationship,
+                            description = if (isRoot) initial.description.ifBlank { DesktopSeed.ROOT_PERSONA } else description,
+                            personality = if (isRoot) initial.personality else personality,
+                            scenario = if (isRoot) initial.scenario else scenario,
+                            firstMessage = if (isRoot) initial.firstMessage else firstMessage,
+                            relationship = if (isRoot) initial.relationship else relationship,
                             avatarPath = avatarPath,
+                            visualStyle = visualStyle,
+                            gender = gender,
+                            appearancePrompt = appearance,
+                            clothing = clothing,
+                            negativePrompt = negative,
                         )
+                        val targetName = if (isRoot) (character?.name ?: "Root") else name.trim()
                         onSave(
-                            name.trim(),
+                            targetName,
                             fields,
                             tier,
                             appearance,
@@ -798,7 +824,7 @@ private fun CharacterEditor(
                             negative,
                         )
                     },
-                    enabled = name.isNotBlank(),
+                    enabled = isRoot || name.isNotBlank(),
                 ) {
                     Text(
                         if (character == null) {
@@ -806,7 +832,7 @@ private fun CharacterEditor(
                         } else {
                             stringResource(R.string.character_save)
                         },
-                        color = if (name.isNotBlank()) CharactersAccent else CharactersMuted,
+                        color = if (isRoot || name.isNotBlank()) CharactersAccent else CharactersMuted,
                         fontWeight = FontWeight.SemiBold,
                     )
                 }
@@ -830,7 +856,7 @@ private fun CharacterEditor(
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 CharacterPortrait(
-                    name = name.trim().ifBlank { "?" },
+                    name = name.trim().ifBlank { if (isRoot) "R" else "?" },
                     imagePath = avatarPath,
                     circular = true,
                     modifier = Modifier
@@ -854,104 +880,23 @@ private fun CharacterEditor(
                 )
             }
 
-            SectionLabel(stringResource(R.string.character_section_identity), readOnly)
-            CharactersField(
-                value = name,
-                onValueChange = {
-                    name = it
-                    if (!handleLocked) handle = CharacterCardV2.slugHandle(it)
-                },
-                label = stringResource(R.string.character_name_label),
-                enabled = !readOnly,
-                onClickWhenDisabled = onRequestEdit,
-            )
-            CharactersField(
-                value = if (handle.startsWith("@")) handle else "@$handle",
-                onValueChange = {
-                    if (!handleLocked) handle = CharacterCardV2.normalizeHandle(it)
-                },
-                label = stringResource(R.string.character_handle_label),
-                enabled = !readOnly && !handleLocked,
-                supporting = stringResource(R.string.character_handle_hint),
-                onClickWhenDisabled = onRequestEdit,
-            )
-
-            SectionLabel(stringResource(R.string.character_section_personality), readOnly)
-            CharactersField(
-                value = personality,
-                onValueChange = { personality = it },
-                label = stringResource(R.string.character_personality_label),
-                enabled = !readOnly,
-                minLines = 3,
-                // Fancy live viewer EditText heights (density 420): ~341/169/736/232/232 px.
-                fixedHeight = if (readOnly) 130.dp else null,
-                onClickWhenDisabled = onRequestEdit,
-            )
-            CharactersField(
-                value = relationship,
-                onValueChange = { relationship = it },
-                label = stringResource(R.string.character_relationship_label),
-                enabled = !readOnly,
-                supporting = if (character == null) {
-                    stringResource(R.string.character_relationship_hint)
-                } else {
-                    null
-                },
-                fixedHeight = if (readOnly) 64.2.dp else null,
-                onClickWhenDisabled = onRequestEdit,
-            )
-            CharactersField(
-                value = description,
-                onValueChange = { description = it },
-                label = stringResource(R.string.character_description_label),
-                enabled = !readOnly,
-                minLines = 8,
-                fixedHeight = if (readOnly) 280.2.dp else null,
-                onClickWhenDisabled = onRequestEdit,
-            )
-
-            SectionLabel(
-                stringResource(R.string.character_section_chat),
-                viewer = readOnly,
-                extraTop = if (readOnly) 10.dp else 0.dp,
-            )
-            CharactersField(
-                value = scenario,
-                onValueChange = { scenario = it },
-                label = stringResource(R.string.character_scenario_label),
-                enabled = !readOnly,
-                minLines = 3,
-                fixedHeight = if (readOnly) 88.2.dp else null,
-                onClickWhenDisabled = onRequestEdit,
-            )
-            CharactersField(
-                value = firstMessage,
-                onValueChange = { firstMessage = it },
-                label = stringResource(R.string.character_first_message_label),
-                enabled = !readOnly,
-                minLines = 3,
-                fixedHeight = if (readOnly) 88.2.dp else null,
-                onClickWhenDisabled = onRequestEdit,
-            )
-
-            // Enhancer fields exist in Fancy OS editor only; live viewer stops at Chat Settings.
-            if (!readOnly) {
-                SectionLabel(stringResource(R.string.character_attention_tier))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                listOf("角色", "外貌").forEachIndexed { index, label ->
                     FilterChip(
-                        selected = tier == "special_focus",
-                        onClick = { tier = "special_focus" },
-                        label = { Text(stringResource(R.string.character_special_focus)) },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = CharactersAccent.copy(alpha = 0.22f),
-                            selectedLabelColor = CharactersAccent,
-                            labelColor = CharactersMuted,
-                        ),
-                    )
-                    FilterChip(
-                        selected = tier == "resident",
-                        onClick = { tier = "resident" },
-                        label = { Text(stringResource(R.string.character_resident)) },
+                        selected = editorTab == index,
+                        onClick = { editorTab = index },
+                        label = {
+                            Text(
+                                label,
+                                fontWeight = if (editorTab == index) FontWeight.Bold else FontWeight.Normal,
+                            )
+                        },
+                        modifier = Modifier.testTag("character-tab-$index"),
                         colors = FilterChipDefaults.filterChipColors(
                             selectedContainerColor = CharactersAccent.copy(alpha = 0.22f),
                             selectedLabelColor = CharactersAccent,
@@ -959,37 +904,285 @@ private fun CharacterEditor(
                         ),
                     )
                 }
+            }
 
-                SectionLabel(stringResource(R.string.character_visual_identity))
+            if (editorTab == 0) {
+                if (isRoot) {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 4.dp),
+                        colors = CardDefaults.cardColors(containerColor = CharactersField),
+                        shape = RoundedCornerShape(10.dp),
+                    ) {
+                        Text(
+                            "Root 为系统内置角色，基础人设已锁定保护。您可以在“外貌”页签中自定义外观与视觉风格。",
+                            color = CharactersAccent,
+                            fontSize = 12.sp,
+                            modifier = Modifier.padding(12.dp),
+                        )
+                    }
+                }
+
+                SectionLabel(stringResource(R.string.character_section_identity), readOnly)
+                CharactersField(
+                    value = name,
+                    onValueChange = {
+                        name = it
+                        if (!handleLocked) handle = CharacterCardV2.slugHandle(it)
+                    },
+                    label = stringResource(R.string.character_name_label),
+                    enabled = !readOnly && !isRoot,
+                    onClickWhenDisabled = if (isRoot) null else onRequestEdit,
+                )
+                CharactersField(
+                    value = if (handle.startsWith("@")) handle else "@$handle",
+                    onValueChange = {
+                        if (!handleLocked) handle = CharacterCardV2.normalizeHandle(it)
+                    },
+                    label = stringResource(R.string.character_handle_label),
+                    enabled = !readOnly && !handleLocked,
+                    supporting = stringResource(R.string.character_handle_hint),
+                    onClickWhenDisabled = if (isRoot) null else onRequestEdit,
+                )
+
+                SectionLabel(stringResource(R.string.character_section_personality), readOnly)
+                CharactersField(
+                    value = personality,
+                    onValueChange = { personality = it },
+                    label = stringResource(R.string.character_personality_label),
+                    enabled = !readOnly && !isRoot,
+                    minLines = 3,
+                    fixedHeight = if (readOnly) 130.dp else null,
+                    onClickWhenDisabled = if (isRoot) null else onRequestEdit,
+                )
+                CharactersField(
+                    value = relationship,
+                    onValueChange = { relationship = it },
+                    label = stringResource(R.string.character_relationship_label),
+                    enabled = !readOnly && !isRoot,
+                    supporting = if (character == null) {
+                        stringResource(R.string.character_relationship_hint)
+                    } else {
+                        null
+                    },
+                    fixedHeight = if (readOnly) 64.2.dp else null,
+                    onClickWhenDisabled = if (isRoot) null else onRequestEdit,
+                )
+                CharactersField(
+                    value = description,
+                    onValueChange = { description = it },
+                    label = stringResource(R.string.character_description_label),
+                    enabled = !readOnly && !isRoot,
+                    minLines = 8,
+                    fixedHeight = if (readOnly) 280.2.dp else null,
+                    onClickWhenDisabled = if (isRoot) null else onRequestEdit,
+                )
+
+                SectionLabel(
+                    stringResource(R.string.character_section_chat),
+                    viewer = readOnly,
+                    extraTop = if (readOnly) 10.dp else 0.dp,
+                )
+                CharactersField(
+                    value = scenario,
+                    onValueChange = { scenario = it },
+                    label = stringResource(R.string.character_scenario_label),
+                    enabled = !readOnly && !isRoot,
+                    minLines = 3,
+                    fixedHeight = if (readOnly) 88.2.dp else null,
+                    onClickWhenDisabled = if (isRoot) null else onRequestEdit,
+                )
+                CharactersField(
+                    value = firstMessage,
+                    onValueChange = { firstMessage = it },
+                    label = stringResource(R.string.character_first_message_label),
+                    enabled = !readOnly && !isRoot,
+                    minLines = 3,
+                    fixedHeight = if (readOnly) 88.2.dp else null,
+                    onClickWhenDisabled = if (isRoot) null else onRequestEdit,
+                )
+            }
+
+            if (editorTab == 1) {
+                if (!readOnly) {
+                    SectionLabel(stringResource(R.string.character_attention_tier))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilterChip(
+                            selected = tier == "special_focus",
+                            onClick = { tier = "special_focus" },
+                            label = { Text(stringResource(R.string.character_special_focus)) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = CharactersAccent.copy(alpha = 0.22f),
+                                selectedLabelColor = CharactersAccent,
+                                labelColor = CharactersMuted,
+                            ),
+                        )
+                        FilterChip(
+                            selected = tier == "resident",
+                            onClick = { tier = "resident" },
+                            label = { Text(stringResource(R.string.character_resident)) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = CharactersAccent.copy(alpha = 0.22f),
+                                selectedLabelColor = CharactersAccent,
+                                labelColor = CharactersMuted,
+                            ),
+                        )
+                    }
+                }
+
+                SectionLabel(stringResource(R.string.character_visual_identity), readOnly)
                 Text(
                     stringResource(R.string.character_visual_identity_summary),
                     color = CharactersMuted,
                     fontSize = 12.sp,
                 )
+
+                Text(
+                    "艺术风格预设",
+                    color = CharactersInk,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    listOf("Photoreal", "Film", "Anime", "Painted").forEach { style ->
+                        FilterChip(
+                            selected = visualStyle.equals(style, ignoreCase = true),
+                            onClick = {
+                                if (!readOnly) {
+                                    visualStyle = if (visualStyle.equals(style, ignoreCase = true)) "" else style
+                                }
+                            },
+                            label = { Text(style) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = CharactersAccent.copy(alpha = 0.22f),
+                                selectedLabelColor = CharactersAccent,
+                                labelColor = CharactersMuted,
+                            ),
+                        )
+                    }
+                }
+
+                Text(
+                    "性别预设",
+                    color = CharactersInk,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    listOf("Woman", "Man", "Non-binary", "Unspecified").forEach { value ->
+                        FilterChip(
+                            selected = gender.equals(value, ignoreCase = true),
+                            onClick = {
+                                if (!readOnly) {
+                                    gender = if (gender.equals(value, ignoreCase = true)) "" else value
+                                }
+                            },
+                            label = { Text(value) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = CharactersAccent.copy(alpha = 0.22f),
+                                selectedLabelColor = CharactersAccent,
+                                labelColor = CharactersMuted,
+                            ),
+                        )
+                    }
+                }
+
+                if (!readOnly) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            "固定外观特征",
+                            color = CharactersInk,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium,
+                        )
+                        TextButton(
+                            onClick = {
+                                extractingAppearance = true
+                                transferStatus = "正在提取外观关键词..."
+                                AppearanceExtractor.extract(context, description, personality) { extracted, isLlm ->
+                                    extractingAppearance = false
+                                    if (extracted.appearancePrompt.isNotBlank()) {
+                                        appearance = extracted.appearancePrompt
+                                    }
+                                    if (extracted.clothing.isNotBlank()) {
+                                        clothing = extracted.clothing
+                                    }
+                                    if (extracted.visualStyle.isNotBlank() && visualStyle.isBlank()) {
+                                        visualStyle = extracted.visualStyle
+                                    }
+                                    if (extracted.gender.isNotBlank() && gender.isBlank()) {
+                                        gender = extracted.gender
+                                    }
+                                    if (extracted.negativePrompt.isNotBlank() && negative.isBlank()) {
+                                        negative = extracted.negativePrompt
+                                    }
+                                    transferStatus = if (isLlm) {
+                                        "已根据人设智能提取外观关键词"
+                                    } else {
+                                        "已根据本地规则填充（配置 Provider 后效果更好）"
+                                    }
+                                }
+                            },
+                            enabled = !extractingAppearance && (description.isNotBlank() || personality.isNotBlank()),
+                        ) {
+                            Text(
+                                if (extractingAppearance) "正在提取..." else "从人设自动提取外观",
+                                color = CharactersAccent,
+                            )
+                        }
+                    }
+                }
+
                 CharactersField(
                     value = appearance,
                     onValueChange = { appearance = it },
                     label = stringResource(R.string.character_fixed_appearance),
+                    enabled = !readOnly,
                     minLines = 2,
+                    supporting = "发色、瞳色、体态特征等（如 short silver hair, blue eyes）",
+                    fixedHeight = if (readOnly) 88.dp else null,
+                    onClickWhenDisabled = onRequestEdit,
                 )
                 CharactersField(
                     value = clothing,
                     onValueChange = { clothing = it },
                     label = stringResource(R.string.character_usual_clothing),
+                    enabled = !readOnly,
                     minLines = 2,
+                    supporting = "常用服装搭配（如 black trench coat, white shirt）",
+                    fixedHeight = if (readOnly) 88.dp else null,
+                    onClickWhenDisabled = onRequestEdit,
                 )
                 CharactersField(
                     value = negative,
                     onValueChange = { negative = it },
                     label = stringResource(R.string.character_negative_prompt),
+                    enabled = !readOnly,
                     minLines = 2,
+                    supporting = "过滤畸变与低质量标签（如 blurry, bad anatomy, deformed）",
+                    fixedHeight = if (readOnly) 88.dp else null,
+                    onClickWhenDisabled = onRequestEdit,
                 )
             }
 
+            transferStatus?.let { statusText ->
+                Text(statusText, color = CharactersAccent, fontSize = 13.sp)
+            }
+
             if (!readOnly && character != null) {
-                transferStatus?.let { statusText ->
-                    Text(statusText, color = CharactersAccent)
-                }
                 if (turningPoints.isNotEmpty()) {
                     SectionLabel(stringResource(R.string.character_turning_points))
                     Text(
@@ -1019,7 +1212,7 @@ private fun CharacterEditor(
                         }
                     }
                 }
-                if (onActiveChange != null) {
+                if (onActiveChange != null && !isRoot) {
                     TextButton(
                         onClick = onActiveChange,
                         enabled = !character.active || canLeave,
@@ -1045,7 +1238,7 @@ private fun CharacterEditor(
         }
     }
 
-    if (showDeleteConfirmation && onDelete != null) {
+    if (showDeleteConfirmation && onDelete != null && !isRoot) {
         Dialog(onDismissRequest = { showDeleteConfirmation = false }) {
             Card(modifier = Modifier.fillMaxWidth()) {
                 Column(
