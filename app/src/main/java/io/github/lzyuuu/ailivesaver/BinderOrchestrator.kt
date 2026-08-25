@@ -17,7 +17,8 @@ internal object BinderOrchestrator {
         callback: (Result<BinderGeneration>) -> Unit,
     ) {
         val appContext = context.applicationContext
-        val config = ProviderStore(appContext).loadFor(ProviderTask.World)
+        val providerStore = ProviderStore(appContext)
+        val config = providerStore.loadFor(ProviderTask.World)
         val systemPrompt =
             "Generate 2 to 6 distinct fictional companion candidates. " +
                 "The body string must be JSON matching " +
@@ -27,6 +28,7 @@ internal object BinderOrchestrator {
         fun request(candidateFormatAttempt: Int) {
             ProviderTextClient.completeStructured(
                 config,
+                providerStore.loadDefaultGeneration(),
                 systemPrompt,
                 answers.toJson(),
             ) { providerResult ->

@@ -36,6 +36,7 @@ internal fun generateYPost(
     return runCatching {
         ProviderTextClient.completeStructured(
             config,
+            ProviderStore(context).loadDefaultGeneration(),
             "You are ${actor.name}. ${actor.persona}",
             customPrompt.trim().ifBlank {
                 "Write one short public broadcast under 60 Chinese characters."

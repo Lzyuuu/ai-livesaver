@@ -127,6 +127,74 @@ internal data class GenerationSettings(
     fun normalized() = copy(temperature = temperature.coerceIn(0f, 2f), maxTokens = maxTokens.coerceIn(128, 8192), topP = topP.coerceIn(0f, 1f))
 }
 
+/** 推理配置对全局生成参数的可空覆盖字段；空 = 跟随全局默认（ADR-0063）。 */
+internal data class GenerationOverrides(
+    val temperature: Float? = null,
+    val maxTokens: Int? = null,
+    val topP: Float? = null,
+    val preset: GenerationPreset? = null,
+    val instructionTemplate: InstructionTemplate? = null,
+)
+
+internal fun encodeGenerationSettings(settings: GenerationSettings): String = JSONObject()
+    .put("temperature", settings.temperature.toDouble())
+    .put("max_tokens", settings.maxTokens)
+    .put("top_p", settings.topP.toDouble())
+    .put("preset", settings.preset.name)
+    .put("instruction_template", settings.instructionTemplate.name)
+    .toString()
+
+internal fun decodeGenerationSettings(raw: String?): GenerationSettings = runCatching {
+    val json = JSONObject(raw.orEmpty())
+    GenerationSettings(
+        temperature = json.getDouble("temperature").toFloat(),
+        maxTokens = json.getInt("max_tokens"),
+        topP = json.getDouble("top_p").toFloat(),
+        preset = enumValueOrNull<GenerationPreset>(json.optString("preset")) ?: GenerationPreset.Balanced,
+        instructionTemplate = enumValueOrNull<InstructionTemplate>(json.optString("instruction_template"))
+            ?: InstructionTemplate.Roleplay,
+    ).normalized()
+}.getOrDefault(GenerationSettings())
+
+internal fun encodeGenerationOverrides(overrides: GenerationOverrides): String {
+    val json = JSONObject()
+    overrides.temperature?.let { json.put("temperature", it.toDouble()) }
+    overrides.maxTokens?.let { json.put("max_tokens", it) }
+    overrides.topP?.let { json.put("top_p", it.toDouble()) }
+    overrides.preset?.let { json.put("preset", it.name) }
+    overrides.instructionTemplate?.let { json.put("instruction_template", it.name) }
+    return json.toString()
+}
+
+internal fun decodeGenerationOverrides(raw: String?): GenerationOverrides = runCatching {
+    val json = JSONObject(raw.orEmpty())
+    GenerationOverrides(
+        temperature = if (json.has("temperature")) json.getDouble("temperature").toFloat() else null,
+        maxTokens = if (json.has("max_tokens")) json.getInt("max_tokens") else null,
+        topP = if (json.has("top_p")) json.getDouble("top_p").toFloat() else null,
+        preset = enumValueOrNull<GenerationPreset>(json.optString("preset")),
+        instructionTemplate = enumValueOrNull<InstructionTemplate>(json.optString("instruction_template")),
+    )
+}.getOrDefault(GenerationOverrides())
+
+private inline fun <reified T : Enum<T>> enumValueOrNull(name: String): T? =
+    T::class.java.enumConstants.firstOrNull { it.name == name }
+
+/** 有效生成参数：逐项覆盖优先，未覆盖项继承全局默认（ADR-0063）。 */
+internal fun effectiveGeneration(
+    defaults: GenerationSettings,
+    overrides: GenerationOverrides?,
+): GenerationSettings = GenerationSettings(
+    temperature = overrides?.temperature ?: defaults.temperature,
+    maxTokens = overrides?.maxTokens ?: defaults.maxTokens,
+    topP = overrides?.topP ?: defaults.topP,
+    preset = overrides?.preset ?: defaults.preset,
+    instructionTemplate = overrides?.instructionTemplate ?: defaults.instructionTemplate,
+).normalized()
+
+internal fun applyInstructionTemplate(system: String, template: InstructionTemplate): String =
+    "$system\n\n${template.prompt}"
+
 internal data class ProviderConfig(
     val preset: ProviderPreset = ProviderPreset.DeepSeek,
     val baseUrl: String = ProviderPreset.DeepSeek.defaultBaseUrl,
@@ -134,7 +202,7 @@ internal data class ProviderConfig(
     val apiKey: String = "",
     val extraHeaders: String = "",
     val contextBudget: Int = DEFAULT_CONTEXT_BUDGET,
-    val generation: GenerationSettings = GenerationSettings(),
+    val generationOverride: GenerationOverrides = GenerationOverrides(),
     val capabilities: ProviderCapabilities = ProviderCapabilities(),
     val fallback: ProviderConfig? = null,
 ) {
@@ -179,6 +247,22 @@ internal object ProviderProtocol {
             .put("messages", JSONArray().put(JSONObject().put("role", "system").put("content", s.instructionTemplate.prompt)).put(JSONObject().put("role", "user").put("content", prompt)))
     }
 
+    /** 流式聊天请求体：由调用方先用 effectiveGeneration 解析出有效参数再传入。 */
+    fun streamingChatBody(
+        model: String,
+        messages: JSONArray,
+        generation: GenerationSettings,
+    ): JSONObject {
+        val s = generation.normalized()
+        return JSONObject()
+            .put("model", model)
+            .put("messages", messages)
+            .put("stream", true)
+            .put("temperature", s.temperature.toDouble())
+            .put("max_tokens", s.maxTokens)
+            .put("top_p", s.topP.toDouble())
+    }
+
     fun chatCompletionsUrl(baseUrl: String) =
         "${baseUrl.trim().trimEnd('/')}/chat/completions"
 
@@ -206,21 +290,31 @@ internal object ProviderProtocol {
         system: String,
         prompt: String,
         disableThinking: Boolean = false,
-    ): JSONObject = JSONObject()
-        .put("model", model)
-        // Binder candidate lists can exceed the previous 240-token ceiling. A truncated
-        // outer JSON object is unusable, so reserve enough room for bounded structured payloads.
-        .put("max_tokens", 1_024)
-        .put("response_format", JSONObject().put("type", "json_object"))
-        .apply {
-            if (disableThinking) put("thinking", JSONObject().put("type", "disabled"))
-        }
-        .put(
-            "messages",
-            JSONArray()
-                .put(JSONObject().put("role", "system").put("content", system))
-                .put(JSONObject().put("role", "user").put("content", prompt)),
-        )
+        settings: GenerationSettings,
+    ): JSONObject {
+        val s = settings.normalized()
+        return JSONObject()
+            .put("model", model)
+            // Binder candidate lists can exceed the previous 240-token ceiling. A truncated
+            // outer JSON object is unusable, so reserve enough room for bounded structured payloads.
+            .put("max_tokens", 1_024)
+            .put("temperature", s.temperature.toDouble())
+            .put("top_p", s.topP.toDouble())
+            .put("response_format", JSONObject().put("type", "json_object"))
+            .apply {
+                if (disableThinking) put("thinking", JSONObject().put("type", "disabled"))
+            }
+            .put(
+                "messages",
+                JSONArray()
+                    .put(
+                        JSONObject()
+                            .put("role", "system")
+                            .put("content", applyInstructionTemplate(system, s.instructionTemplate)),
+                    )
+                    .put(JSONObject().put("role", "user").put("content", prompt)),
+            )
+    }
 
     fun parseStructuredBody(json: String): String {
         val content = parseReply(json)
@@ -257,43 +351,62 @@ internal object ProviderProtocol {
         model: String,
         dataUrl: String,
         disableThinking: Boolean = false,
-    ): JSONObject = JSONObject()
-        .put("model", model)
-        .put("max_tokens", 180)
-        .apply {
-            if (disableThinking) put("thinking", JSONObject().put("type", "disabled"))
-        }
-        .put(
-            "messages",
-            JSONArray().put(
-                JSONObject()
-                    .put("role", "user")
+        settings: GenerationSettings,
+    ): JSONObject {
+        val s = settings.normalized()
+        return JSONObject()
+            .put("model", model)
+            // 视觉描述保持简短图说预算；采样参数与指令模板仍随全局默认/覆盖下发。
+            .put("max_tokens", 180)
+            .put("temperature", s.temperature.toDouble())
+            .put("top_p", s.topP.toDouble())
+            .apply {
+                if (disableThinking) put("thinking", JSONObject().put("type", "disabled"))
+            }
+            .put(
+                "messages",
+                JSONArray()
+                    .put(JSONObject().put("role", "system").put("content", s.instructionTemplate.prompt))
                     .put(
-                        "content",
-                        JSONArray()
+                        JSONObject()
+                            .put("role", "user")
                             .put(
-                                JSONObject()
-                                    .put("type", "text")
+                                "content",
+                                JSONArray()
                                     .put(
-                                        "text",
-                                        "Describe only the visible content of this image in concise natural language. Do not infer unseen facts.",
-                                    ),
-                            )
-                            .put(
-                                JSONObject()
-                                    .put("type", "image_url")
+                                        JSONObject()
+                                            .put("type", "text")
+                                            .put(
+                                                "text",
+                                                "Describe only the visible content of this image in concise natural language. Do not infer unseen facts.",
+                                            ),
+                                    )
                                     .put(
-                                        "image_url",
-                                        JSONObject().put("url", dataUrl),
+                                        JSONObject()
+                                            .put("type", "image_url")
+                                            .put(
+                                                "image_url",
+                                                JSONObject().put("url", dataUrl),
+                                            ),
                                     ),
                             ),
                     ),
-            ),
-        )
+            )
+    }
 }
 
 internal class ProviderStore(context: Context) {
     private val preferences = context.getSharedPreferences("provider", Context.MODE_PRIVATE)
+
+    /** 全局生成参数默认值（ADR-0063：存设置层，推理配置未覆盖项继承）。 */
+    fun loadDefaultGeneration(): GenerationSettings =
+        decodeGenerationSettings(preferences.getString(GENERATION_DEFAULT_KEY, null))
+
+    fun saveDefaultGeneration(settings: GenerationSettings) {
+        preferences.edit {
+            putString(GENERATION_DEFAULT_KEY, encodeGenerationSettings(settings.normalized()))
+        }
+    }
 
     fun load() = load("")
 
@@ -339,6 +452,9 @@ internal class ProviderStore(context: Context) {
             ?.let(::decrypt)
             .orEmpty(),
         capabilities = decodeCapabilities(preferences.getString("${prefix}capabilities", null)),
+        generationOverride = decodeGenerationOverrides(
+            preferences.getString("${prefix}generation_overrides", null),
+        ),
     )
 
     fun save(config: ProviderConfig) = save(config, "")
@@ -371,8 +487,8 @@ internal class ProviderStore(context: Context) {
             remove("${prefix}model")
             remove("${prefix}context_budget")
             remove("${prefix}api_key")
-            remove("${prefix}extra_headers")
             remove("${prefix}capabilities")
+            remove("${prefix}generation_overrides")
         }
     }
 
@@ -389,8 +505,8 @@ internal class ProviderStore(context: Context) {
             remove("${prefix}model")
             remove("${prefix}context_budget")
             remove("${prefix}api_key")
-            remove("${prefix}extra_headers")
             remove("${prefix}capabilities")
+            remove("${prefix}generation_overrides")
         }
     }
 
@@ -414,6 +530,12 @@ internal class ProviderStore(context: Context) {
             putString("${prefix}api_key", encrypt(config.apiKey))
             putString("${prefix}extra_headers", encrypt(config.extraHeaders))
             putString("${prefix}capabilities", encodeCapabilities(config.capabilities))
+            if (config.generationOverride != GenerationOverrides()) {
+                putString(
+                    "${prefix}generation_overrides",
+                    encodeGenerationOverrides(config.generationOverride),
+                )
+            }
         }
     }
 
@@ -492,6 +614,7 @@ internal class ProviderStore(context: Context) {
     private companion object {
         const val KEY_ALIAS = "ai_livesaver_provider"
         const val TRANSFORMATION = "AES/GCM/NoPadding"
+        const val GENERATION_DEFAULT_KEY = "generation_default"
     }
 }
 
@@ -551,6 +674,8 @@ internal object ProviderCapabilityTester {
                                             "Return JSON only with a single string field named body.",
                                             "Return body equal to OK.",
                                             disableThinking = config.shouldDisableThinking(),
+                                            // 能力探测与用户生成参数解耦，保持探测载荷确定。
+                                            settings = GenerationSettings(),
                                         ),
                                     ),
                                 )
@@ -563,6 +688,7 @@ internal object ProviderCapabilityTester {
                                             config.model,
                                             ONE_PIXEL_DATA_URL,
                                             disableThinking = config.shouldDisableThinking(),
+                                            settings = GenerationSettings(),
                                         ),
                                     ),
                                 ).ifBlank { throw IOException("empty vision description") }
@@ -597,6 +723,7 @@ internal object ProviderCapabilityTester {
 
 internal object ProviderChatClient {
     fun stream(
+        defaults: GenerationSettings,
         config: ProviderConfig,
         character: ResidentCharacter,
         messages: List<ChatMessage>,
@@ -647,14 +774,12 @@ internal object ProviderChatClient {
                     if (handle.isCancelled()) throw ProviderStreamCancelledException()
                     var delivered = false
                     try {
-                        val body = JSONObject()
-                            .put("model", candidate.model)
-                            .put("messages", requestMessages)
-                            .put("stream", true)
-                            .put("temperature", candidate.generation.normalized().temperature)
-                            .put("max_tokens", candidate.generation.normalized().maxTokens)
-                            .put("top_p", candidate.generation.normalized().topP)
-                        requestMessages.getJSONObject(0).put("content", buildString { append(requestMessages.getJSONObject(0).getString("content")); append("\n\n"); append(candidate.generation.instructionTemplate.prompt) })
+                        val generation = effectiveGeneration(defaults, candidate.generationOverride)
+                        requestMessages.getJSONObject(0).put(
+                            "content",
+                            applyInstructionTemplate(system, generation.instructionTemplate),
+                        )
+                        val body = ProviderProtocol.streamingChatBody(candidate.model, requestMessages, generation)
                         val text = ProviderHttp.stream(candidate, body, handle) { accumulated ->
                             delivered = true
                             Handler(Looper.getMainLooper()).post { onDelta(accumulated) }
@@ -791,22 +916,30 @@ internal fun relationshipBehaviorGuidance(relationship: RelationshipState): Stri
 internal object ProviderTextClient {
     fun complete(
         config: ProviderConfig,
+        defaults: GenerationSettings,
         system: String,
         prompt: String,
         callback: (Result<ProviderResponse>) -> Unit,
     ) {
         Thread {
             val result = runCatching {
-                val messages = JSONArray()
-                    .put(JSONObject().put("role", "system").put("content", system))
-                    .put(JSONObject().put("role", "user").put("content", prompt))
                 var lastFailure: Throwable? = null
                 for (candidate in providerCandidates(config)) {
                     try {
+                        val generation = effectiveGeneration(defaults, candidate.generationOverride)
+                        val requestMessages = JSONArray()
+                            .put(
+                                JSONObject()
+                                    .put("role", "system")
+                                    .put("content", applyInstructionTemplate(system, generation.instructionTemplate)),
+                            )
+                            .put(JSONObject().put("role", "user").put("content", prompt))
                         val body = JSONObject()
                             .put("model", candidate.model)
-                            .put("messages", messages)
-                            .put("max_tokens", 180)
+                            .put("messages", requestMessages)
+                            .put("temperature", generation.temperature.toDouble())
+                            .put("max_tokens", generation.maxTokens)
+                            .put("top_p", generation.topP.toDouble())
                         val text = ProviderProtocol.parseReply(ProviderHttp.post(candidate, body))
                             .ifBlank { throw IOException("Provider returned an empty reply") }
                         return@runCatching ProviderResponse(text, candidate)
@@ -822,6 +955,7 @@ internal object ProviderTextClient {
 
     fun completeStructured(
         config: ProviderConfig,
+        defaults: GenerationSettings,
         system: String,
         prompt: String,
         callback: (Result<ProviderResponse>) -> Unit,
@@ -844,6 +978,7 @@ internal object ProviderTextClient {
                                         "$system\nReturn a JSON object with only one string field named body.",
                                         "$prompt\nReturn only the JSON object; put the response text in body.",
                                         disableThinking = candidate.shouldDisableThinking(),
+                                        settings = effectiveGeneration(defaults, candidate.generationOverride),
                                     ),
                                 ),
                             )
@@ -867,6 +1002,7 @@ internal object ProviderTextClient {
 internal object ProviderVisionClient {
     fun describe(
         config: ProviderConfig,
+        defaults: GenerationSettings = GenerationSettings(),
         imagePath: String,
         callback: (Result<ProviderResponse>) -> Unit,
     ) {
@@ -883,10 +1019,11 @@ internal object ProviderVisionClient {
                             ProviderHttp.post(
                                 candidate,
                                 ProviderProtocol.visionRequest(
-                                candidate.model,
-                                dataUrl,
-                                disableThinking = candidate.shouldDisableThinking(),
-                            ),
+                                    candidate.model,
+                                    dataUrl,
+                                    disableThinking = candidate.shouldDisableThinking(),
+                                    settings = effectiveGeneration(defaults, candidate.generationOverride),
+                                ),
                             ),
                         ).ifBlank { throw IOException("Vision Provider returned an empty description") }
                         return@runCatching ProviderResponse(text, candidate)

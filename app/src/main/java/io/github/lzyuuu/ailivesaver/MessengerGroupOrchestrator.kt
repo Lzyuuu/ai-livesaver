@@ -51,7 +51,9 @@ internal object MessengerGroupOrchestrator {
             val handle: ProviderStreamHandle,
         )
 
-        val config = ProviderStore(appContext).loadFor(ProviderTask.Chat)
+        val providerStore = ProviderStore(appContext)
+        val config = providerStore.loadFor(ProviderTask.Chat)
+        val generationDefaults = providerStore.loadDefaultGeneration()
         val prepared = WorldStore(appContext).use { store ->
             val resolved = if (group.id > 0) {
                 store.loadPersistedMessengerGroup(group.id)
@@ -113,6 +115,7 @@ internal object MessengerGroupOrchestrator {
                 systemPromptAppendix = group.prompt,
                 onDelta = {},
                 handle = reply.handle,
+                defaults = generationDefaults,
                 callback = { providerResult ->
                     val persistedResult = providerResult.mapCatching { response ->
                         val text = response.text.trim()

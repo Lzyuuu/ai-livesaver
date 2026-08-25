@@ -80,6 +80,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -305,6 +306,7 @@ private fun AiLivesaverApp(
     var activeGameId by rememberSaveable { mutableStateOf<String?>(null) }
     var showUpdates by rememberSaveable { mutableStateOf(false) }
     var showProviders by rememberSaveable { mutableStateOf(false) }
+    var showGeneration by rememberSaveable { mutableStateOf(false) }
     var showWorldSettings by rememberSaveable { mutableStateOf(false) }
     var showWorldKnowledge by rememberSaveable { mutableStateOf(false) }
     var showWorldChronicle by rememberSaveable { mutableStateOf(false) }
@@ -490,10 +492,10 @@ private fun AiLivesaverApp(
         return
     }
 
-    val settingsOpen = showUpdates || showProviders || showWorldSettings || showWorldKnowledge ||
-        showWorldChronicle || showImageGeneration || showImagingStudio || showSettingsAppearance ||
-        showDiagnostics || showPrivacy || showBackups || showIdentity || showCharacters ||
-        showVoiceCalls || showStorage || showWelcomeGuide
+    val settingsOpen = showUpdates || showProviders || showGeneration || showWorldSettings ||
+        showWorldKnowledge || showWorldChronicle || showImageGeneration || showImagingStudio ||
+        showSettingsAppearance || showDiagnostics || showPrivacy || showBackups || showIdentity ||
+        showCharacters || showVoiceCalls || showStorage || showWelcomeGuide
 
     BackHandler(enabled = settingsOpen || activeDesktopApp != null || activeHub != null || activeGameId != null) {
         when {
@@ -501,6 +503,7 @@ private fun AiLivesaverApp(
                 if (showProviders) worldRevision++
                 showUpdates = false
                 showProviders = false
+                showGeneration = false
                 showWorldSettings = false
                 showWorldKnowledge = false
                 showWorldChronicle = false
@@ -549,6 +552,11 @@ private fun AiLivesaverApp(
                     showProviders = false
                     worldRevision++
                 },
+            )
+        } else if (showGeneration) {
+            GenerationSettingsScreen(
+                contentPadding = padding,
+                onBack = { showGeneration = false },
             )
         } else if (showWorldSettings) {
             WorldSettingsScreen(
@@ -791,6 +799,7 @@ private fun AiLivesaverApp(
                         onOpenCharacters = { showCharacters = true },
                         onOpenUpdates = { showUpdates = true },
                         onOpenProviders = { showProviders = true },
+                        onOpenGeneration = { showGeneration = true },
                         onOpenWorldSettings = { showWorldSettings = true },
                         onOpenWorldKnowledge = { showWorldKnowledge = true },
                         onOpenLocalDream = { showImageGeneration = true },
@@ -1617,6 +1626,7 @@ private fun MeScreen(
     onOpenCharacters: () -> Unit,
     onOpenUpdates: () -> Unit,
     onOpenProviders: () -> Unit,
+    onOpenGeneration: () -> Unit,
     onOpenWorldSettings: () -> Unit,
     onOpenWorldKnowledge: () -> Unit,
     onOpenLocalDream: () -> Unit,
@@ -1651,6 +1661,7 @@ private fun MeScreen(
     fun openSetting(destination: SettingsDestination) {
         when (destination) {
             SettingsDestination.PROVIDER -> onOpenProviders()
+            SettingsDestination.GENERATION -> onOpenGeneration()
             SettingsDestination.CHAT_BRAIN -> onOpenProviders()
             SettingsDestination.VOICE, SettingsDestination.CALLS -> onOpenVoiceCalls()
             SettingsDestination.LOCAL_DREAM -> onOpenLocalDream()
@@ -2998,6 +3009,16 @@ private fun ProviderScreen(
     var apiKey by rememberSaveable { mutableStateOf(initial.apiKey) }
     var extraHeaders by rememberSaveable { mutableStateOf(initial.extraHeaders) }
     var capabilities by remember { mutableStateOf(initial.capabilities) }
+    var generationOverride by remember { mutableStateOf(initial.generationOverride) }
+    var overrideMaxTokensText by remember {
+        mutableStateOf(initial.generationOverride.maxTokens?.toString().orEmpty())
+    }
+    val globalGenerationDefaults = remember { store.loadDefaultGeneration() }
+    var genTempCustom by remember { mutableStateOf(initial.generationOverride.temperature != null) }
+    var genTopCustom by remember { mutableStateOf(initial.generationOverride.topP != null) }
+    var genMaxCustom by remember { mutableStateOf(initial.generationOverride.maxTokens != null) }
+    var genPresetCustom by remember { mutableStateOf(initial.generationOverride.preset != null) }
+    var genTemplateCustom by remember { mutableStateOf(initial.generationOverride.instructionTemplate != null) }
     var testing by remember { mutableStateOf(false) }
     var testingCapabilities by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf<String?>(null) }
@@ -3018,6 +3039,13 @@ private fun ProviderScreen(
         apiKey = config.apiKey
         extraHeaders = config.extraHeaders
         capabilities = config.capabilities
+        generationOverride = config.generationOverride
+        overrideMaxTokensText = config.generationOverride.maxTokens?.toString().orEmpty()
+        genTempCustom = config.generationOverride.temperature != null
+        genTopCustom = config.generationOverride.topP != null
+        genMaxCustom = config.generationOverride.maxTokens != null
+        genPresetCustom = config.generationOverride.preset != null
+        genTemplateCustom = config.generationOverride.instructionTemplate != null
         status = null
     }
 
@@ -3041,8 +3069,14 @@ private fun ProviderScreen(
         apiKey = apiKey.trim(),
         extraHeaders = extraHeaders.trim(),
         capabilities = capabilities,
+        generationOverride = GenerationOverrides(
+            temperature = generationOverride.temperature.takeIf { genTempCustom },
+            maxTokens = generationOverride.maxTokens.takeIf { genMaxCustom },
+            topP = generationOverride.topP.takeIf { genTopCustom },
+            preset = generationOverride.preset.takeIf { genPresetCustom },
+            instructionTemplate = generationOverride.instructionTemplate.takeIf { genTemplateCustom },
+        ),
     )
-
     fun rememberSavedConfig(savedTask: ProviderTask, config: ProviderConfig) {
         when (savedTask) {
             ProviderTask.Chat -> textConfig = config
@@ -3185,6 +3219,141 @@ private fun ProviderScreen(
                 minLines = 3,
                 modifier = Modifier.fillMaxWidth(),
             )
+        }
+        item {
+            Card(Modifier.fillMaxWidth()) {
+                Column(
+                    Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Text(
+                        stringResource(R.string.provider_generation_overrides),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        stringResource(R.string.provider_generation_overrides_summary),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    GenerationOverrideRow(
+                        label = stringResource(R.string.generation_temperature),
+                        custom = genTempCustom,
+                        onToggle = { on ->
+                            genTempCustom = on
+                            if (on) {
+                                generationOverride = generationOverride.copy(
+                                    temperature = globalGenerationDefaults.temperature,
+                                )
+                            }
+                        },
+                    ) {
+                        Slider(
+                            value = generationOverride.temperature ?: globalGenerationDefaults.temperature,
+                            onValueChange = {
+                                generationOverride =
+                                    generationOverride.copy(temperature = Math.round(it * 10f) / 10f)
+                            },
+                            valueRange = 0f..2f,
+                            steps = 19,
+                            modifier = Modifier.testTag("provider-generation-temperature"),
+                        )
+                        Text(
+                            "%.1f".format(generationOverride.temperature ?: 0f),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    GenerationOverrideRow(
+                        label = stringResource(R.string.generation_top_p),
+                        custom = genTopCustom,
+                        onToggle = { on ->
+                            genTopCustom = on
+                            if (on) {
+                                generationOverride = generationOverride.copy(topP = globalGenerationDefaults.topP)
+                            }
+                        },
+                    ) {
+                        Slider(
+                            value = generationOverride.topP ?: globalGenerationDefaults.topP,
+                            onValueChange = {
+                                generationOverride = generationOverride.copy(topP = Math.round(it * 100f) / 100f)
+                            },
+                            valueRange = 0f..1f,
+                            steps = 19,
+                            modifier = Modifier.testTag("provider-generation-top-p"),
+                        )
+                        Text(
+                            "%.2f".format(generationOverride.topP ?: 0f),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    GenerationOverrideRow(
+                        label = stringResource(R.string.generation_max_tokens),
+                        custom = genMaxCustom,
+                        onToggle = { on ->
+                            genMaxCustom = on
+                            if (on) {
+                                val tokens = generationOverride.maxTokens ?: globalGenerationDefaults.maxTokens
+                                overrideMaxTokensText = tokens.toString()
+                                generationOverride = generationOverride.copy(maxTokens = tokens)
+                            }
+                        },
+                    ) {
+                        OutlinedTextField(
+                            value = overrideMaxTokensText,
+                            onValueChange = { value ->
+                                val digits = value.filter(Char::isDigit).take(4)
+                                overrideMaxTokensText = digits
+                                digits.toIntOrNull()?.let { tokens ->
+                                    generationOverride = generationOverride.copy(maxTokens = tokens)
+                                }
+                            },
+                            label = { Text(stringResource(R.string.generation_max_tokens)) },
+                            supportingText = { Text(stringResource(R.string.generation_max_tokens_hint)) },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                    GenerationOverrideRow(
+                        label = stringResource(R.string.generation_preset),
+                        custom = genPresetCustom,
+                        onToggle = { on ->
+                            genPresetCustom = on
+                            if (on && generationOverride.preset == null) {
+                                generationOverride = generationOverride.copy(preset = GenerationPreset.Balanced)
+                            }
+                        },
+                    ) {
+                        GenerationPresetChips(
+                            selected = generationOverride.preset ?: GenerationPreset.Balanced,
+                            onPick = { preset -> generationOverride = generationOverride.copy(preset = preset) },
+                        )
+                    }
+                    GenerationOverrideRow(
+                        label = stringResource(R.string.generation_section_template),
+                        custom = genTemplateCustom,
+                        onToggle = { on ->
+                            genTemplateCustom = on
+                            if (on && generationOverride.instructionTemplate == null) {
+                                generationOverride = generationOverride.copy(
+                                    instructionTemplate = globalGenerationDefaults.instructionTemplate,
+                                )
+                            }
+                        },
+                    ) {
+                        InstructionTemplateChips(
+                            selected = generationOverride.instructionTemplate
+                                ?: globalGenerationDefaults.instructionTemplate,
+                            onSelect = { template ->
+                                generationOverride = generationOverride.copy(instructionTemplate = template)
+                            },
+                        )
+                    }
+                }
+            }
         }
         item {
             Row(
@@ -3397,6 +3566,37 @@ private fun ProviderScreen(
                 }
             }
         }
+    }
+}
+
+/** 推理配置页的生成参数覆盖行：开关关闭即「跟随全局默认」，展开后编辑该字段。 */
+@Composable
+private fun GenerationOverrideRow(
+    label: String,
+    custom: Boolean,
+    onToggle: (Boolean) -> Unit,
+    content: @Composable () -> Unit,
+) {
+    Column(Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(label, fontWeight = FontWeight.Bold)
+                Text(
+                    if (custom) {
+                        stringResource(R.string.generation_override_on)
+                    } else {
+                        stringResource(R.string.generation_follow_default)
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Switch(checked = custom, onCheckedChange = onToggle)
+        }
+        if (custom) content()
     }
 }
 

@@ -30,9 +30,7 @@
     <string name="moments_title">Moments</string>
     <string name="enter">进入</string>
     <string name="commons_title">Commons</string>
-    <string name="commons_replies">9 条回复</string>
     <string name="creation_queue">创作队列</string>
-    <string name="local_dream_disconnected">Local Dream 未连接</string>
     <string name="queue_summary">一条配图意图正在等待。文字世界仍会继续推进。</string>
     <string name="queue_empty">当前没有等待 Local Dream 的配图意图。</string>
     <string name="queue_count">等待 %1$d</string>
@@ -62,14 +60,9 @@
 
     <string name="chats_eyebrow">PRIVATE RELATIONSHIPS</string>
     <string name="chats_title">Chats</string>
-    <string name="chats_summary">这里保留你与常驻角色之间的私密时间线。</string>
-    <string name="manage_characters">管理角色</string>
-    <string name="search_conversations">搜索角色或对话</string>
     <string name="no_matching_conversations">没有匹配的会话。</string>
-    <string name="no_messages_yet">还没有消息</string>
     <string name="messenger_title">Messenger</string>
     <string name="messenger_recent_chats">Recent Chats</string>
-    <string name="messenger_new">New</string>
     <string name="messenger_new_character_action">+ New Character</string>
     <string name="messenger_list_settings">Messenger settings</string>
     <string name="messenger_chats">Chats</string>
@@ -120,8 +113,6 @@
     <string name="first_relationship_card_loaded">已载入角色卡：%1$s；创建后会保留首条示例消息和 lore。</string>
     <string name="complete_world_fields">请完整填写你的名字、角色名字和角色设定</string>
     <string name="create_world">创建第一段关系</string>
-    <string name="private_conversation">当前时间线 · 私密对话</string>
-    <string name="memories_count">记忆 %1$d</string>
     <string name="conversation_context">上下文</string>
     <string name="conversation_recap">对话回顾</string>
     <string name="conversation_recap_summary">回顾压缩较早的对话供模型理解；完整原始消息仍保留在当前时间线。</string>
@@ -146,7 +137,6 @@
     <string name="recap_requires_messages">至少需要两条消息才能生成回顾。</string>
     <string name="recap_failed">生成回顾失败：%1$s</string>
     <string name="recap_outdated">生成期间对话已改变，请重新生成回顾。</string>
-    <string name="start_conversation">还没有消息。说点什么，让这段关系真正开始。</string>
     <string name="chat_failed">回复失败：%1$s</string>
     <string name="streaming_reply">正在实时回应…</string>
     <string name="reply_interrupted">上次回应被应用退出或系统中断，尚未进入当前时间线。</string>
@@ -160,8 +150,6 @@
     <string name="confirm_rewrite">确认并重新回应</string>
     <string name="retired_timeline">已退出当前时间线</string>
     <string name="retired_timeline_summary">从旧消息重写后，被替换的原始消息仍在本机留作追溯，但不会再参与模型上下文或世界推进。</string>
-    <string name="message_character">发给 %1$s</string>
-    <string name="character_thinking">正在回应…</string>
     <string name="send">发送</string>
     <string name="long_term_memories">长期记忆</string>
     <string name="memory_transparency">每条记忆都显示来源、生成时间和所属角色；你可以编辑、删除或固定。</string>
@@ -171,9 +159,7 @@
     <string name="unpin">取消固定</string>
     <string name="edit">编辑</string>
     <string name="delete">删除</string>
-    <string name="moments_social_summary">分享图片、短文字与生活近况；熟悉的人会在这里回应你。</string>
     <string name="ustagram_disclaimer">This feed contains AI-generated content. All posts are\nsimulated.</string>
-    <string name="ustagram_empty">No posts yet. Tap ✨ to generate one.</string>
     <string name="ustagram_empty_prefix">No posts yet. Tap </string>
     <string name="ustagram_empty_suffix"> to generate one.</string>
     <string name="ustagram_image_prompt">Image prompt</string>
@@ -195,7 +181,6 @@
     <string name="ustagram_time_minutes_ago">%1$d minutes ago</string>
     <string name="ustagram_time_hours_ago">%1$d hours ago</string>
     <string name="ustagram_time_days_ago">%1$d days ago</string>
-    <string name="commons_social_summary">围绕一个主题展开更长、更深入的公共讨论。</string>
     <string name="social_requires_world">创建第一段核心关系后才能进入这个社交世界。</string>
     <string name="topic_title">主题标题</string>
     <string name="share_moment">分享此刻</string>
@@ -539,6 +524,25 @@
     <string name="provider_model">模型名</string>
     <string name="provider_context_budget">上下文预算（tokens）</string>
     <string name="provider_context_budget_hint">固定设定、记忆、回顾与最近聊天共享；范围 2,048–1,000,000。</string>
+    <string name="generation_settings">生成参数</string>
+    <string name="generation_settings_summary">温度、输出长度、采样预设与指令模板的全局默认</string>
+    <string name="generation_title">生成参数</string>
+    <string name="generation_summary">全局默认适用于所有推理请求；推理配置可在「推理配置」页逐项覆盖。</string>
+    <string name="generation_section_parameters">生成参数</string>
+    <string name="generation_section_template">指令模板</string>
+    <string name="generation_temperature">温度（Temperature）</string>
+    <string name="generation_top_p">Top_P</string>
+    <string name="generation_max_tokens">最大输出 Token</string>
+    <string name="generation_max_tokens_hint">范围 128–8192</string>
+    <string name="generation_preset">采样预设</string>
+    <string name="generation_preset_precise">精准 0.2</string>
+    <string name="generation_preset_balanced">均衡 0.7</string>
+    <string name="generation_preset_creative">创意 1.1</string>
+    <string name="generation_preset_custom">自定义</string>
+    <string name="generation_template_roleplay">角色扮演</string>
+    <string name="generation_template_direct">直接回答</string>
+    <string name="generation_template_straight">简明作答</string>
+    <string name="generation_saved">已保存生成参数</string>
     <string name="provider_api_key">API Key</string>
     <string name="provider_extra_headers">额外请求头（可选）</string>
     <string name="provider_extra_headers_hint">每行一个，格式为 Name: Value</string>
@@ -556,6 +560,10 @@
     <string name="vision_provider_summary">仅在用户上传未描述图片时调用；未保存独立配置时使用通用模型。</string>
     <string name="remove_vision_provider">移除独立视觉配置</string>
     <string name="remove_task_provider">移除该任务配置</string>
+    <string name="provider_generation_overrides">生成参数覆盖</string>
+    <string name="provider_generation_overrides_summary">关闭某项即跟随全局默认；开启后对该任务单独生效。</string>
+    <string name="generation_follow_default">跟随全局默认</string>
+    <string name="generation_override_on">已覆盖</string>
     <string name="vision_provider_removed">已移除独立视觉配置，将使用通用模型</string>
     <string name="capability_chat">普通对话</string>
     <string name="capability_streaming">流式响应</string>

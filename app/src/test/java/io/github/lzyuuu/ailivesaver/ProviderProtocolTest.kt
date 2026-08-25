@@ -51,15 +51,16 @@ class ProviderProtocolTest {
                 """{"choices":[{"delta":{},"finish_reason":"stop"}]}""",
             ),
         )
-        val vision = ProviderProtocol.visionRequest("vision-model", "data:image/jpeg;base64,abc")
-        val visionMessages = vision.getJSONArray("messages")
-        val visionContent = visionMessages.getJSONObject(0).getJSONArray("content")
-        assertEquals(1, visionMessages.length())
-        assertEquals(2, visionContent.length())
-        assertEquals(
+        val vision = ProviderProtocol.visionRequest(
+            "vision-model",
             "data:image/jpeg;base64,abc",
-            visionContent.getJSONObject(1).getJSONObject("image_url").getString("url"),
+            settings = GenerationSettings(),
         )
+        val visionMessages = vision.getJSONArray("messages")
+        val visionContent = visionMessages.getJSONObject(1).getJSONArray("content")
+        assertEquals(2, visionMessages.length())
+        assertEquals("system", visionMessages.getJSONObject(0).getString("role"))
+        assertEquals(2, visionContent.length())
         assertFalse(vision.toString().contains("memory", ignoreCase = true))
     }
 
@@ -69,6 +70,7 @@ class ProviderProtocolTest {
             "model",
             "Return JSON.",
             "Say OK.",
+            settings = GenerationSettings(),
         )
         assertEquals(
             "json_object",
@@ -206,6 +208,7 @@ class ProviderProtocolTest {
                 byHost.model,
                 "system",
                 "prompt",
+                settings = GenerationSettings(),
                 disableThinking = byHost.shouldDisableThinking(),
             ).getJSONObject("thinking").getString("type"),
         )

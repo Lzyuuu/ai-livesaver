@@ -516,7 +516,12 @@ internal object WorldEngine {
             turn,
             actor.appearance.isNotBlank() || actor.clothing.isNotBlank(),
         )
-        ProviderTextClient.completeStructured(config, system, prompt) { result ->
+        ProviderTextClient.completeStructured(
+            config,
+            ProviderStore(context).loadDefaultGeneration(),
+            system,
+            prompt,
+        ) { result ->
             var mediaQueued = false
             val created = runCatching {
                 result.fold(
@@ -680,7 +685,12 @@ internal object WorldEngine {
             "Write one natural short photo-lifestyle social post for Ustagram. " +
                 "Keep it under 80 Chinese characters and do not address the user directly.$styleHint"
         val attachWorldImage = shouldAttachWorldImage(eventCount, "post", true)
-        ProviderTextClient.completeStructured(config, system, prompt) { result ->
+        ProviderTextClient.completeStructured(
+            config,
+            ProviderStore(context).loadDefaultGeneration(),
+            system,
+            prompt,
+        ) { result ->
             var mediaQueued = false
             val created = runCatching {
                 result.fold(
@@ -797,6 +807,7 @@ internal object WorldEngine {
         }
         ProviderTextClient.completeStructured(
             config,
+            ProviderStore(context).loadDefaultGeneration(),
             "You are ${character.name}. ${character.persona}",
             "$prompt\n\nUser post:\n$body",
         ) { result ->
@@ -934,6 +945,7 @@ internal object WorldEngine {
         }
         ProviderTextClient.completeStructured(
             config,
+            ProviderStore(context).loadDefaultGeneration(),
             system,
             "Rewrite this post as a distinct alternative. Keep the same facts, do not mention rewriting, " +
                 "and stay under 120 Chinese characters.\n\n${post.body}",
@@ -1010,6 +1022,7 @@ internal object WorldEngine {
         }
         ProviderTextClient.completeStructured(
             config,
+            ProviderStore(context).loadDefaultGeneration(),
             "You are ${character.name}. ${character.persona}",
             "$prompt\nPost to r/$community. Reply with the post body only.",
         ) { result ->

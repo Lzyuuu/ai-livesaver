@@ -134,10 +134,12 @@ private fun captureLongTermMemory(
         return
     }
     if (!MemoryExtractor.shouldInspect(message.body)) return
-    val config = ProviderStore(context).loadFor(ProviderTask.Memory)
+    val provider = ProviderStore(context)
+    val config = provider.loadFor(ProviderTask.Memory)
     if (!config.supports(ProviderCapability.Structured)) return
     ProviderTextClient.completeStructured(
         config,
+        provider.loadDefaultGeneration(),
         "Extract only durable facts the user explicitly shares for future conversation context. " +
             "Do not infer preferences, identity or plans that are not clearly stated. " +
             "Return NONE when this message contains no durable fact.",
@@ -1425,6 +1427,7 @@ private fun ConversationScreen(
                         onChanged()
                     }
                 },
+                defaults = provider.loadDefaultGeneration(),
                 handle = handle,
             )
         }.start()
@@ -2426,6 +2429,7 @@ private fun ConversationContextScreen(
                                 recapError = null
                                 ProviderTextClient.complete(
                                     provider.loadFor(ProviderTask.Memory),
+                                    provider.loadDefaultGeneration(),
                                     "Summarize a private conversation for future context. " +
                                         "Preserve concrete events, promises, feelings and unresolved topics. " +
                                         "Do not invent facts. Write concise natural-language Chinese.",
