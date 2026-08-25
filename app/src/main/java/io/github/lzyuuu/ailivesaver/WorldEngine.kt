@@ -42,6 +42,26 @@ internal fun chooseWorldTurn(
     else -> "none"
 }
 
+/**
+ * 独立发帖轮次的平台路由（spec-v451 §1）：双授权时按 eventCount 奇偶交替 Y/Ustagram，
+ * 单授权走唯一平台，全部关闭则不发帖。interaction 轮次固定 Ustagram moment。
+ */
+internal fun choosePostPlatform(eventCount: Int, allowY: Boolean, allowUstagram: Boolean): String = when {
+    allowY && (!allowUstagram || eventCount % 2 == 1) -> "y"
+    allowUstagram -> "ustagram"
+    else -> "none"
+}
+
+/**
+ * 发布执行点兜底检查（spec-v451 §1 双保险）：选行动后、真正发布前再核对一次该角色授权。
+ */
+internal fun postAllowed(controls: ChatControls, postKind: String): Boolean = when {
+    postKind == Y_POST_KIND -> controls.allowPostY
+    postKind == "forum" -> controls.allowPostRebbit
+    postKind == "moment" -> controls.allowPostUstagram
+    else -> true
+}
+
 internal fun shouldAttachWorldImage(
     eventCount: Int,
     turn: String,
@@ -353,18 +373,25 @@ internal object WorldEngine {
         val activeCharacters = store.characters(includeDeparted = false)
         val messageCharacters = activeCharacters.filter { proactiveMessages(context, it.id) }
         val postCharacters = activeCharacters.filter { proactivePosts(context, it.id) }
-        val interactionActor = postCharacters.firstOrNull()
+        // 发帖授权过滤（spec-v451 §1）：moment/interaction 需要 Ustagram 授权，Y 分支需要 Y 授权。
+        val ustagramActor = postCharacters.firstOrNull {
+            store.chatControls(it.id).allowPostUstagram
+        }
+        val yActor = postCharacters.firstOrNull {
+            store.chatControls(it.id).allowPostY
+        }
+        val interactionActor = ustagramActor
         val turn = chooseWorldTurn(
             eventCount,
             proactiveMessages = messageCharacters.isNotEmpty(),
-            proactivePosts = postCharacters.isNotEmpty(),
+            proactivePosts = ustagramActor != null || yActor != null,
             hasBackgroundPair = interactionActor != null &&
                 activeCharacters.any { it.id != interactionActor.id },
             allowInteraction = interactionActor != null,
         )
         val actor = when (turn) {
             "message" -> messageCharacters.firstOrNull()
-            "post", "interaction" -> interactionActor
+            "post", "interaction" -> interactionActor ?: yActor
             else -> null
         } ?: character
         val npcTurn = turn == "npc"
@@ -374,6 +401,46 @@ internal object WorldEngine {
             otherCharacters[(eventCount / 7) % otherCharacters.size]
         } else {
             null
+        }
+        if (turn == "post") {
+            // 独立发帖轮次按授权路由平台；Y 分支复用 YGeneration 管线（当前 tick 从不发 Y）。
+            val actorControls = store.chatControls(actor.id)
+            when (choosePostPlatform(
+                eventCount,
+                allowY = actorControls.allowPostY,
+                allowUstagram = actorControls.allowPostUstagram,
+            )) {
+                "y" -> {
+                    generateYPost(
+                        context,
+                        customPrompt = "",
+                        existingStore = store,
+                        actorOverride = actor,
+                    ) { created ->
+                        if (created) {
+                            consumeBudget(context)
+                            recordSuccess(context)
+                            preferences(context).edit {
+                                putInt("event_count", eventCount + 1)
+                                putLong("last_event", System.currentTimeMillis())
+                            }
+                        } else {
+                            recordFailure(context, "Y post generation failed")
+                        }
+                        store.close()
+                        generationRunning.set(false)
+                        callback(created)
+                    }
+                    return true
+                }
+                "none" -> {
+                    // 选行动后授权全部关闭：本轮静默跳过，不发布任何内容。
+                    store.close()
+                    generationRunning.set(false)
+                    callback(false)
+                    return true
+                }
+            }
         }
         val pendingNpc = if (npcTurn) npcProfileForEvent(eventCount) else null
         val npcForumTarget = if (pendingNpc != null && eventCount % 10 == 9) {
@@ -456,6 +523,12 @@ internal object WorldEngine {
                     onSuccess = { response ->
                         val body = response.text
                         val usedConfig = response.config
+                        // 发布执行前兜底（spec-v451 §1 双保险）：moment/interaction 发布前再核对授权。
+                        if (pendingNpc == null && !messageTurn) {
+                            check(postAllowed(store.chatControls(actor.id), "moment")) {
+                                "Moment posting authorization is revoked"
+                            }
+                        }
                         when {
                             pendingNpc != null -> {
                                 check(
@@ -661,10 +734,7 @@ internal object WorldEngine {
     }
 
     private fun worldImagePrompt(context: Context, actor: ResidentCharacter, scene: String): String =
-        listOf(actor.appearance, actor.clothing, globalStyle(context), scene)
-            .map { it.trim() }
-            .filter { it.isNotBlank() }
-            .joinToString(", ")
+        composeImageIntentPrompt(actor.appearance, actor.clothing, globalStyle(context), scene)
 
     fun respondToPost(
         context: Context,

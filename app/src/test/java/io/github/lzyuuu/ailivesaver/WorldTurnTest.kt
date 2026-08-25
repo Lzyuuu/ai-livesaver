@@ -97,4 +97,26 @@ class WorldTurnTest {
         assertFalse(shouldAttachWorldImage(2, "message", hasVisualIdentity = true))
         assertFalse(shouldAttachWorldImage(2, "post", hasVisualIdentity = false))
     }
+
+    @Test
+    fun routesStandalonePostTurnsAcrossAuthorizedPlatforms() {
+        assertEquals("ustagram", choosePostPlatform(0, allowY = true, allowUstagram = true))
+        assertEquals("y", choosePostPlatform(1, allowY = true, allowUstagram = true))
+        assertEquals("y", choosePostPlatform(0, allowY = true, allowUstagram = false))
+        assertEquals("y", choosePostPlatform(3, allowY = true, allowUstagram = false))
+        assertEquals("ustagram", choosePostPlatform(1, allowY = false, allowUstagram = true))
+        assertEquals("none", choosePostPlatform(4, allowY = false, allowUstagram = false))
+    }
+
+    @Test
+    fun executionGuardRechecksPlatformAuthorization() {
+        val lockedDown = ChatControls()
+        assertFalse(postAllowed(lockedDown, Y_POST_KIND))
+        assertFalse(postAllowed(lockedDown, "moment"))
+        assertFalse(postAllowed(lockedDown, "forum"))
+        val permissive = defaultChatControls()
+        assertTrue(postAllowed(permissive, Y_POST_KIND))
+        assertTrue(postAllowed(permissive, "moment"))
+        assertTrue(postAllowed(permissive, "forum"))
+    }
 }

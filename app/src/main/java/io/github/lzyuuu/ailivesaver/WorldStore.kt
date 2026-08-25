@@ -2110,6 +2110,7 @@ internal class WorldStore(
         mediaHeight: Int = 512,
         subreddit: String = "",
         mediaPath: String? = null,
+        hidden: Boolean = false,
     ): Long {
         val cleanMediaPrompt = mediaPrompt.orEmpty().trim()
         val cleanMediaPath = mediaPath?.trim().orEmpty()
@@ -2150,6 +2151,7 @@ internal class WorldStore(
                         put("provider_name", providerName)
                         put("model_name", modelName)
                         put("subreddit", cleanSubreddit)
+                        put("hidden", if (hidden) 1 else 0)
                         put(
                             "media_status",
                             when {
@@ -3332,6 +3334,19 @@ internal class WorldStore(
                 put("time_zone", timeZone.trim())
             },
             SQLiteDatabase.CONFLICT_REPLACE,
+        )
+    }
+
+    // 聊天抽屉 5 开关的 per-member KV 载体（spec-v451 §1）：member_key = "chat_controls:<id>"，
+    // 编码进 location 列，不动 schema。
+    fun chatControls(characterId: Long): ChatControls =
+        decodeChatControls(memberWorldContext("chat_controls:$characterId").location)
+
+    fun saveChatControls(characterId: Long, controls: ChatControls) {
+        saveMemberWorldContext(
+            "chat_controls:$characterId",
+            encodeChatControls(controls),
+            "",
         )
     }
 

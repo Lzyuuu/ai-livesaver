@@ -107,6 +107,26 @@ internal data class CapabilityResult(
     val detail: String = "",
 )
 
+internal enum class GenerationPreset(val temperature: Float, val maxTokens: Int, val topP: Float) {
+    Precise(0.2f, 1024, 0.8f), Balanced(0.7f, 2048, 0.95f), Creative(1.1f, 4096, 0.95f), Custom(0.7f, 2048, 0.95f)
+}
+
+internal enum class InstructionTemplate(val prompt: String) {
+    Roleplay("Stay deeply in character and respond naturally."),
+    Direct("Answer directly and concisely."),
+    StraightAnswers("Give straightforward factual answers.")
+}
+
+internal data class GenerationSettings(
+    val temperature: Float = 0.7f,
+    val maxTokens: Int = 2048,
+    val topP: Float = 0.95f,
+    val preset: GenerationPreset = GenerationPreset.Balanced,
+    val instructionTemplate: InstructionTemplate = InstructionTemplate.Roleplay,
+) {
+    fun normalized() = copy(temperature = temperature.coerceIn(0f, 2f), maxTokens = maxTokens.coerceIn(128, 8192), topP = topP.coerceIn(0f, 1f))
+}
+
 internal data class ProviderConfig(
     val preset: ProviderPreset = ProviderPreset.DeepSeek,
     val baseUrl: String = ProviderPreset.DeepSeek.defaultBaseUrl,
@@ -114,6 +134,7 @@ internal data class ProviderConfig(
     val apiKey: String = "",
     val extraHeaders: String = "",
     val contextBudget: Int = DEFAULT_CONTEXT_BUDGET,
+    val generation: GenerationSettings = GenerationSettings(),
     val capabilities: ProviderCapabilities = ProviderCapabilities(),
     val fallback: ProviderConfig? = null,
 ) {
@@ -152,6 +173,12 @@ internal fun isRetryableStructuredFormatFailure(failure: Throwable): Boolean =
         failure.message.orEmpty().contains("body must be a string", ignoreCase = true)
 
 internal object ProviderProtocol {
+    fun chatRequest(model: String, prompt: String, settings: GenerationSettings, stream: Boolean = false): JSONObject {
+        val s = settings.normalized()
+        return JSONObject().put("model", model).put("temperature", s.temperature).put("max_tokens", s.maxTokens).put("top_p", s.topP).put("stream", stream)
+            .put("messages", JSONArray().put(JSONObject().put("role", "system").put("content", s.instructionTemplate.prompt)).put(JSONObject().put("role", "user").put("content", prompt)))
+    }
+
     fun chatCompletionsUrl(baseUrl: String) =
         "${baseUrl.trim().trimEnd('/')}/chat/completions"
 
@@ -581,6 +608,7 @@ internal object ProviderChatClient {
         characterContext: MemberWorldContext,
         relationship: RelationshipState,
         systemPromptAppendix: String = "",
+        webResults: List<WebSearchResult> = emptyList(),
         onDelta: (String) -> Unit,
         callback: (Result<ProviderResponse>) -> Unit,
         handle: ProviderStreamHandle = ProviderStreamHandle(),
@@ -597,6 +625,7 @@ internal object ProviderChatClient {
                     userContext,
                     characterContext,
                     relationship,
+                    webResults,
                 ) + systemPromptAppendix.trim().takeIf { it.isNotBlank() }?.let { "\n\nGroup scene/system instructions:\n$it" }.orEmpty()
                 val requestMessages = JSONArray().put(
                     JSONObject().put("role", "system").put("content", system),
@@ -622,6 +651,10 @@ internal object ProviderChatClient {
                             .put("model", candidate.model)
                             .put("messages", requestMessages)
                             .put("stream", true)
+                            .put("temperature", candidate.generation.normalized().temperature)
+                            .put("max_tokens", candidate.generation.normalized().maxTokens)
+                            .put("top_p", candidate.generation.normalized().topP)
+                        requestMessages.getJSONObject(0).put("content", buildString { append(requestMessages.getJSONObject(0).getString("content")); append("\n\n"); append(candidate.generation.instructionTemplate.prompt) })
                         val text = ProviderHttp.stream(candidate, body, handle) { accumulated ->
                             delivered = true
                             Handler(Looper.getMainLooper()).post { onDelta(accumulated) }
@@ -707,6 +740,7 @@ internal fun buildChatSystemPrompt(
     userContext: MemberWorldContext? = null,
     characterContext: MemberWorldContext? = null,
     relationship: RelationshipState? = null,
+    webResults: List<WebSearchResult> = emptyList(),
 ): String = buildString {
     append("You are ${character.name}. ")
     append(character.persona)
@@ -738,6 +772,7 @@ internal fun buildChatSystemPrompt(
         append("\nLong-term memories:\n")
         memories.take(20).forEach { append("- ${it.body}\n") }
     }
+    append(webResultsForPrompt(webResults))
 }
 
 internal fun relationshipBehaviorGuidance(relationship: RelationshipState): String = when {

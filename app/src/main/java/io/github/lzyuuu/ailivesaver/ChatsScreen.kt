@@ -165,6 +165,56 @@ private fun captureLongTermMemory(
     }
 }
 
+internal fun composeImageIntentPrompt(
+    appearance: String,
+    clothing: String,
+    styleHint: String,
+    scene: String,
+): String = listOf(appearance, clothing, styleHint, scene)
+    .map { it.trim() }
+    .filter { it.isNotBlank() }
+    .joinToString(", ")
+
+internal fun shouldQueueReplyImage(controls: ChatControls, replyBody: String): Boolean =
+    controls.autoImageGeneration && replyBody.isNotBlank()
+
+/**
+ * 回复后自动配图（spec-v451 §1）：把回复内容转成「配图意图」并入世界事件同一条
+ * LocalDream 管线。载体是隐藏 moment 帖（不出现在任何信息流、不产生世界事件），
+ * Local Dream 未安装/失败时由既有 markMediaWaiting 静默等待，不阻塞聊天。
+ */
+internal fun queueChatReplyImageIntent(
+    controls: ChatControls,
+    context: android.content.Context,
+    store: WorldStore,
+    character: ResidentCharacter,
+    replyBody: String,
+) {
+    if (!shouldQueueReplyImage(controls, replyBody)) return
+    val prompt = composeImageIntentPrompt(
+        appearance = character.appearance,
+        clothing = character.clothing,
+        styleHint = WorldEngine.globalStyle(context),
+        scene = replyBody.trim().take(240),
+    )
+    if (prompt.isBlank()) return
+    runCatching {
+        store.createPost(
+            kind = "moment",
+            authorName = character.name,
+            title = "",
+            body = "",
+            authorKind = "resident",
+            authorCharacterId = character.id,
+            aiResponsesEnabled = false,
+            hidden = true,
+            mediaPrompt = prompt,
+            mediaNegativePrompt = character.negativePrompt,
+        )
+    }
+    LocalDreamQueue.resume(context)
+}
+
 @Composable
 internal fun ChatsScreen(
     contentPadding: PaddingValues,
@@ -1236,6 +1286,11 @@ private fun ConversationScreen(
     var input by rememberSaveable { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
     var showContext by rememberSaveable { mutableStateOf(false) }
+    var showControlDrawer by rememberSaveable { mutableStateOf(false) }
+    var showExitConfirmation by remember { mutableStateOf(false) }
+    var chatControls by rememberSaveable(stateSaver = ChatControlsSaver) {
+        mutableStateOf(store.chatControls(character.id))
+    }
     var streamingMessageId by remember { mutableStateOf<Long?>(null) }
     var streamingText by remember { mutableStateOf("") }
     var menuExpanded by remember { mutableStateOf(false) }
@@ -1279,73 +1334,100 @@ private fun ConversationScreen(
         var lastPersistedAt = 0L
         val handle = ProviderStreamHandle()
         ActiveChatReplies.attachStream(character.id, handle)
-        ProviderChatClient.stream(
-            config = config,
-            character = character,
-            messages = store.messages(character.id),
-            memories = store.memories(character.id),
-            recap = store.conversationRecap(character.id),
-            worldFacts = store.worldFacts(),
-            cognition = store.characterCognition(character.id),
-            userContext = store.memberWorldContext("user"),
-            characterContext = store.memberWorldContext("character:${character.id}"),
-            relationship = relationship,
-            onDelta = { body ->
-                streamingText = body
-                val now = System.currentTimeMillis()
-                if (now - lastPersistedAt >= 500) {
-                    runCatching {
-                        WorldStore(context.applicationContext).use {
-                            it.updateAssistantDraft(reply.id, body)
+        Thread {
+            val webResults = if (chatControls.webSearchEnabled) {
+                searchDuckDuckGo(
+                    store.messages(character.id)
+                        .lastOrNull { it.sender == "user" && it.active && it.status == "complete" }
+                        ?.body.orEmpty(),
+                )
+            } else {
+                emptyList()
+            }
+            ProviderChatClient.stream(
+                config = config,
+                character = character,
+                messages = store.messages(character.id),
+                memories = store.memories(character.id),
+                recap = store.conversationRecap(character.id),
+                worldFacts = store.worldFacts(),
+                cognition = store.characterCognition(character.id),
+                userContext = store.memberWorldContext("user"),
+                characterContext = store.memberWorldContext("character:${character.id}"),
+                relationship = relationship,
+                webResults = webResults,
+                onDelta = { body ->
+                    streamingText = body
+                    val now = System.currentTimeMillis()
+                    if (now - lastPersistedAt >= 500) {
+                        runCatching {
+                            WorldStore(context.applicationContext).use {
+                                it.updateAssistantDraft(reply.id, body)
+                            }
                         }
+                        lastPersistedAt = now
                     }
-                    lastPersistedAt = now
-                }
-            },
-            callback = { result ->
-                try {
-                    result.fold(
-                        onSuccess = { response ->
-                            runCatching {
-                                WorldStore(context.applicationContext).use {
-                                    it.completeAssistantReply(
-                                        reply.id,
-                                        response.text,
-                                        response.config.preset.displayName,
-                                        response.config.model,
-                                    )
+                },
+                callback = { result ->
+                    try {
+                        result.fold(
+                            onSuccess = { response ->
+                                val persisted = runCatching {
+                                    WorldStore(context.applicationContext).use {
+                                        it.completeAssistantReply(
+                                            reply.id,
+                                            response.text,
+                                            response.config.preset.displayName,
+                                            response.config.model,
+                                        )
+                                    }
                                 }
-                            }.onFailure {
+                                persisted.onFailure {
+                                    runCatching {
+                                        WorldStore(context.applicationContext).use { callbackStore ->
+                                            callbackStore.failAssistantReply(reply.id, it.message.orEmpty())
+                                        }
+                                    }
+                                    error = it.message.orEmpty()
+                                }
+                                if (persisted.isSuccess) {
+                                    // 回复后自动配图（spec-v451 §1）：静默入队，不阻塞聊天。
+                                    runCatching {
+                                        WorldStore(context.applicationContext).use { intentStore ->
+                                            queueChatReplyImageIntent(
+                                                chatControls,
+                                                context.applicationContext,
+                                                intentStore,
+                                                character,
+                                                response.text,
+                                            )
+                                        }
+                                    }
+                                }
+                            },
+                            onFailure = { failure ->
                                 runCatching {
                                     WorldStore(context.applicationContext).use { callbackStore ->
-                                        callbackStore.failAssistantReply(reply.id, it.message.orEmpty())
+                                        if (failure is ProviderStreamCancelledException || handle.isCancelled()) {
+                                            callbackStore.interruptAssistantReply(reply.id)
+                                        } else {
+                                            callbackStore.failAssistantReply(reply.id, failure.message.orEmpty())
+                                            error = failure.message.orEmpty()
+                                        }
                                     }
                                 }
-                                error = it.message.orEmpty()
-                            }
-                        },
-                        onFailure = { failure ->
-                            runCatching {
-                                WorldStore(context.applicationContext).use { callbackStore ->
-                                    if (failure is ProviderStreamCancelledException || handle.isCancelled()) {
-                                        callbackStore.interruptAssistantReply(reply.id)
-                                    } else {
-                                        callbackStore.failAssistantReply(reply.id, failure.message.orEmpty())
-                                        error = failure.message.orEmpty()
-                                    }
-                                }
-                            }
-                        },
-                    )
-                } finally {
-                    ActiveChatReplies.remove(character.id)
-                    streamingMessageId = null
-                    streamingText = ""
-                    onChanged()
-                }
-            },
-            handle = handle,
-        )
+                            },
+                        )
+                    } finally {
+                        ActiveChatReplies.remove(character.id)
+                        streamingMessageId = null
+                        streamingText = ""
+                        onChanged()
+                    }
+                },
+                handle = handle,
+            )
+        }.start()
     }
 
     fun stopGeneration() {
@@ -1427,9 +1509,35 @@ private fun ConversationScreen(
             )
         }
     }
-
-    BackHandler(enabled = !showContext) { onBack() }
+    BackHandler(enabled = !showContext && !showControlDrawer) {
+        if (shouldConfirmChatExit(sending, ActiveChatReplies.contains(character.id))) showExitConfirmation = true else onBack()
+    }
     BackHandler(showContext) { showContext = false }
+    if (showExitConfirmation) StreamingExitDialog(onConfirm = { stopGeneration(); showExitConfirmation = false; onBack() }, onDismiss = { showExitConfirmation = false })
+    if (showControlDrawer) MessengerControlDrawer(
+        controls = chatControls,
+        memories = memories,
+        onControlsChanged = {
+            chatControls = it
+            store.saveChatControls(character.id, it)
+        },
+        onAddMemory = { body ->
+            latestUserMessageForMemory(messages)?.let { message ->
+                store.rememberIfCurrent(character.id, message.id, body)
+            }
+            onChanged()
+        },
+        onPinMemory = { id, pinned ->
+            store.setMemoryPinned(id, pinned)
+            onChanged()
+        },
+        onDeleteMemory = { id ->
+            store.deleteMemory(id)
+            onChanged()
+        },
+        onConsolidate = { latestUserMessageForMemory(messages)?.let { message -> captureLongTermMemory(context, store, character, message, onChanged) } },
+        onDismiss = { showControlDrawer = false },
+    )
     // 回复完成（streaming→complete）也触发已读标记，避免会话内读完最新回复后
     // 返回列表时未读角标残留。
     LaunchedEffect(messages.size, messages.lastOrNull()?.status) {
@@ -1565,7 +1673,7 @@ private fun ConversationScreen(
                     )
                 }
                 IconButton(
-                    onClick = { showContext = true },
+                    onClick = { showControlDrawer = true },
                     modifier = Modifier.testTag("messenger-open-context"),
                 ) {
                     Icon(

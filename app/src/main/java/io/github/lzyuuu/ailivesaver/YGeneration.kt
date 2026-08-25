@@ -12,13 +12,15 @@ internal fun generateYPost(
     context: Context,
     customPrompt: String,
     existingStore: WorldStore? = null,
+    actorOverride: ResidentCharacter? = null,
     callback: (Boolean) -> Unit,
 ): Boolean {
     val store = existingStore ?: WorldStore(context)
     fun closeOwnedStore() {
         if (existingStore == null) store.close()
     }
-    val actor = store.characters(includeDeparted = false).firstOrNull()
+    val actor = actorOverride
+        ?: store.characters(includeDeparted = false).firstOrNull()
         ?: store.primaryCharacter()
     if (actor == null) {
         closeOwnedStore()
