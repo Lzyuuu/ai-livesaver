@@ -28,6 +28,13 @@ internal data class ImportedCharacterCard(
     val avatarBytes: ByteArray? = null,
     val visualStyle: String = "",
     val gender: String = "",
+    val age: String = "",
+    val ethnicity: String = "",
+    val skin: String = "",
+    val eyes: String = "",
+    val hair: String = "",
+    val body: String = "",
+    val appearanceSupplement: String = "",
     val appearancePrompt: String = "",
     val clothing: String = "",
     val negativePrompt: String = "",
@@ -43,6 +50,13 @@ internal data class CharacterProfileFields(
     val avatarPath: String = "",
     val visualStyle: String = "",
     val gender: String = "",
+    val age: String = "",
+    val ethnicity: String = "",
+    val skin: String = "",
+    val eyes: String = "",
+    val hair: String = "",
+    val body: String = "",
+    val appearanceSupplement: String = "",
     val appearancePrompt: String = "",
     val clothing: String = "",
     val negativePrompt: String = "",
@@ -57,7 +71,142 @@ internal data class ExtractedAppearance(
     val hair: String = "",
     val eyes: String = "",
     val build: String = "",
+    val age: String = "",
+    val ethnicity: String = "",
+    val skin: String = "",
+    val body: String = "",
+    val supplement: String = "",
 )
+
+internal object VisualIdentity {
+    val style = listOf("photoreal", "film photo", "anime", "painted")
+    val gender = listOf("woman", "man", "nonbinary", "androgynous")
+    val age = listOf("early twenties", "late twenties", "thirties", "forties")
+    val ethnicity = listOf(
+        "Black",
+        "East Asian",
+        "South Asian",
+        "Middle Eastern",
+        "Latino",
+        "Slavic",
+        "White",
+        "mixed",
+    )
+    val skin = listOf("pale", "olive", "tan", "brown", "freckled")
+    val eyes = listOf("blue", "green", "brown", "amber", "grey")
+    val hair = listOf("short dark", "long black", "blonde waves", "red curls", "buzzed", "silver")
+    val body = listOf("slim", "athletic", "broad", "stocky", "curvy", "petite")
+
+    private val classifiedKeys = listOf(
+        "age", "ethnicity", "skin", "eyes", "hair", "body", "build", "supplement",
+    )
+
+    fun hasClassifications(visualIdentity: JSONObject?): Boolean =
+        visualIdentity != null && classifiedKeys.any { visualIdentity.has(it) }
+
+    fun composeFixedFeature(fields: CharacterProfileFields): String =
+        listOf(
+            fields.visualStyle,
+            fields.gender,
+            fields.age,
+            fields.ethnicity,
+            fields.skin,
+            fields.eyes,
+            fields.hair,
+            fields.body,
+            fields.appearanceSupplement,
+        ).map(String::trim).filter(String::isNotEmpty).joinToString(", ")
+
+    fun normalize(fields: CharacterProfileFields): CharacterProfileFields {
+        val extraFilled = listOf(
+            fields.age,
+            fields.ethnicity,
+            fields.skin,
+            fields.eyes,
+            fields.hair,
+            fields.body,
+            fields.appearanceSupplement,
+        ).any { it.isNotBlank() }
+        val supplement = if (
+            fields.appearanceSupplement.isBlank() &&
+            !extraFilled &&
+            fields.appearancePrompt.isNotBlank()
+        ) {
+            fields.appearancePrompt.trim()
+        } else {
+            fields.appearanceSupplement.trim()
+        }
+        val normalized = fields.copy(
+            visualStyle = fields.visualStyle.trim(),
+            gender = fields.gender.trim(),
+            age = fields.age.trim(),
+            ethnicity = fields.ethnicity.trim(),
+            skin = fields.skin.trim(),
+            eyes = fields.eyes.trim(),
+            hair = fields.hair.trim(),
+            body = fields.body.trim(),
+            appearanceSupplement = supplement,
+            clothing = fields.clothing.trim(),
+            negativePrompt = fields.negativePrompt.trim(),
+        )
+        return normalized.copy(appearancePrompt = composeFixedFeature(normalized))
+    }
+
+    fun fillEmpty(
+        current: CharacterProfileFields,
+        extracted: ExtractedAppearance,
+    ): CharacterProfileFields {
+        fun take(cur: String, ext: String) = cur.trim().ifBlank { ext.trim() }
+        return normalize(
+            current.copy(
+                visualStyle = take(current.visualStyle, extracted.visualStyle),
+                gender = take(current.gender, extracted.gender),
+                age = take(current.age, extracted.age),
+                ethnicity = take(current.ethnicity, extracted.ethnicity),
+                skin = take(current.skin, extracted.skin),
+                eyes = take(current.eyes, extracted.eyes),
+                hair = take(current.hair, extracted.hair),
+                body = take(current.body, extracted.body.ifBlank { extracted.build }),
+                appearanceSupplement = take(current.appearanceSupplement, extracted.supplement),
+                clothing = take(current.clothing, extracted.clothing),
+                negativePrompt = take(current.negativePrompt, extracted.negativePrompt),
+            ),
+        )
+    }
+
+    fun readGroups(
+        extensions: JSONObject,
+        visualIdentity: JSONObject?,
+        fallbackPrompt: String = "",
+    ): CharacterProfileFields {
+        val storedPrompt = extensions.optString("appearance_prompt").trim()
+            .ifBlank { visualIdentity.optTrim("prompt") }
+            .ifBlank { fallbackPrompt }
+        val supplement = if (hasClassifications(visualIdentity)) {
+            visualIdentity.optTrim("supplement")
+        } else {
+            storedPrompt
+        }
+        return normalize(
+            CharacterProfileFields(
+                visualStyle = extensions.optString("visual_style").trim()
+                    .ifBlank { visualIdentity.optTrim("style") },
+                gender = extensions.optString("gender").trim()
+                    .ifBlank { visualIdentity.optTrim("gender") },
+                age = visualIdentity.optTrim("age"),
+                ethnicity = visualIdentity.optTrim("ethnicity"),
+                skin = visualIdentity.optTrim("skin"),
+                eyes = visualIdentity.optTrim("eyes"),
+                hair = visualIdentity.optTrim("hair"),
+                body = visualIdentity.optTrim("body").ifBlank { visualIdentity.optTrim("build") },
+                appearanceSupplement = supplement,
+            ),
+        )
+    }
+}
+
+private fun JSONObject?.optTrim(key: String): String =
+    this?.optString(key)?.trim().orEmpty()
 
 internal object CharacterCardV2 {
     private val pngSignature = byteArrayOf(-119, 80, 78, 71, 13, 10, 26, 10)
@@ -88,6 +237,14 @@ internal object CharacterCardV2 {
         return parseText(text)
     }
 
+    fun composeFixedFeature(fields: CharacterProfileFields): String =
+        VisualIdentity.composeFixedFeature(fields)
+
+    fun fillEmptyVisualIdentity(
+        current: CharacterProfileFields,
+        extracted: ExtractedAppearance,
+    ): CharacterProfileFields = VisualIdentity.fillEmpty(current, extracted)
+
     fun profileFields(character: ResidentCharacter): CharacterProfileFields {
         val root = runCatching { JSONObject(character.cardJson) }.getOrElse { JSONObject() }
         val data = root.optJSONObject("data") ?: JSONObject()
@@ -96,22 +253,17 @@ internal object CharacterCardV2 {
         val description = data.optString("description").trim()
         val personality = data.optString("personality").trim()
         val scenario = data.optString("scenario").trim()
-
-        val style = extensions.optString("visual_style").trim()
-            .ifBlank { visualIdentity?.optString("style")?.trim().orEmpty() }
-        val gender = extensions.optString("gender").trim()
-            .ifBlank { visualIdentity?.optString("gender")?.trim().orEmpty() }
-        val appearance = extensions.optString("appearance_prompt").trim()
-            .ifBlank { visualIdentity?.optString("prompt")?.trim().orEmpty() }
+        val fallbackPrompt = extensions.optString("appearance").trim()
             .ifBlank { character.appearance.trim() }
+        val visual = VisualIdentity.readGroups(extensions, visualIdentity, fallbackPrompt)
         val clothing = extensions.optString("clothing").trim()
-            .ifBlank { visualIdentity?.optString("clothing")?.trim().orEmpty() }
+            .ifBlank { visualIdentity.optTrim("clothing") }
             .ifBlank { character.clothing.trim() }
         val negative = extensions.optString("negative_prompt").trim()
-            .ifBlank { visualIdentity?.optString("negative_prompt")?.trim().orEmpty() }
+            .ifBlank { visualIdentity.optTrim("negative_prompt") }
             .ifBlank { character.negativePrompt.trim() }
 
-        return CharacterProfileFields(
+        return visual.copy(
             handle = extensions.optString("handle").trim()
                 .ifBlank { slugHandle(character.name) },
             description = description.ifBlank { character.persona },
@@ -120,9 +272,6 @@ internal object CharacterCardV2 {
             firstMessage = data.optString("first_mes").trim(),
             relationship = extensions.optString("relationship_to_user").trim(),
             avatarPath = extensions.optString("avatar_path").trim(),
-            visualStyle = style,
-            gender = gender,
-            appearancePrompt = appearance,
             clothing = clothing,
             negativePrompt = negative,
         )
@@ -155,24 +304,31 @@ internal object CharacterCardV2 {
         val extensions = data.optJSONObject("extensions") ?: JSONObject().also {
             data.put("extensions", it)
         }
-        extensions.put("handle", normalizeHandle(fields.handle.ifBlank { name }))
-        extensions.put("relationship_to_user", fields.relationship.trim())
-        extensions.put("avatar_path", fields.avatarPath.trim())
-        extensions.put("visual_style", fields.visualStyle.trim())
-        extensions.put("gender", fields.gender.trim())
-        extensions.put("appearance_prompt", fields.appearancePrompt.trim())
-        extensions.put("clothing", fields.clothing.trim())
-        extensions.put("negative_prompt", fields.negativePrompt.trim())
+        val visual = VisualIdentity.normalize(fields)
+        extensions.put("handle", normalizeHandle(visual.handle.ifBlank { name }))
+        extensions.put("relationship_to_user", visual.relationship.trim())
+        extensions.put("avatar_path", visual.avatarPath.trim())
+        extensions.put("visual_style", visual.visualStyle)
+        extensions.put("gender", visual.gender)
+        extensions.put("appearance_prompt", visual.appearancePrompt)
+        extensions.put("clothing", visual.clothing)
+        extensions.put("negative_prompt", visual.negativePrompt)
 
-        // Preserve and sync visual_identity dictionary
         val visualIdentity = extensions.optJSONObject("visual_identity") ?: JSONObject().also {
             extensions.put("visual_identity", it)
         }
-        visualIdentity.put("style", fields.visualStyle.trim())
-        visualIdentity.put("gender", fields.gender.trim())
-        visualIdentity.put("prompt", fields.appearancePrompt.trim())
-        visualIdentity.put("clothing", fields.clothing.trim())
-        visualIdentity.put("negative_prompt", fields.negativePrompt.trim())
+        visualIdentity.put("style", visual.visualStyle)
+        visualIdentity.put("gender", visual.gender)
+        visualIdentity.put("age", visual.age)
+        visualIdentity.put("ethnicity", visual.ethnicity)
+        visualIdentity.put("skin", visual.skin)
+        visualIdentity.put("eyes", visual.eyes)
+        visualIdentity.put("hair", visual.hair)
+        visualIdentity.put("body", visual.body)
+        visualIdentity.put("supplement", visual.appearanceSupplement)
+        visualIdentity.put("prompt", visual.appearancePrompt)
+        visualIdentity.put("clothing", visual.clothing)
+        visualIdentity.put("negative_prompt", visual.negativePrompt)
 
         return root.toString(2)
     }
@@ -224,28 +380,26 @@ internal object CharacterCardV2 {
             .findAll(combined)
             .forEach { buildMatches.add(it.value.trim()) }
 
-        // Gender heuristic
         val gender = when {
-            Regex("(?i)\\b(?:woman|girl|female|lady|sister|mother)\\b|少女|女生|女性|女人|姐姐|妹妹|女孩|女士").containsMatchIn(combined) -> "Woman"
-            Regex("(?i)\\b(?:man|boy|male|gentleman|brother|father)\\b|少年|青年|男生|男性|男人|哥哥|弟弟|男孩|男士").containsMatchIn(combined) -> "Man"
-            Regex("(?i)\\b(?:non-binary|enby)\\b|非二元").containsMatchIn(combined) -> "Non-binary"
-            else -> "Unspecified"
+            Regex("(?i)\\b(?:woman|girl|female|lady|sister|mother)\\b|少女|女生|女性|女人|姐姐|妹妹|女孩|女士").containsMatchIn(combined) -> "woman"
+            Regex("(?i)\\b(?:man|boy|male|gentleman|brother|father)\\b|少年|青年|男生|男性|男人|哥哥|弟弟|男孩|男士").containsMatchIn(combined) -> "man"
+            Regex("(?i)\\b(?:nonbinary|non-binary|enby)\\b|非二元").containsMatchIn(combined) -> "nonbinary"
+            Regex("(?i)\\b(?:androgynous)\\b|中性").containsMatchIn(combined) -> "androgynous"
+            else -> ""
         }
 
-        // Style heuristic
         val visualStyle = when {
-            Regex("(?i)\\b(?:anime|manga|cel-shading|2d)\\b|二次元|动漫|日漫").containsMatchIn(combined) -> "Anime"
-            Regex("(?i)\\b(?:film|vintage|polaroid|analog|kodak|35mm)\\b|胶片|复古胶片").containsMatchIn(combined) -> "Film"
-            Regex("(?i)\\b(?:painting|painted|oil painting|watercolor|illustration)\\b|油画|水彩|插画|绘画").containsMatchIn(combined) -> "Painted"
-            Regex("(?i)\\b(?:photoreal|realistic|photo|portrait)\\b|写实|摄影|真人").containsMatchIn(combined) -> "Photoreal"
-            else -> "Photoreal"
+            Regex("(?i)\\b(?:anime|manga|cel-shading|2d)\\b|二次元|动漫|日漫").containsMatchIn(combined) -> "anime"
+            Regex("(?i)\\b(?:film|vintage|polaroid|analog|kodak|35mm)\\b|胶片|复古胶片").containsMatchIn(combined) -> "film photo"
+            Regex("(?i)\\b(?:painting|painted|oil painting|watercolor|illustration)\\b|油画|水彩|插画|绘画").containsMatchIn(combined) -> "painted"
+            Regex("(?i)\\b(?:photoreal|realistic|photo|portrait)\\b|写实|摄影|真人").containsMatchIn(combined) -> "photoreal"
+            else -> ""
         }
 
         val hairStr = hairMatches.distinct().joinToString(", ")
         val eyesStr = eyesMatches.distinct().joinToString(", ")
         val buildStr = buildMatches.distinct().joinToString(", ")
         val clothingStr = clothingMatches.distinct().joinToString(", ")
-
         val traits = listOf(hairStr, eyesStr, buildStr).filter(String::isNotBlank).joinToString(", ")
 
         return ExtractedAppearance(
@@ -257,6 +411,7 @@ internal object CharacterCardV2 {
             hair = hairStr,
             eyes = eyesStr,
             build = buildStr,
+            body = buildStr,
         )
     }
 
@@ -376,31 +531,24 @@ internal object CharacterCardV2 {
             }
             .orEmpty()
 
-        val style = extensions.optString("visual_style").trim()
-            .ifBlank { visualIdentity?.optString("style")?.trim().orEmpty() }
-        val gender = extensions.optString("gender").trim()
-            .ifBlank { visualIdentity?.optString("gender")?.trim().orEmpty() }
-        val hair = visualIdentity?.optString("hair")?.trim().orEmpty()
-        val eyes = visualIdentity?.optString("eyes")?.trim().orEmpty()
-        val build = visualIdentity?.optString("build")?.trim().orEmpty()
-        val prompt = extensions.optString("appearance_prompt").trim()
-            .ifBlank { visualIdentity?.optString("prompt")?.trim().orEmpty() }
-            .ifBlank { listOf(hair, eyes, build).filter(String::isNotBlank).joinToString(", ") }
+        val fallbackPrompt = listOf(
+            visualIdentity.optTrim("hair"),
+            visualIdentity.optTrim("eyes"),
+            visualIdentity.optTrim("build"),
+        ).filter(String::isNotBlank).joinToString(", ")
+        val visual = VisualIdentity.readGroups(extensions, visualIdentity, fallbackPrompt)
         val clothing = extensions.optString("clothing").trim()
-            .ifBlank { visualIdentity?.optString("clothing")?.trim().orEmpty() }
+            .ifBlank { visualIdentity.optTrim("clothing") }
         val negative = extensions.optString("negative_prompt").trim()
-            .ifBlank { visualIdentity?.optString("negative_prompt")?.trim().orEmpty() }
+            .ifBlank { visualIdentity.optTrim("negative_prompt") }
 
-        val fields = CharacterProfileFields(
+        val fields = visual.copy(
             handle = extensions.optString("handle").trim().ifBlank { slugHandle(name) },
             description = description,
             personality = personality,
             scenario = scenario,
             firstMessage = data.optString("first_mes").trim(),
             relationship = extensions.optString("relationship_to_user").trim(),
-            visualStyle = style,
-            gender = gender,
-            appearancePrompt = prompt,
             clothing = clothing,
             negativePrompt = negative,
         )
@@ -418,6 +566,13 @@ internal object CharacterCardV2 {
             avatarBytes = avatarBytes,
             visualStyle = fields.visualStyle,
             gender = fields.gender,
+            age = fields.age,
+            ethnicity = fields.ethnicity,
+            skin = fields.skin,
+            eyes = fields.eyes,
+            hair = fields.hair,
+            body = fields.body,
+            appearanceSupplement = fields.appearanceSupplement,
             appearancePrompt = fields.appearancePrompt,
             clothing = fields.clothing,
             negativePrompt = fields.negativePrompt,
@@ -597,11 +752,12 @@ internal object AppearanceExtractor {
         val hair = root.optString("hair").trim()
         val eyes = root.optString("eyes").trim()
         val build = root.optString("build").trim()
+        val body = root.optString("body").trim().ifBlank { build }
         val prompt = root.optString("appearance_prompt").trim().ifBlank {
-            listOf(hair, eyes, build).filter(String::isNotBlank).joinToString(", ")
+            listOf(hair, eyes, body).filter(String::isNotBlank).joinToString(", ")
         }
         val clothing = root.optString("clothing").trim()
-        val style = root.optString("visual_style").trim()
+        val style = root.optString("visual_style").trim().ifBlank { root.optString("style").trim() }
         val gender = root.optString("gender").trim()
         val negative = root.optString("negative_prompt").trim().ifBlank {
             "blurry, bad anatomy, deformed, low quality"
@@ -615,6 +771,11 @@ internal object AppearanceExtractor {
             hair = hair,
             eyes = eyes,
             build = build,
+            age = root.optString("age").trim(),
+            ethnicity = root.optString("ethnicity").trim(),
+            skin = root.optString("skin").trim(),
+            body = body,
+            supplement = root.optString("supplement").trim(),
         )
     }
 
@@ -640,20 +801,36 @@ internal object AppearanceExtractor {
 
             Respond with a valid JSON object:
             {
-              "hair": "e.g. short silver hair",
-              "eyes": "e.g. blue eyes",
+              "style": "one of: photoreal, film photo, anime, painted",
+              "gender": "one of: woman, man, nonbinary, androgynous",
+              "age": "one of: early twenties, late twenties, thirties, forties",
+              "ethnicity": "one of: Black, East Asian, South Asian, Middle Eastern, Latino, Slavic, White, mixed",
+              "skin": "one of: pale, olive, tan, brown, freckled",
+              "eyes": "e.g. blue",
+              "hair": "e.g. long black",
+              "body": "one of: slim, athletic, broad, stocky, curvy, petite",
+              "supplement": "extra look details not covered by the groups",
               "clothing": "e.g. black trench coat",
-              "build": "e.g. tall and slender",
-              "appearance_prompt": "combined hair, eyes, facial traits, build",
-              "visual_style": "one of: Photoreal, Film, Anime, Painted",
-              "gender": "one of: Woman, Man, Non-binary, Unspecified",
               "negative_prompt": "recommended negative prompts"
             }
         """.trimIndent()
         ProviderTextClient.complete(config, defaults, system, prompt) { result ->
             result.onSuccess { response ->
                 val extracted = runCatching { parseLlmResponse(response.text) }.getOrNull()
-                if (extracted != null && (extracted.appearancePrompt.isNotBlank() || extracted.clothing.isNotBlank())) {
+                if (extracted != null && listOf(
+                        extracted.visualStyle,
+                        extracted.gender,
+                        extracted.appearancePrompt,
+                        extracted.clothing,
+                        extracted.hair,
+                        extracted.eyes,
+                        extracted.body,
+                        extracted.age,
+                        extracted.ethnicity,
+                        extracted.skin,
+                        extracted.supplement,
+                    ).any { it.isNotBlank() }
+                ) {
                     onResult(extracted, true)
                 } else {
                     onResult(localFallback, false)

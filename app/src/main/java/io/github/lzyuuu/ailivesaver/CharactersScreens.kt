@@ -13,6 +13,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -192,6 +194,13 @@ internal fun CharacterManagerScreen(
             avatarPath = avatarPath,
             visualStyle = card.visualStyle,
             gender = card.gender,
+            age = card.age,
+            ethnicity = card.ethnicity,
+            skin = card.skin,
+            eyes = card.eyes,
+            hair = card.hair,
+            body = card.body,
+            appearanceSupplement = card.appearanceSupplement,
             appearancePrompt = card.appearancePrompt,
             clothing = card.clothing,
             negativePrompt = card.negativePrompt,
@@ -201,7 +210,7 @@ internal fun CharacterManagerScreen(
             card.name,
             CharacterCardV2.composePersona(fields).ifBlank { card.persona },
             "resident",
-            card.appearancePrompt,
+            CharacterCardV2.composeFixedFeature(fields).ifBlank { card.appearancePrompt },
             card.clothing,
             card.negativePrompt,
             cardJson,
@@ -228,6 +237,13 @@ internal fun CharacterManagerScreen(
             avatarPath = persistAvatar(card).ifBlank { current.avatarPath },
             visualStyle = card.visualStyle.ifBlank { current.visualStyle },
             gender = card.gender.ifBlank { current.gender },
+            age = card.age.ifBlank { current.age },
+            ethnicity = card.ethnicity.ifBlank { current.ethnicity },
+            skin = card.skin.ifBlank { current.skin },
+            eyes = card.eyes.ifBlank { current.eyes },
+            hair = card.hair.ifBlank { current.hair },
+            body = card.body.ifBlank { current.body },
+            appearanceSupplement = card.appearanceSupplement.ifBlank { current.appearanceSupplement },
             appearancePrompt = card.appearancePrompt.ifBlank { current.appearancePrompt },
             clothing = card.clothing.ifBlank { current.clothing },
             negativePrompt = card.negativePrompt.ifBlank { current.negativePrompt },
@@ -235,7 +251,7 @@ internal fun CharacterManagerScreen(
         store.updateCharacter(
             existing.copy(
                 persona = CharacterCardV2.composePersona(fields).ifBlank { card.persona },
-                appearance = fields.appearancePrompt.ifBlank { existing.appearance },
+                appearance = CharacterCardV2.composeFixedFeature(fields).ifBlank { existing.appearance },
                 clothing = fields.clothing.ifBlank { existing.clothing },
                 negativePrompt = fields.negativePrompt.ifBlank { existing.negativePrompt },
                 cardJson = CharacterCardV2.buildCardJson(existing.name, fields, existing.cardJson),
@@ -643,9 +659,6 @@ private fun CharacterEditor(
     var tier by rememberSaveable(character?.id) {
         mutableStateOf(character?.attentionTier ?: "resident")
     }
-    var appearance by rememberSaveable(character?.id) {
-        mutableStateOf(initial.appearancePrompt.ifBlank { character?.appearance.orEmpty() })
-    }
     var clothing by rememberSaveable(character?.id) {
         mutableStateOf(initial.clothing.ifBlank { character?.clothing.orEmpty() })
     }
@@ -654,6 +667,15 @@ private fun CharacterEditor(
     }
     var visualStyle by rememberSaveable(character?.id) { mutableStateOf(initial.visualStyle) }
     var gender by rememberSaveable(character?.id) { mutableStateOf(initial.gender) }
+    var age by rememberSaveable(character?.id) { mutableStateOf(initial.age) }
+    var ethnicity by rememberSaveable(character?.id) { mutableStateOf(initial.ethnicity) }
+    var skin by rememberSaveable(character?.id) { mutableStateOf(initial.skin) }
+    var eyes by rememberSaveable(character?.id) { mutableStateOf(initial.eyes) }
+    var hair by rememberSaveable(character?.id) { mutableStateOf(initial.hair) }
+    var body by rememberSaveable(character?.id) { mutableStateOf(initial.body) }
+    var supplement by rememberSaveable(character?.id) {
+        mutableStateOf(initial.appearanceSupplement)
+    }
     var editorTab by rememberSaveable(character?.id) { mutableStateOf(0) }
     var extractingAppearance by remember { mutableStateOf(false) }
     var transferStatus by remember { mutableStateOf<String?>(null) }
@@ -810,16 +832,23 @@ private fun CharacterEditor(
                             avatarPath = avatarPath,
                             visualStyle = visualStyle,
                             gender = gender,
-                            appearancePrompt = appearance,
+                            age = age,
+                            ethnicity = ethnicity,
+                            skin = skin,
+                            eyes = eyes,
+                            hair = hair,
+                            body = body,
+                            appearanceSupplement = supplement,
                             clothing = clothing,
                             negativePrompt = negative,
                         )
                         val targetName = if (isRoot) (character?.name ?: "Root") else name.trim()
+                        val composed = CharacterCardV2.composeFixedFeature(fields)
                         onSave(
                             targetName,
                             fields,
                             tier,
-                            appearance,
+                            composed,
                             clothing,
                             negative,
                         )
@@ -1038,121 +1067,133 @@ private fun CharacterEditor(
                     fontSize = 12.sp,
                 )
 
-                Text(
-                    "艺术风格预设",
-                    color = CharactersInk,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Medium,
-                    modifier = Modifier.padding(top = 4.dp),
-                )
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    listOf("Photoreal", "Film", "Anime", "Painted").forEach { style ->
-                        FilterChip(
-                            selected = visualStyle.equals(style, ignoreCase = true),
-                            onClick = {
-                                if (!readOnly) {
-                                    visualStyle = if (visualStyle.equals(style, ignoreCase = true)) "" else style
-                                }
-                            },
-                            label = { Text(style) },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = CharactersAccent.copy(alpha = 0.22f),
-                                selectedLabelColor = CharactersAccent,
-                                labelColor = CharactersMuted,
-                            ),
-                        )
-                    }
-                }
-
-                Text(
-                    "性别预设",
-                    color = CharactersInk,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Medium,
-                    modifier = Modifier.padding(top = 4.dp),
-                )
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    listOf("Woman", "Man", "Non-binary", "Unspecified").forEach { value ->
-                        FilterChip(
-                            selected = gender.equals(value, ignoreCase = true),
-                            onClick = {
-                                if (!readOnly) {
-                                    gender = if (gender.equals(value, ignoreCase = true)) "" else value
-                                }
-                            },
-                            label = { Text(value) },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = CharactersAccent.copy(alpha = 0.22f),
-                                selectedLabelColor = CharactersAccent,
-                                labelColor = CharactersMuted,
-                            ),
-                        )
-                    }
-                }
-
                 if (!readOnly) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
+                    TextButton(
+                        onClick = {
+                            extractingAppearance = true
+                            transferStatus = context.getString(R.string.character_fill_from_description_working)
+                            AppearanceExtractor.extract(context, description, personality) { extracted, isLlm ->
+                                extractingAppearance = false
+                                val filled = CharacterCardV2.fillEmptyVisualIdentity(
+                                    CharacterProfileFields(
+                                        visualStyle = visualStyle,
+                                        gender = gender,
+                                        age = age,
+                                        ethnicity = ethnicity,
+                                        skin = skin,
+                                        eyes = eyes,
+                                        hair = hair,
+                                        body = body,
+                                        appearanceSupplement = supplement,
+                                        clothing = clothing,
+                                        negativePrompt = negative,
+                                    ),
+                                    extracted,
+                                )
+                                visualStyle = filled.visualStyle
+                                gender = filled.gender
+                                age = filled.age
+                                ethnicity = filled.ethnicity
+                                skin = filled.skin
+                                eyes = filled.eyes
+                                hair = filled.hair
+                                body = filled.body
+                                supplement = filled.appearanceSupplement
+                                clothing = filled.clothing
+                                negative = filled.negativePrompt
+                                transferStatus = context.getString(
+                                    if (isLlm) {
+                                        R.string.character_fill_from_description_llm
+                                    } else {
+                                        R.string.character_fill_from_description_local
+                                    },
+                                )
+                            }
+                        },
+                        enabled = !extractingAppearance && (description.isNotBlank() || personality.isNotBlank()),
                     ) {
                         Text(
-                            "固定外观特征",
-                            color = CharactersInk,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Medium,
-                        )
-                        TextButton(
-                            onClick = {
-                                extractingAppearance = true
-                                transferStatus = "正在提取外观关键词..."
-                                AppearanceExtractor.extract(context, description, personality) { extracted, isLlm ->
-                                    extractingAppearance = false
-                                    if (extracted.appearancePrompt.isNotBlank()) {
-                                        appearance = extracted.appearancePrompt
-                                    }
-                                    if (extracted.clothing.isNotBlank()) {
-                                        clothing = extracted.clothing
-                                    }
-                                    if (extracted.visualStyle.isNotBlank() && visualStyle.isBlank()) {
-                                        visualStyle = extracted.visualStyle
-                                    }
-                                    if (extracted.gender.isNotBlank() && gender.isBlank()) {
-                                        gender = extracted.gender
-                                    }
-                                    if (extracted.negativePrompt.isNotBlank() && negative.isBlank()) {
-                                        negative = extracted.negativePrompt
-                                    }
-                                    transferStatus = if (isLlm) {
-                                        "已根据人设智能提取外观关键词"
-                                    } else {
-                                        "已根据本地规则填充（配置 Provider 后效果更好）"
-                                    }
-                                }
+                            if (extractingAppearance) {
+                                stringResource(R.string.character_fill_from_description_working)
+                            } else {
+                                stringResource(R.string.character_fill_from_description)
                             },
-                            enabled = !extractingAppearance && (description.isNotBlank() || personality.isNotBlank()),
-                        ) {
-                            Text(
-                                if (extractingAppearance) "正在提取..." else "从人设自动提取外观",
-                                color = CharactersAccent,
-                            )
-                        }
+                            color = CharactersAccent,
+                        )
                     }
                 }
 
+                ClassificationGroup(
+                    title = stringResource(R.string.character_appearance_style),
+                    chips = VisualIdentity.style,
+                    value = visualStyle,
+                    onValueChange = { visualStyle = it },
+                    enabled = !readOnly,
+                    onClickWhenDisabled = onRequestEdit,
+                )
+                ClassificationGroup(
+                    title = stringResource(R.string.character_appearance_gender),
+                    chips = VisualIdentity.gender,
+                    value = gender,
+                    onValueChange = { gender = it },
+                    enabled = !readOnly,
+                    onClickWhenDisabled = onRequestEdit,
+                )
+                ClassificationGroup(
+                    title = stringResource(R.string.character_appearance_age),
+                    chips = VisualIdentity.age,
+                    value = age,
+                    onValueChange = { age = it },
+                    enabled = !readOnly,
+                    onClickWhenDisabled = onRequestEdit,
+                )
+                ClassificationGroup(
+                    title = stringResource(R.string.character_appearance_ethnicity),
+                    chips = VisualIdentity.ethnicity,
+                    value = ethnicity,
+                    onValueChange = { ethnicity = it },
+                    enabled = !readOnly,
+                    onClickWhenDisabled = onRequestEdit,
+                )
+                ClassificationGroup(
+                    title = stringResource(R.string.character_appearance_skin),
+                    chips = VisualIdentity.skin,
+                    value = skin,
+                    onValueChange = { skin = it },
+                    enabled = !readOnly,
+                    onClickWhenDisabled = onRequestEdit,
+                )
+                ClassificationGroup(
+                    title = stringResource(R.string.character_appearance_eyes),
+                    chips = VisualIdentity.eyes,
+                    value = eyes,
+                    onValueChange = { eyes = it },
+                    enabled = !readOnly,
+                    onClickWhenDisabled = onRequestEdit,
+                )
+                ClassificationGroup(
+                    title = stringResource(R.string.character_appearance_hair),
+                    chips = VisualIdentity.hair,
+                    value = hair,
+                    onValueChange = { hair = it },
+                    enabled = !readOnly,
+                    onClickWhenDisabled = onRequestEdit,
+                )
+                ClassificationGroup(
+                    title = stringResource(R.string.character_appearance_body),
+                    chips = VisualIdentity.body,
+                    value = body,
+                    onValueChange = { body = it },
+                    enabled = !readOnly,
+                    onClickWhenDisabled = onRequestEdit,
+                )
                 CharactersField(
-                    value = appearance,
-                    onValueChange = { appearance = it },
-                    label = stringResource(R.string.character_fixed_appearance),
+                    value = supplement,
+                    onValueChange = { supplement = it },
+                    label = stringResource(R.string.character_appearance_supplement),
                     enabled = !readOnly,
                     minLines = 2,
-                    supporting = "发色、瞳色、体态特征等（如 short silver hair, blue eyes）",
+                    supporting = "分类未覆盖的细节，拼在固定特征最后",
                     fixedHeight = if (readOnly) 88.dp else null,
                     onClickWhenDisabled = onRequestEdit,
                 )
@@ -1279,6 +1320,63 @@ private fun CharacterEditor(
                 }
             }
         }
+    }
+}
+
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ClassificationGroup(
+    title: String,
+    chips: List<String>,
+    value: String,
+    onValueChange: (String) -> Unit,
+    enabled: Boolean,
+    onClickWhenDisabled: (() -> Unit)?,
+) {
+    Text(
+        title,
+        color = CharactersInk,
+        fontSize = 13.sp,
+        fontWeight = FontWeight.Medium,
+        modifier = Modifier.padding(top = 4.dp),
+    )
+    FlowRow(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        chips.forEach { chip ->
+            FilterChip(
+                selected = classificationChipSelected(value, chip),
+                onClick = { if (enabled) onValueChange(chip) },
+                enabled = enabled,
+                label = { Text(chip) },
+                colors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = CharactersAccent.copy(alpha = 0.22f),
+                    selectedLabelColor = CharactersAccent,
+                    labelColor = CharactersMuted,
+                    disabledSelectedContainerColor = CharactersAccent.copy(alpha = 0.22f),
+                    disabledLabelColor = CharactersMuted,
+                ),
+            )
+        }
+    }
+    CharactersField(
+        value = value,
+        onValueChange = onValueChange,
+        label = title,
+        enabled = enabled,
+        onClickWhenDisabled = onClickWhenDisabled,
+    )
+}
+
+private fun classificationChipSelected(value: String, chip: String): Boolean {
+    if (value.equals(chip, ignoreCase = true)) return true
+    return when (chip) {
+        "film photo" -> value.equals("Film", ignoreCase = true)
+        "nonbinary" -> value.equals("Non-binary", ignoreCase = true)
+        else -> false
     }
 }
 

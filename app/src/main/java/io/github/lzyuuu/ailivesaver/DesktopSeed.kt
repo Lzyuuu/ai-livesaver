@@ -80,11 +80,19 @@ internal object DesktopSeed {
         val rootId: Long
         if (existing.isEmpty()) {
             val avatarPath = context?.let { persistSeedAvatar(it, ROOT_NAME, avatarRes) }.orEmpty()
+            val cardJson = rootCardJson(avatarPath)
             val root = store.createWorld(
                 name,
                 ROOT_NAME,
                 ROOT_PERSONA,
-                cardJson = rootCardJson(avatarPath),
+                cardJson = cardJson,
+            )
+            store.updateCharacter(
+                root.copy(
+                    appearance = ROOT_APPEARANCE,
+                    clothing = ROOT_CLOTHING,
+                    cardJson = cardJson,
+                ),
             )
             rootId = root.id
             if (about.isNotBlank()) {
@@ -122,18 +130,10 @@ internal object DesktopSeed {
             firstMessage = "",
             relationship = ROOT_RELATIONSHIP,
             avatarPath = avatarPath,
+            appearanceSupplement = ROOT_APPEARANCE,
+            clothing = ROOT_CLOTHING,
         )
-        val base = CharacterCardV2.buildCardJson(ROOT_NAME, fields)
-        return runCatching {
-            val root = org.json.JSONObject(base)
-            val data = root.getJSONObject("data")
-            val extensions = data.optJSONObject("extensions") ?: org.json.JSONObject().also {
-                data.put("extensions", it)
-            }
-            extensions.put("appearance", ROOT_APPEARANCE)
-            extensions.put("clothing", ROOT_CLOTHING)
-            root.toString(2)
-        }.getOrDefault(base)
+        return CharacterCardV2.buildCardJson(ROOT_NAME, fields)
     }
 
     private fun seedCardJson(
@@ -151,19 +151,10 @@ internal object DesktopSeed {
             firstMessage = "",
             relationship = "",
             avatarPath = avatarPath,
+            appearanceSupplement = appearance,
+            clothing = clothing,
         )
-        val base = CharacterCardV2.buildCardJson(name, fields)
-        if (appearance.isBlank() && clothing.isBlank()) return base
-        return runCatching {
-            val root = org.json.JSONObject(base)
-            val data = root.getJSONObject("data")
-            val extensions = data.optJSONObject("extensions") ?: org.json.JSONObject().also {
-                data.put("extensions", it)
-            }
-            if (appearance.isNotBlank()) extensions.put("appearance", appearance)
-            if (clothing.isNotBlank()) extensions.put("clothing", clothing)
-            root.toString(2)
-        }.getOrDefault(base)
+        return CharacterCardV2.buildCardJson(name, fields)
     }
 
     /** Older desktop worlds may lack card_json; fill handles/description without overwriting. */

@@ -94,11 +94,13 @@ class CharacterCardV2Test {
             clothing = "black trench coat",
             negativePrompt = "blurry, deformed",
         )
+        val composed = "Anime, Woman, short silver hair, blue eyes"
         val card = CharacterCardV2.buildCardJson("Mira", fields)
         val parsed = CharacterCardV2.parse(card.toByteArray())
         assertEquals("Anime", parsed.visualStyle)
         assertEquals("Woman", parsed.gender)
-        assertEquals("short silver hair, blue eyes", parsed.appearancePrompt)
+        assertEquals("short silver hair, blue eyes", parsed.appearanceSupplement)
+        assertEquals(composed, parsed.appearancePrompt)
         assertEquals("black trench coat", parsed.clothing)
         assertEquals("blurry, deformed", parsed.negativePrompt)
         val transparentPng = java.util.Base64.getDecoder().decode(
@@ -109,7 +111,8 @@ class CharacterCardV2Test {
         val parsedPng = CharacterCardV2.parse(png)
         assertEquals("Anime", parsedPng.visualStyle)
         assertEquals("Woman", parsedPng.gender)
-        assertEquals("short silver hair, blue eyes", parsedPng.appearancePrompt)
+        assertEquals("short silver hair, blue eyes", parsedPng.appearanceSupplement)
+        assertEquals(composed, parsedPng.appearancePrompt)
         assertEquals("black trench coat", parsedPng.clothing)
         assertEquals("blurry, deformed", parsedPng.negativePrompt)
     }
@@ -140,7 +143,8 @@ class CharacterCardV2Test {
         assertEquals("Aria", parsed.name)
         assertEquals("Film", parsed.visualStyle)
         assertEquals("Woman", parsed.gender)
-        assertEquals("long wavy brown hair, hazel eyes, slender", parsed.appearancePrompt)
+        assertEquals("long wavy brown hair, hazel eyes, slender", parsed.appearanceSupplement)
+        assertEquals("Film, Woman, long wavy brown hair, hazel eyes, slender", parsed.appearancePrompt)
         assertEquals("vintage leather jacket", parsed.clothing)
         assertEquals("bad anatomy, watermark", parsed.negativePrompt)
     }
@@ -170,6 +174,9 @@ class CharacterCardV2Test {
         val parsed = CharacterCardV2.parse(cardWithSlots.toByteArray())
         assertEquals("Anime", parsed.visualStyle)
         assertEquals("Man", parsed.gender)
+        assertEquals("short spiky black hair", parsed.hair)
+        assertEquals("ruby eyes", parsed.eyes)
+        assertEquals("athletic", parsed.body)
         assertTrue(parsed.appearancePrompt.contains("short spiky black hair"))
         assertTrue(parsed.appearancePrompt.contains("ruby eyes"))
         assertTrue(parsed.appearancePrompt.contains("athletic"))
@@ -190,8 +197,8 @@ class CharacterCardV2Test {
             "A tall young woman with long silver hair and bright blue eyes",
             "She usually wears a dark trench coat and boots.",
         )
-        assertEquals("Woman", en.gender)
-        assertEquals("Photoreal", en.visualStyle)
+        assertEquals("woman", en.gender)
+        assertEquals("", en.visualStyle)
         assertTrue(en.appearancePrompt.contains("long silver hair"))
         assertTrue(en.appearancePrompt.contains("blue eyes"))
         assertTrue(en.appearancePrompt.contains("tall"))
@@ -201,8 +208,8 @@ class CharacterCardV2Test {
             "高挑的黑发少女，有着清澈的蓝眸，气质优雅",
             "平日里总是一袭黑色风衣，二次元画风。",
         )
-        assertEquals("Woman", zh.gender)
-        assertEquals("Anime", zh.visualStyle)
+        assertEquals("woman", zh.gender)
+        assertEquals("anime", zh.visualStyle)
         assertTrue(zh.appearancePrompt.contains("黑发"))
         assertTrue(zh.appearancePrompt.contains("蓝眸"))
         assertTrue(zh.appearancePrompt.contains("高挑"))
@@ -261,10 +268,10 @@ class CharacterCardV2Test {
         assertEquals("root", fields.handle)
         assertEquals("Photoreal", fields.visualStyle)
         assertEquals("Woman", fields.gender)
-        assertEquals("short silver hair, blue eyes", fields.appearancePrompt)
+        assertEquals("short silver hair, blue eyes", fields.appearanceSupplement)
+        assertEquals("Photoreal, Woman, short silver hair, blue eyes", fields.appearancePrompt)
         assertEquals("black high-collar coat", fields.clothing)
 
-        // Simulate appearance modification
         val updatedFields = fields.copy(
             visualStyle = "Anime",
             clothing = "white lab coat",
@@ -279,7 +286,7 @@ class CharacterCardV2Test {
         assertEquals("Anime", parsedReExport.visualStyle)
         assertEquals("white lab coat", parsedReExport.clothing)
         assertEquals("root", parsedReExport.handle)
-        // Persona is preserved
+        assertEquals("short silver hair, blue eyes", parsedReExport.appearanceSupplement)
         assertTrue(parsedReExport.persona.contains(DesktopSeed.ROOT_PERSONA))
     }
 

@@ -38,7 +38,8 @@ class CharacterAppearanceCardTest {
         assertEquals("seraphina", fields.handle)
         assertEquals("Painted", fields.visualStyle)
         assertEquals("Woman", fields.gender)
-        assertEquals("silver hair, golden eyes, slender", fields.appearancePrompt)
+        assertEquals("silver hair, golden eyes, slender", fields.appearanceSupplement)
+        assertEquals("Painted, Woman, silver hair, golden eyes, slender", fields.appearancePrompt)
         assertEquals("clockmaker velvet coat", fields.clothing)
         assertEquals("blurry, deformed", fields.negativePrompt)
 
@@ -47,18 +48,16 @@ class CharacterAppearanceCardTest {
         assertEquals("Seraphina", parsed.name)
         assertEquals("Painted", parsed.visualStyle)
         assertEquals("Woman", parsed.gender)
-        assertEquals("silver hair, golden eyes, slender", parsed.appearancePrompt)
+        assertEquals("silver hair, golden eyes, slender", parsed.appearanceSupplement)
+        assertEquals("Painted, Woman, silver hair, golden eyes, slender", parsed.appearancePrompt)
         assertEquals("clockmaker velvet coat", parsed.clothing)
         assertEquals("blurry, deformed", parsed.negativePrompt)
     }
 
     @Test
     fun styleAndGenderPresetsAppliedCorrectly() {
-        val styles = listOf("Photoreal", "Film", "Anime", "Painted")
-        val genders = listOf("Woman", "Man", "Non-binary", "Unspecified")
-
-        for (style in styles) {
-            for (gender in genders) {
+        for (style in VisualIdentity.style) {
+            for (gender in VisualIdentity.gender) {
                 val fields = CharacterProfileFields(
                     handle = "hero",
                     description = "A test hero",
@@ -71,7 +70,8 @@ class CharacterAppearanceCardTest {
                 val parsed = CharacterCardV2.parse(json.toByteArray())
                 assertEquals(style, parsed.visualStyle)
                 assertEquals(gender, parsed.gender)
-                assertEquals("spiky hair", parsed.appearancePrompt)
+                assertEquals("spiky hair", parsed.appearanceSupplement)
+                assertEquals("$style, $gender, spiky hair", parsed.appearancePrompt)
                 assertEquals("casual jacket", parsed.clothing)
             }
         }
@@ -81,14 +81,14 @@ class CharacterAppearanceCardTest {
     fun fillFromDescriptionExtractsKeywords() {
         val descEn = "A slender young woman with short curly blonde hair and amber eyes, wearing a white uniform and boots."
         val extractedEn = CharacterCardV2.extractAppearanceKeywords(descEn, "She is very disciplined.")
-        assertEquals("Woman", extractedEn.gender)
+        assertEquals("woman", extractedEn.gender)
         assertTrue(extractedEn.appearancePrompt.contains("curly blonde hair") || extractedEn.appearancePrompt.contains("blonde hair"))
         assertTrue(extractedEn.appearancePrompt.contains("amber eyes"))
         assertTrue(extractedEn.clothing.contains("white uniform") || extractedEn.clothing.contains("uniform"))
 
         val descZh = "修长挺拔的黑发青年，拥有深邃的蓝眸。平日总穿着黑色风衣，二次元写实风格。"
         val extractedZh = CharacterCardV2.extractAppearanceKeywords(descZh, "沉稳可靠的调查员。")
-        assertEquals("Man", extractedZh.gender)
+        assertEquals("man", extractedZh.gender)
         assertTrue(extractedZh.appearancePrompt.contains("黑发"))
         assertTrue(extractedZh.appearancePrompt.contains("蓝眸"))
         assertTrue(extractedZh.clothing.contains("黑色风衣"))
@@ -109,30 +109,29 @@ class CharacterAppearanceCardTest {
             clothing = "midnight blue gown with silver celestial embroidery",
             negativePrompt = "blurry, low quality, bad hands, distorted",
         )
-
+        val composed = "Film, Woman, wavy dark brown hair, sapphire eyes, delicate features"
         val cardJson = CharacterCardV2.buildCardJson("Elena", originalFields)
 
-        // 1. JSON parse round-trip
         val parsedJson = CharacterCardV2.parse(cardJson.toByteArray())
         assertEquals("Elena", parsedJson.name)
         assertEquals("Film", parsedJson.visualStyle)
         assertEquals("Woman", parsedJson.gender)
-        assertEquals(originalFields.appearancePrompt, parsedJson.appearancePrompt)
+        assertEquals(originalFields.appearancePrompt, parsedJson.appearanceSupplement)
+        assertEquals(composed, parsedJson.appearancePrompt)
         assertEquals(originalFields.clothing, parsedJson.clothing)
         assertEquals(originalFields.negativePrompt, parsedJson.negativePrompt)
 
-        // 2. PNG embed & extract round-trip
         val dummyPng = Base64.getDecoder().decode(
             "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M/wHwAF/gL+" +
                 "3MxZ5wAAAABJRU5ErkJggg==",
         )
-        val embeddedPng = CharacterCardV2.embedJson(dummyPng, cardJson)
-        val parsedPng = CharacterCardV2.parse(embeddedPng)
+        val parsedPng = CharacterCardV2.parse(CharacterCardV2.embedJson(dummyPng, cardJson))
 
         assertEquals("Elena", parsedPng.name)
         assertEquals("Film", parsedPng.visualStyle)
         assertEquals("Woman", parsedPng.gender)
-        assertEquals(originalFields.appearancePrompt, parsedPng.appearancePrompt)
+        assertEquals(originalFields.appearancePrompt, parsedPng.appearanceSupplement)
+        assertEquals(composed, parsedPng.appearancePrompt)
         assertEquals(originalFields.clothing, parsedPng.clothing)
         assertEquals(originalFields.negativePrompt, parsedPng.negativePrompt)
         assertEquals("elena", parsedPng.handle)
@@ -170,30 +169,31 @@ class CharacterAppearanceCardTest {
         assertEquals("Photoreal", initialFields.visualStyle)
         assertEquals("Woman", initialFields.gender)
 
-        // User updates visual appearance in Tab 2 to Anime style and changes clothing
         val updatedFields = initialFields.copy(
             visualStyle = "Anime",
             clothing = "cybernetic jacket",
-            appearancePrompt = "short silver bob hair, bright cyan eyes",
+            hair = "short silver bob hair",
+            eyes = "bright cyan eyes",
         )
 
         val updatedCardJson = CharacterCardV2.buildCardJson("Root", updatedFields, initialRoot.cardJson)
         val updatedRoot = initialRoot.copy(
-            appearance = updatedFields.appearancePrompt,
+            appearance = CharacterCardV2.composeFixedFeature(updatedFields),
             clothing = updatedFields.clothing,
             cardJson = updatedCardJson,
         )
 
-        // Verify root persona is locked and not corrupted
         assertEquals("Root", updatedRoot.name)
         assertEquals(DesktopSeed.ROOT_PERSONA, updatedRoot.persona)
 
-        // Verify appearance was updated
         val reloadedFields = CharacterCardV2.profileFields(updatedRoot)
         assertEquals("Anime", reloadedFields.visualStyle)
         assertEquals("Woman", reloadedFields.gender)
         assertEquals("cybernetic jacket", reloadedFields.clothing)
-        assertEquals("short silver bob hair, bright cyan eyes", reloadedFields.appearancePrompt)
+        assertEquals("short silver bob hair", reloadedFields.hair)
+        assertEquals("bright cyan eyes", reloadedFields.eyes)
+        assertTrue(reloadedFields.appearancePrompt.contains("short silver bob hair"))
+        assertTrue(reloadedFields.appearancePrompt.contains("bright cyan eyes"))
 
         // Export and verify
         val exported = CharacterCardV2.export(updatedRoot)
@@ -202,5 +202,182 @@ class CharacterAppearanceCardTest {
         assertEquals("Anime", parsedExport.visualStyle)
         assertEquals("cybernetic jacket", parsedExport.clothing)
         assertTrue(parsedExport.persona.contains("{{char}}") || parsedExport.persona.contains("Fancy AI"))
+    }
+
+    @Test
+    fun composesClassificationsThenSupplementInFixedFeatureOrder() {
+        val fields = CharacterProfileFields(
+            visualStyle = "photoreal",
+            gender = "woman",
+            age = "early twenties",
+            ethnicity = "East Asian",
+            skin = "pale",
+            eyes = "brown",
+            hair = "long black",
+            body = "slim",
+            appearanceSupplement = "faint scar at the brow",
+            clothing = "school uniform",
+            negativePrompt = "blurry",
+        )
+        assertEquals(
+            "photoreal, woman, early twenties, East Asian, pale, brown, long black, slim, faint scar at the brow",
+            CharacterCardV2.composeFixedFeature(fields),
+        )
+        assertEquals(
+            "photoreal, woman, East Asian, brown, long black, slim",
+            CharacterCardV2.composeFixedFeature(fields.copy(age = "", skin = "", appearanceSupplement = "")),
+        )
+    }
+
+    @Test
+    fun ethnicityChipsMatchReferenceMeasurement() {
+        assertEquals(
+            listOf(
+                "Black",
+                "East Asian",
+                "South Asian",
+                "Middle Eastern",
+                "Latino",
+                "Slavic",
+                "White",
+                "mixed",
+            ),
+            VisualIdentity.ethnicity,
+        )
+    }
+
+    @Test
+    fun characterCardJsonAndPngRoundTripPreserveClassificationsAndComposedPrompt() {
+        val originalFields = CharacterProfileFields(
+            handle = "elena",
+            description = "An astronomer in the high observatory",
+            personality = "Dreamy, brilliant",
+            visualStyle = "film photo",
+            gender = "woman",
+            age = "thirties",
+            ethnicity = "Latino",
+            skin = "olive",
+            eyes = "brown",
+            hair = "blonde waves",
+            body = "curvy",
+            appearanceSupplement = "constellation freckles",
+            clothing = "midnight blue gown",
+            negativePrompt = "blurry, low quality",
+        )
+        val composed =
+            "film photo, woman, thirties, Latino, olive, brown, blonde waves, curvy, constellation freckles"
+        val cardJson = CharacterCardV2.buildCardJson("Elena", originalFields)
+        val visualIdentity = org.json.JSONObject(cardJson)
+            .getJSONObject("data")
+            .getJSONObject("extensions")
+            .getJSONObject("visual_identity")
+        assertEquals("film photo", visualIdentity.getString("style"))
+        assertEquals("woman", visualIdentity.getString("gender"))
+        assertEquals("thirties", visualIdentity.getString("age"))
+        assertEquals("Latino", visualIdentity.getString("ethnicity"))
+        assertEquals("olive", visualIdentity.getString("skin"))
+        assertEquals("brown", visualIdentity.getString("eyes"))
+        assertEquals("blonde waves", visualIdentity.getString("hair"))
+        assertEquals("curvy", visualIdentity.getString("body"))
+        assertEquals("constellation freckles", visualIdentity.getString("supplement"))
+        assertEquals(composed, visualIdentity.getString("prompt"))
+
+        val parsedJson = CharacterCardV2.parse(cardJson.toByteArray())
+        assertEquals("film photo", parsedJson.visualStyle)
+        assertEquals("woman", parsedJson.gender)
+        assertEquals("thirties", parsedJson.age)
+        assertEquals("Latino", parsedJson.ethnicity)
+        assertEquals("olive", parsedJson.skin)
+        assertEquals("brown", parsedJson.eyes)
+        assertEquals("blonde waves", parsedJson.hair)
+        assertEquals("curvy", parsedJson.body)
+        assertEquals("constellation freckles", parsedJson.appearanceSupplement)
+        assertEquals(composed, parsedJson.appearancePrompt)
+        assertEquals("midnight blue gown", parsedJson.clothing)
+
+        val dummyPng = Base64.getDecoder().decode(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M/wHwAF/gL+" +
+                "3MxZ5wAAAABJRU5ErkJggg==",
+        )
+        val parsedPng = CharacterCardV2.parse(CharacterCardV2.embedJson(dummyPng, cardJson))
+        assertEquals("thirties", parsedPng.age)
+        assertEquals("Latino", parsedPng.ethnicity)
+        assertEquals("constellation freckles", parsedPng.appearanceSupplement)
+        assertEquals(composed, parsedPng.appearancePrompt)
+    }
+
+    @Test
+    fun promptOnlyImportLandsInAppearanceSupplement() {
+        val card = """
+            {
+              "spec":"chara_card_v2",
+              "spec_version":"2.0",
+              "data":{
+                "name":"Aria",
+                "description":"A wandering musician",
+                "extensions":{
+                  "visual_identity":{
+                    "style":"Film",
+                    "gender":"Woman",
+                    "prompt":"long wavy brown hair, hazel eyes, slender"
+                  }
+                }
+              }
+            }
+        """.trimIndent()
+        val parsed = CharacterCardV2.parse(card.toByteArray())
+        assertEquals("Film", parsed.visualStyle)
+        assertEquals("Woman", parsed.gender)
+        assertEquals("long wavy brown hair, hazel eyes, slender", parsed.appearanceSupplement)
+        assertEquals("", parsed.hair)
+        assertEquals("", parsed.eyes)
+        assertEquals("", parsed.body)
+        assertEquals(
+            "Film, Woman, long wavy brown hair, hazel eyes, slender",
+            parsed.appearancePrompt,
+        )
+    }
+
+    @Test
+    fun fillFromDescriptionFillsOnlyEmptyGroupsAndFields() {
+        val current = CharacterProfileFields(
+            visualStyle = "anime",
+            gender = "woman",
+            hair = "short dark",
+            clothing = "black coat",
+            negativePrompt = "blurry",
+            appearanceSupplement = "keep me",
+        )
+        val extracted = ExtractedAppearance(
+            appearancePrompt = "should not replace supplement",
+            clothing = "red dress",
+            visualStyle = "photoreal",
+            gender = "man",
+            negativePrompt = "deformed",
+            hair = "blonde waves",
+            eyes = "blue",
+            build = "athletic",
+            age = "thirties",
+            ethnicity = "Slavic",
+            skin = "pale",
+            body = "athletic",
+            supplement = "new extra",
+        )
+        val filled = CharacterCardV2.fillEmptyVisualIdentity(current, extracted)
+        assertEquals("anime", filled.visualStyle)
+        assertEquals("woman", filled.gender)
+        assertEquals("thirties", filled.age)
+        assertEquals("Slavic", filled.ethnicity)
+        assertEquals("pale", filled.skin)
+        assertEquals("blue", filled.eyes)
+        assertEquals("short dark", filled.hair)
+        assertEquals("athletic", filled.body)
+        assertEquals("black coat", filled.clothing)
+        assertEquals("blurry", filled.negativePrompt)
+        assertEquals("keep me", filled.appearanceSupplement)
+        assertEquals(
+            "anime, woman, thirties, Slavic, pale, blue, short dark, athletic, keep me",
+            filled.appearancePrompt,
+        )
     }
 }

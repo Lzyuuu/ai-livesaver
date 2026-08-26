@@ -18,9 +18,11 @@ class EndToEndFlowTest {
             personality = "Curious",
             firstMessage = "The roads shift when you sleep.",
             relationship = "friend",
-            visualStyle = "Anime",
-            gender = "Woman",
-            appearancePrompt = "silver braided hair, amber eyes",
+            visualStyle = "anime",
+            gender = "woman",
+            eyes = "amber",
+            hair = "silver",
+            appearanceSupplement = "braided hair",
             clothing = "oilskin coat",
             negativePrompt = "photorealistic, extra fingers",
         )
@@ -28,8 +30,12 @@ class EndToEndFlowTest {
             CharacterCardV2.buildCardJson("Mira", fields).toByteArray(),
         )
         assertEquals("Mira", imported.name)
-        assertEquals("Anime", imported.visualStyle)
-        assertEquals("silver braided hair, amber eyes", imported.appearancePrompt)
+        assertEquals("anime", imported.visualStyle)
+        assertEquals("woman", imported.gender)
+        assertEquals("amber", imported.eyes)
+        assertEquals("silver", imported.hair)
+        assertEquals("braided hair", imported.appearanceSupplement)
+        assertEquals("anime, woman, amber, silver, braided hair", imported.appearancePrompt)
         assertEquals("oilskin coat", imported.clothing)
 
         val effective = effectiveGeneration(
@@ -49,7 +55,7 @@ class EndToEndFlowTest {
         assertTrue(shouldQueueReplyImage(controls, "The harbor lights come on."))
         assertFalse(shouldQueueReplyImage(defaultChatControls(), "The harbor lights come on."))
         assertEquals(
-            "silver braided hair, amber eyes, oilskin coat, moonlight over the harbor",
+            "anime, woman, amber, silver, braided hair, oilskin coat, moonlight over the harbor",
             composeImageIntentPrompt(
                 imported.appearancePrompt,
                 imported.clothing,
