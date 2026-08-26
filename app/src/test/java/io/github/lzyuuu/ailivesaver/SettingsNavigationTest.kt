@@ -48,6 +48,27 @@ class SettingsNavigationTest {
     }
 
     @Test
+    fun instructionAndGenerationAreSeparateAiModelEntries() {
+        assertEquals(SettingsDestination.INSTRUCTION, resolveSettingsDestination("指令"))
+        assertEquals(SettingsDestination.GENERATION, resolveSettingsDestination("生成"))
+        assertEquals(
+            R.string.instruction_settings,
+            settingsDestinationTitleRes(SettingsDestination.INSTRUCTION),
+        )
+        assertEquals(
+            R.string.generation_settings,
+            settingsDestinationTitleRes(SettingsDestination.GENERATION),
+        )
+        val aiEntries = settingsDestinationsInOrder().filter { it.section == SettingsSection.CHAT_BRAIN }
+        assertTrue(aiEntries.contains(SettingsDestination.INSTRUCTION))
+        assertTrue(aiEntries.contains(SettingsDestination.GENERATION))
+        assertTrue(
+            aiEntries.indexOf(SettingsDestination.INSTRUCTION) <
+                aiEntries.indexOf(SettingsDestination.GENERATION),
+        )
+    }
+
+    @Test
     fun appearanceAndAppShareThemeSummary() {
         assertEquals(
             R.string.appearance_settings_summary,

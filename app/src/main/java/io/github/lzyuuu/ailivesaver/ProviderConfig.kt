@@ -111,38 +111,106 @@ internal enum class GenerationPreset(val temperature: Float, val maxTokens: Int,
     Precise(0.2f, 1024, 0.8f), Balanced(0.7f, 2048, 0.95f), Creative(1.1f, 4096, 0.95f), Custom(0.7f, 2048, 0.95f)
 }
 
-internal enum class InstructionTemplate(val prompt: String) {
-    Roleplay("Stay deeply in character and respond naturally."),
-    Direct("Answer directly and concisely."),
-    StraightAnswers("Give straightforward factual answers.")
-}
+internal const val FACTORY_INSTRUCTION_ROLEPLAY_ID = "Roleplay"
+internal const val FACTORY_INSTRUCTION_DIRECT_ID = "Direct"
+internal const val FACTORY_INSTRUCTION_STRAIGHT_ID = "StraightAnswers"
+
+/** 出厂正文抄自 FancyAI GitHub V4.51（jadx `zl4`/`yl4`），与参考指令页一致。 */
+internal const val FACTORY_INSTRUCTION_ROLEPLAY_BODY =
+    "Engage as {{char}}, be creative. Embrace the character's personality, emotion, mental state. Consider the character's history and mood."
+internal const val FACTORY_INSTRUCTION_DIRECT_BODY =
+    "You are {{char}}, talking with {{user}}. Be sharp, warm and direct. Keep your answers short and concise."
+internal const val FACTORY_INSTRUCTION_STRAIGHT_BODY =
+    "You are {{char}}, answer what {{user}} actually asked with one or two sentences at top."
+
+internal const val FACTORY_IMAGE_PROMPT_TEMPLATE =
+    "You are a Stable Diffusion prompt writer. Convert the supplied scene into one concrete,\n" +
+        "single-line, comma-separated visual prompt and output only that prompt. Describe the subject and\n" +
+        "action, {{appearance}}, outfit, location and background, pose and composition, camera shot and\n" +
+        "camera angle, lens, lighting, and visual style, quality, and mood. Use visible details rather than\n" +
+        "names or story commentary; never ask questions, explain the result, or output placeholders."
+
+internal data class InstructionTemplateEntry(
+    val id: String,
+    val name: String,
+    val body: String,
+    val factory: Boolean = false,
+)
+
+internal fun factoryInstructionLibrary(): List<InstructionTemplateEntry> = listOf(
+    InstructionTemplateEntry(
+        FACTORY_INSTRUCTION_ROLEPLAY_ID,
+        "Roleplay",
+        FACTORY_INSTRUCTION_ROLEPLAY_BODY,
+        factory = true,
+    ),
+    InstructionTemplateEntry(
+        FACTORY_INSTRUCTION_DIRECT_ID,
+        "Direct",
+        FACTORY_INSTRUCTION_DIRECT_BODY,
+        factory = true,
+    ),
+    InstructionTemplateEntry(
+        FACTORY_INSTRUCTION_STRAIGHT_ID,
+        "Straight answers",
+        FACTORY_INSTRUCTION_STRAIGHT_BODY,
+        factory = true,
+    ),
+)
 
 internal data class GenerationSettings(
     val temperature: Float = 0.7f,
     val maxTokens: Int = 2048,
     val topP: Float = 0.95f,
     val preset: GenerationPreset = GenerationPreset.Balanced,
-    val instructionTemplate: InstructionTemplate = InstructionTemplate.Roleplay,
+    val instructionTemplateId: String = FACTORY_INSTRUCTION_ROLEPLAY_ID,
+    val instructionLibrary: List<InstructionTemplateEntry> = factoryInstructionLibrary(),
+    val imagePromptTemplate: String = FACTORY_IMAGE_PROMPT_TEMPLATE,
 ) {
-    fun normalized() = copy(temperature = temperature.coerceIn(0f, 2f), maxTokens = maxTokens.coerceIn(128, 8192), topP = topP.coerceIn(0f, 1f))
+    fun normalized() = copy(
+        temperature = temperature.coerceIn(0f, 2f),
+        maxTokens = maxTokens.coerceIn(128, 8192),
+        topP = topP.coerceIn(0f, 1f),
+    )
+
+    fun selectedInstructionEntry(): InstructionTemplateEntry =
+        resolveInstructionEntry(instructionLibrary, instructionTemplateId)
+
+    fun selectedInstructionBody(): String = selectedInstructionEntry().body
+
+    fun selectedInstructionName(): String = selectedInstructionEntry().name
 }
 
-/** 推理配置对全局生成参数的可空覆盖字段；空 = 跟随全局默认（ADR-0063）。 */
+/** 推理配置对全局生成参数的可空覆盖字段；空 = 跟随全局默认（ADR-0063）。覆盖只存指令模板 id，不存正文。 */
 internal data class GenerationOverrides(
     val temperature: Float? = null,
     val maxTokens: Int? = null,
     val topP: Float? = null,
     val preset: GenerationPreset? = null,
-    val instructionTemplate: InstructionTemplate? = null,
+    val instructionTemplateId: String? = null,
 )
 
-internal fun encodeGenerationSettings(settings: GenerationSettings): String = JSONObject()
-    .put("temperature", settings.temperature.toDouble())
-    .put("max_tokens", settings.maxTokens)
-    .put("top_p", settings.topP.toDouble())
-    .put("preset", settings.preset.name)
-    .put("instruction_template", settings.instructionTemplate.name)
-    .toString()
+internal fun encodeGenerationSettings(settings: GenerationSettings): String {
+    val library = JSONArray()
+    settings.instructionLibrary.forEach { entry ->
+        library.put(
+            JSONObject()
+                .put("id", entry.id)
+                .put("name", entry.name)
+                .put("body", entry.body)
+                .put("factory", entry.factory),
+        )
+    }
+    return JSONObject()
+        .put("temperature", settings.temperature.toDouble())
+        .put("max_tokens", settings.maxTokens)
+        .put("top_p", settings.topP.toDouble())
+        .put("preset", settings.preset.name)
+        .put("instruction_template", settings.instructionTemplateId)
+        .put("instruction_library", library)
+        .put("image_prompt_template", settings.imagePromptTemplate)
+        .toString()
+}
 
 internal fun decodeGenerationSettings(raw: String?): GenerationSettings = runCatching {
     val json = JSONObject(raw.orEmpty())
@@ -151,10 +219,36 @@ internal fun decodeGenerationSettings(raw: String?): GenerationSettings = runCat
         maxTokens = json.getInt("max_tokens"),
         topP = json.getDouble("top_p").toFloat(),
         preset = enumValueOrNull<GenerationPreset>(json.optString("preset")) ?: GenerationPreset.Balanced,
-        instructionTemplate = enumValueOrNull<InstructionTemplate>(json.optString("instruction_template"))
-            ?: InstructionTemplate.Roleplay,
+        instructionTemplateId = json.optString("instruction_template").ifBlank { FACTORY_INSTRUCTION_ROLEPLAY_ID },
+        instructionLibrary = decodeInstructionLibrary(json.optJSONArray("instruction_library")),
+        imagePromptTemplate = if (json.has("image_prompt_template")) {
+            json.optString("image_prompt_template")
+        } else {
+            FACTORY_IMAGE_PROMPT_TEMPLATE
+        },
     ).normalized()
 }.getOrDefault(GenerationSettings())
+
+private fun decodeInstructionLibrary(raw: JSONArray?): List<InstructionTemplateEntry> {
+    if (raw == null || raw.length() == 0) return factoryInstructionLibrary()
+    val parsed = buildList {
+        for (index in 0 until raw.length()) {
+            val item = raw.optJSONObject(index) ?: continue
+            val id = item.optString("id").trim()
+            val name = item.optString("name").trim()
+            if (id.isEmpty() || name.isEmpty()) continue
+            add(
+                InstructionTemplateEntry(
+                    id = id,
+                    name = name,
+                    body = item.optString("body"),
+                    factory = item.optBoolean("factory"),
+                ),
+            )
+        }
+    }
+    return parsed.ifEmpty { factoryInstructionLibrary() }
+}
 
 internal fun encodeGenerationOverrides(overrides: GenerationOverrides): String {
     val json = JSONObject()
@@ -162,7 +256,7 @@ internal fun encodeGenerationOverrides(overrides: GenerationOverrides): String {
     overrides.maxTokens?.let { json.put("max_tokens", it) }
     overrides.topP?.let { json.put("top_p", it.toDouble()) }
     overrides.preset?.let { json.put("preset", it.name) }
-    overrides.instructionTemplate?.let { json.put("instruction_template", it.name) }
+    overrides.instructionTemplateId?.let { json.put("instruction_template", it) }
     return json.toString()
 }
 
@@ -173,14 +267,16 @@ internal fun decodeGenerationOverrides(raw: String?): GenerationOverrides = runC
         maxTokens = if (json.has("max_tokens")) json.getInt("max_tokens") else null,
         topP = if (json.has("top_p")) json.getDouble("top_p").toFloat() else null,
         preset = enumValueOrNull<GenerationPreset>(json.optString("preset")),
-        instructionTemplate = enumValueOrNull<InstructionTemplate>(json.optString("instruction_template")),
+        instructionTemplateId = json.optString("instruction_template").takeIf {
+            json.has("instruction_template") && it.isNotBlank()
+        },
     )
 }.getOrDefault(GenerationOverrides())
 
 private inline fun <reified T : Enum<T>> enumValueOrNull(name: String): T? =
     T::class.java.enumConstants.firstOrNull { it.name == name }
 
-/** 有效生成参数：逐项覆盖优先，未覆盖项继承全局默认（ADR-0063）。 */
+/** 有效生成参数：逐项覆盖优先，未覆盖项继承全局默认（ADR-0063）。库与图像提示词只随全局默认走。 */
 internal fun effectiveGeneration(
     defaults: GenerationSettings,
     overrides: GenerationOverrides?,
@@ -189,11 +285,71 @@ internal fun effectiveGeneration(
     maxTokens = overrides?.maxTokens ?: defaults.maxTokens,
     topP = overrides?.topP ?: defaults.topP,
     preset = overrides?.preset ?: defaults.preset,
-    instructionTemplate = overrides?.instructionTemplate ?: defaults.instructionTemplate,
+    instructionTemplateId = overrides?.instructionTemplateId ?: defaults.instructionTemplateId,
+    instructionLibrary = defaults.instructionLibrary,
+    imagePromptTemplate = defaults.imagePromptTemplate,
 ).normalized()
 
-internal fun applyInstructionTemplate(system: String, template: InstructionTemplate): String =
-    "$system\n\n${template.prompt}"
+internal fun resolveInstructionEntry(
+    library: List<InstructionTemplateEntry>,
+    id: String,
+): InstructionTemplateEntry =
+    library.firstOrNull { it.id == id }
+        ?: library.firstOrNull { it.id == FACTORY_INSTRUCTION_ROLEPLAY_ID }
+        ?: factoryInstructionLibrary().first()
+
+internal fun resolveInstructionBody(
+    library: List<InstructionTemplateEntry>,
+    id: String,
+): String = resolveInstructionEntry(library, id).body
+
+internal fun applyInstructionTemplate(system: String, settings: GenerationSettings): String =
+    "$system\n\n${settings.selectedInstructionBody()}"
+
+internal fun instructionTokenHint(text: String): Int {
+    if (text.isBlank()) return 0
+    val byChars = kotlin.math.ceil(text.length / 3.0).toInt()
+    if (text.none { it.code > 127 }) return byChars
+    val byUtf8 = kotlin.math.ceil(text.toByteArray(Charsets.UTF_8).size / 2.0).toInt()
+    return maxOf(byChars, byUtf8)
+}
+
+internal fun uniqueInstructionTemplateName(
+    existingNames: Collection<String>,
+    desired: String,
+): String {
+    val base = desired.trim().ifEmpty { "Untitled" }
+    if (base !in existingNames) return base
+    var index = 2
+    while ("$base $index" in existingNames) index++
+    return "$base $index"
+}
+
+internal fun saveInstructionTemplateAsNew(
+    library: List<InstructionTemplateEntry>,
+    body: String,
+    desiredName: String,
+    newId: String,
+): Pair<List<InstructionTemplateEntry>, String> {
+    val name = uniqueInstructionTemplateName(library.map(InstructionTemplateEntry::name), desiredName)
+    val created = InstructionTemplateEntry(id = newId, name = name, body = body, factory = false)
+    return library + created to created.id
+}
+
+internal fun deleteInstructionTemplate(
+    library: List<InstructionTemplateEntry>,
+    selectedId: String,
+    deleteId: String,
+): List<InstructionTemplateEntry> {
+    if (deleteId == selectedId) return library
+    return library.filterNot { it.id == deleteId }
+}
+
+internal fun restoreFactoryInstructionLibrary(settings: GenerationSettings): GenerationSettings =
+    settings.copy(
+        instructionTemplateId = FACTORY_INSTRUCTION_ROLEPLAY_ID,
+        instructionLibrary = factoryInstructionLibrary(),
+    )
 
 internal data class ProviderConfig(
     val preset: ProviderPreset = ProviderPreset.DeepSeek,
@@ -244,7 +400,7 @@ internal object ProviderProtocol {
     fun chatRequest(model: String, prompt: String, settings: GenerationSettings, stream: Boolean = false): JSONObject {
         val s = settings.normalized()
         return JSONObject().put("model", model).put("temperature", s.temperature).put("max_tokens", s.maxTokens).put("top_p", s.topP).put("stream", stream)
-            .put("messages", JSONArray().put(JSONObject().put("role", "system").put("content", s.instructionTemplate.prompt)).put(JSONObject().put("role", "user").put("content", prompt)))
+            .put("messages", JSONArray().put(JSONObject().put("role", "system").put("content", s.selectedInstructionBody())).put(JSONObject().put("role", "user").put("content", prompt)))
     }
 
     /** 流式聊天请求体：由调用方先用 effectiveGeneration 解析出有效参数再传入。 */
@@ -310,7 +466,7 @@ internal object ProviderProtocol {
                     .put(
                         JSONObject()
                             .put("role", "system")
-                            .put("content", applyInstructionTemplate(system, s.instructionTemplate)),
+                            .put("content", applyInstructionTemplate(system, s)),
                     )
                     .put(JSONObject().put("role", "user").put("content", prompt)),
             )
@@ -366,7 +522,7 @@ internal object ProviderProtocol {
             .put(
                 "messages",
                 JSONArray()
-                    .put(JSONObject().put("role", "system").put("content", s.instructionTemplate.prompt))
+                    .put(JSONObject().put("role", "system").put("content", s.selectedInstructionBody()))
                     .put(
                         JSONObject()
                             .put("role", "user")
@@ -777,7 +933,7 @@ internal object ProviderChatClient {
                         val generation = effectiveGeneration(defaults, candidate.generationOverride)
                         requestMessages.getJSONObject(0).put(
                             "content",
-                            applyInstructionTemplate(system, generation.instructionTemplate),
+                            applyInstructionTemplate(system, generation),
                         )
                         val body = ProviderProtocol.streamingChatBody(candidate.model, requestMessages, generation)
                         val text = ProviderHttp.stream(candidate, body, handle) { accumulated ->
@@ -931,7 +1087,7 @@ internal object ProviderTextClient {
                             .put(
                                 JSONObject()
                                     .put("role", "system")
-                                    .put("content", applyInstructionTemplate(system, generation.instructionTemplate)),
+                                    .put("content", applyInstructionTemplate(system, generation)),
                             )
                             .put(JSONObject().put("role", "user").put("content", prompt))
                         val body = JSONObject()

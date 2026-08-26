@@ -29,7 +29,8 @@ internal fun settingsSectionTitleRes(section: SettingsSection): Int = when (sect
 enum class SettingsDestination(val section: SettingsSection, val title: String, val synonyms: Set<String> = emptySet()) {
     PROVIDER(SettingsSection.CHAT_BRAIN, "Provider", setOf("provider", "providers", "供应商", "模型", "model")),
     CHAT_BRAIN(SettingsSection.CHAT_BRAIN, "Chat brain", setOf("brain", "inference", "推理")),
-    GENERATION(SettingsSection.CHAT_BRAIN, "Generation", setOf("generation", "temperature", "top_p", "sampling", "生成参数", "温度", "采样", "指令模板", "模板")),
+    INSTRUCTION(SettingsSection.CHAT_BRAIN, "Instruction", setOf("instruction", "instructions", "指令", "指令模板", "模板", "roleplay", "说话")),
+    GENERATION(SettingsSection.CHAT_BRAIN, "Generation", setOf("generation", "temperature", "top_p", "sampling", "生成", "生成参数", "温度", "采样")),
     VOICE(SettingsSection.VOICE_CALLS, "Voice", setOf("voice", "语音")),
     CALLS(SettingsSection.VOICE_CALLS, "Calls", setOf("call", "通话")),
     LOCAL_DREAM(SettingsSection.IMAGE_GENERATION, "Local Dream", setOf("image", "imaging", "dream", "local dream", "生图", "图像")),
@@ -53,6 +54,7 @@ enum class SettingsDestination(val section: SettingsSection, val title: String, 
 
 internal fun settingsDestinationTitleRes(destination: SettingsDestination): Int = when (destination) {
     SettingsDestination.PROVIDER -> R.string.provider_settings
+    SettingsDestination.INSTRUCTION -> R.string.instruction_settings
     SettingsDestination.GENERATION -> R.string.generation_settings
     SettingsDestination.CHAT_BRAIN -> R.string.settings_entry_chat_brain
     SettingsDestination.VOICE -> R.string.voice_calls_settings
@@ -78,6 +80,7 @@ internal fun settingsDestinationTitleRes(destination: SettingsDestination): Int 
 
 internal fun settingsDestinationSummaryRes(destination: SettingsDestination): Int = when (destination) {
     SettingsDestination.PROVIDER -> R.string.provider_settings_summary
+    SettingsDestination.INSTRUCTION -> R.string.instruction_settings_summary
     SettingsDestination.GENERATION -> R.string.generation_settings_summary
     SettingsDestination.VOICE -> R.string.voice_calls_settings_summary
     SettingsDestination.CHAT_BRAIN -> R.string.settings_entry_chat_brain_summary

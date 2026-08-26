@@ -2,6 +2,7 @@ package io.github.lzyuuu.ailivesaver
 
 import android.os.StatFs
 import android.text.format.Formatter
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -9,24 +10,29 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -35,6 +41,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import java.io.File
+import java.util.UUID
 
 @Composable
 internal fun VoiceCallsSettingsScreen(
@@ -192,12 +199,11 @@ internal fun GenerationSettingsScreen(
                         if (preset == GenerationPreset.Custom) {
                             current.copy(preset = GenerationPreset.Custom)
                         } else {
-                            GenerationSettings(
-                                preset.temperature,
-                                preset.maxTokens,
-                                preset.topP,
-                                preset,
-                                current.instructionTemplate,
+                            current.copy(
+                                temperature = preset.temperature,
+                                maxTokens = preset.maxTokens,
+                                topP = preset.topP,
+                                preset = preset,
                             )
                         }
                     }
@@ -264,17 +270,6 @@ internal fun GenerationSettingsScreen(
             )
         }
         item {
-            Text(
-                stringResource(R.string.generation_section_template),
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-            )
-            InstructionTemplateChips(
-                selected = settings.instructionTemplate,
-                onSelect = { template -> update { it.copy(instructionTemplate = template) } },
-            )
-        }
-        item {
             Button(
                 onClick = {
                     settings = settings.normalized()
@@ -332,8 +327,9 @@ internal fun GenerationPresetChips(
 
 @Composable
 internal fun InstructionTemplateChips(
-    selected: InstructionTemplate,
-    onSelect: (InstructionTemplate) -> Unit,
+    library: List<InstructionTemplateEntry>,
+    selectedId: String,
+    onSelect: (String) -> Unit,
 ) {
     Row(
         modifier = Modifier
@@ -341,20 +337,278 @@ internal fun InstructionTemplateChips(
             .horizontalScroll(rememberScrollState()),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        FilterChip(
-            selected = selected == InstructionTemplate.Roleplay,
-            onClick = { onSelect(InstructionTemplate.Roleplay) },
-            label = { Text(stringResource(R.string.generation_template_roleplay)) },
+        library.forEach { entry ->
+            FilterChip(
+                selected = selectedId == entry.id,
+                onClick = { onSelect(entry.id) },
+                label = { Text(entry.name) },
+            )
+        }
+    }
+}
+
+@Composable
+internal fun InstructionSettingsScreen(
+    contentPadding: PaddingValues,
+    onBack: () -> Unit,
+) {
+    val context = LocalContext.current
+    val store = remember { ProviderStore(context) }
+    var settings by remember {
+        val loaded = store.loadDefaultGeneration()
+        val resolved = if (loaded.instructionLibrary.any { it.id == loaded.instructionTemplateId }) {
+            loaded
+        } else {
+            loaded.copy(instructionTemplateId = FACTORY_INSTRUCTION_ROLEPLAY_ID)
+        }
+        mutableStateOf(resolved)
+    }
+    var saveAsName by remember { mutableStateOf("") }
+    var showSaveAs by remember { mutableStateOf(false) }
+    var showRestore by remember { mutableStateOf(false) }
+    val selected = settings.selectedInstructionEntry()
+
+    fun persist(next: GenerationSettings) {
+        settings = next
+        store.saveDefaultGeneration(next)
+    }
+
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxSize()
+            .testTag("instruction-settings"),
+        contentPadding = PaddingValues(
+            start = 20.dp,
+            top = contentPadding.calculateTopPadding() + 12.dp,
+            end = 20.dp,
+            bottom = contentPadding.calculateBottomPadding() + 72.dp,
+        ),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        item {
+            ScreenBackButton(onBack)
+            Text(
+                stringResource(R.string.instruction_settings),
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold,
+            )
+        }
+        item {
+            Text(
+                stringResource(R.string.instruction_saved_section),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+            )
+            Card(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    settings.instructionLibrary.forEach { entry ->
+                        val selectedRow = entry.id == settings.instructionTemplateId
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("instruction-template-${entry.id}")
+                                .clickable { persist(settings.copy(instructionTemplateId = entry.id)) }
+                                .padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            RadioButton(
+                                selected = selectedRow,
+                                onClick = { persist(settings.copy(instructionTemplateId = entry.id)) },
+                            )
+                            Text(
+                                entry.name,
+                                modifier = Modifier.weight(1f),
+                                color = if (selectedRow) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.onSurface
+                                },
+                                fontWeight = if (selectedRow) FontWeight.Bold else FontWeight.Normal,
+                            )
+                            if (!selectedRow) {
+                                TextButton(
+                                    onClick = {
+                                        persist(
+                                            settings.copy(
+                                                instructionLibrary = deleteInstructionTemplate(
+                                                    settings.instructionLibrary,
+                                                    settings.instructionTemplateId,
+                                                    entry.id,
+                                                ),
+                                            ),
+                                        )
+                                    },
+                                    modifier = Modifier.testTag("instruction-delete-${entry.id}"),
+                                ) {
+                                    Text(stringResource(R.string.delete))
+                                }
+                            }
+                        }
+                    }
+                    Text(
+                        stringResource(R.string.instruction_selection_hint),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+            }
+        }
+        item {
+            Text(
+                stringResource(R.string.instruction_section),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+            )
+            Card(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = selected.body,
+                        onValueChange = { value ->
+                            persist(
+                                settings.copy(
+                                    instructionLibrary = settings.instructionLibrary.map { entry ->
+                                        if (entry.id == settings.instructionTemplateId) {
+                                            entry.copy(body = value)
+                                        } else {
+                                            entry
+                                        }
+                                    },
+                                ),
+                            )
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("instruction-body"),
+                        label = { Text(selected.name) },
+                        minLines = 4,
+                        maxLines = 8,
+                    )
+                    Text(
+                        stringResource(R.string.instruction_token_hint, instructionTokenHint(selected.body)),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    Text(
+                        stringResource(R.string.instruction_write_hint),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+            }
+        }
+        item {
+            Text(
+                stringResource(R.string.instruction_image_section),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+            )
+            Card(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = settings.imagePromptTemplate,
+                        onValueChange = { value -> persist(settings.copy(imagePromptTemplate = value)) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 168.dp)
+                            .testTag("instruction-image-prompt"),
+                        label = { Text(stringResource(R.string.instruction_image_template_label)) },
+                        minLines = 4,
+                        maxLines = 6,
+                    )
+                }
+            }
+        }
+        item {
+            Text(
+                stringResource(R.string.instruction_template_actions),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+            )
+            Card(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        TextButton(
+                            onClick = {
+                                saveAsName = selected.name
+                                showSaveAs = true
+                            },
+                            modifier = Modifier.testTag("instruction-save-as-new"),
+                        ) {
+                            Text(stringResource(R.string.instruction_save_as_new))
+                        }
+                        TextButton(
+                            onClick = { showRestore = true },
+                            modifier = Modifier.testTag("instruction-restore-factory"),
+                        ) {
+                            Text(stringResource(R.string.instruction_restore_factory))
+                        }
+                    }
+                    Text(
+                        stringResource(R.string.instruction_restore_warning),
+                        color = MaterialTheme.colorScheme.primary,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+            }
+        }
+    }
+
+    if (showSaveAs) {
+        AlertDialog(
+            onDismissRequest = { showSaveAs = false },
+            title = { Text(stringResource(R.string.instruction_name_template)) },
+            text = {
+                OutlinedTextField(
+                    value = saveAsName,
+                    onValueChange = { saveAsName = it },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth().testTag("instruction-save-as-name"),
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val (library, newId) = saveInstructionTemplateAsNew(
+                            settings.instructionLibrary,
+                            selected.body,
+                            saveAsName,
+                            newId = "user-${UUID.randomUUID()}",
+                        )
+                        persist(settings.copy(instructionLibrary = library, instructionTemplateId = newId))
+                        showSaveAs = false
+                    },
+                ) {
+                    Text(stringResource(R.string.instruction_confirm))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showSaveAs = false }) {
+                    Text(stringResource(R.string.cancel))
+                }
+            },
         )
-        FilterChip(
-            selected = selected == InstructionTemplate.Direct,
-            onClick = { onSelect(InstructionTemplate.Direct) },
-            label = { Text(stringResource(R.string.generation_template_direct)) },
-        )
-        FilterChip(
-            selected = selected == InstructionTemplate.StraightAnswers,
-            onClick = { onSelect(InstructionTemplate.StraightAnswers) },
-            label = { Text(stringResource(R.string.generation_template_straight)) },
+    }
+    if (showRestore) {
+        AlertDialog(
+            onDismissRequest = { showRestore = false },
+            title = { Text(stringResource(R.string.instruction_restore_factory)) },
+            text = { Text(stringResource(R.string.instruction_restore_warning)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        persist(restoreFactoryInstructionLibrary(settings))
+                        showRestore = false
+                    },
+                    modifier = Modifier.testTag("instruction-restore-confirm"),
+                ) {
+                    Text(stringResource(R.string.instruction_confirm))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showRestore = false }) {
+                    Text(stringResource(R.string.cancel))
+                }
+            },
         )
     }
 }

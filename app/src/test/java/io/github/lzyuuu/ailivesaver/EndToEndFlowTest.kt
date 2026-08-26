@@ -42,7 +42,7 @@ class EndToEndFlowTest {
         assertEquals(0.95, request.getDouble("top_p"), 0.001)
         assertTrue(
             request.getJSONArray("messages").getJSONObject(0).getString("content")
-                .contains(InstructionTemplate.Roleplay.prompt),
+                .contains(FACTORY_INSTRUCTION_ROLEPLAY_BODY),
         )
 
         val controls = defaultChatControls().copy(autoImageGeneration = true)

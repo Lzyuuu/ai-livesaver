@@ -307,6 +307,7 @@ private fun AiLivesaverApp(
     var showUpdates by rememberSaveable { mutableStateOf(false) }
     var showProviders by rememberSaveable { mutableStateOf(false) }
     var showGeneration by rememberSaveable { mutableStateOf(false) }
+    var showInstruction by rememberSaveable { mutableStateOf(false) }
     var showWorldSettings by rememberSaveable { mutableStateOf(false) }
     var showWorldKnowledge by rememberSaveable { mutableStateOf(false) }
     var showWorldChronicle by rememberSaveable { mutableStateOf(false) }
@@ -492,7 +493,7 @@ private fun AiLivesaverApp(
         return
     }
 
-    val settingsOpen = showUpdates || showProviders || showGeneration || showWorldSettings ||
+    val settingsOpen = showUpdates || showProviders || showGeneration || showInstruction || showWorldSettings ||
         showWorldKnowledge || showWorldChronicle || showImageGeneration || showImagingStudio ||
         showSettingsAppearance || showDiagnostics || showPrivacy || showBackups || showIdentity ||
         showCharacters || showVoiceCalls || showStorage || showWelcomeGuide
@@ -504,6 +505,7 @@ private fun AiLivesaverApp(
                 showUpdates = false
                 showProviders = false
                 showGeneration = false
+                showInstruction = false
                 showWorldSettings = false
                 showWorldKnowledge = false
                 showWorldChronicle = false
@@ -552,6 +554,11 @@ private fun AiLivesaverApp(
                     showProviders = false
                     worldRevision++
                 },
+            )
+        } else if (showInstruction) {
+            InstructionSettingsScreen(
+                contentPadding = padding,
+                onBack = { showInstruction = false },
             )
         } else if (showGeneration) {
             GenerationSettingsScreen(
@@ -799,6 +806,7 @@ private fun AiLivesaverApp(
                         onOpenCharacters = { showCharacters = true },
                         onOpenUpdates = { showUpdates = true },
                         onOpenProviders = { showProviders = true },
+                        onOpenInstruction = { showInstruction = true },
                         onOpenGeneration = { showGeneration = true },
                         onOpenWorldSettings = { showWorldSettings = true },
                         onOpenWorldKnowledge = { showWorldKnowledge = true },
@@ -1626,6 +1634,7 @@ private fun MeScreen(
     onOpenCharacters: () -> Unit,
     onOpenUpdates: () -> Unit,
     onOpenProviders: () -> Unit,
+    onOpenInstruction: () -> Unit,
     onOpenGeneration: () -> Unit,
     onOpenWorldSettings: () -> Unit,
     onOpenWorldKnowledge: () -> Unit,
@@ -1661,6 +1670,7 @@ private fun MeScreen(
     fun openSetting(destination: SettingsDestination) {
         when (destination) {
             SettingsDestination.PROVIDER -> onOpenProviders()
+            SettingsDestination.INSTRUCTION -> onOpenInstruction()
             SettingsDestination.GENERATION -> onOpenGeneration()
             SettingsDestination.CHAT_BRAIN -> onOpenProviders()
             SettingsDestination.VOICE, SettingsDestination.CALLS -> onOpenVoiceCalls()
@@ -1856,9 +1866,28 @@ private fun SettingGroup(
                 val summaryRes = settingsDestinationSummaryRes(setting.destination)
                 val isIdentity = setting.destination == SettingsDestination.IDENTITY
                 val displayName = identity.name.ifBlank { stringResource(R.string.me_title) }
+                val context = LocalContext.current
+                val generationDefaults = remember { ProviderStore(context).loadDefaultGeneration() }
                 val displaySummary = when {
                     isIdentity && identity.bio.isNotBlank() -> identity.bio
                     isIdentity -> stringResource(R.string.me_description)
+                    setting.destination == SettingsDestination.INSTRUCTION ->
+                        generationDefaults.selectedInstructionName()
+                    setting.destination == SettingsDestination.GENERATION -> {
+                        val style = stringResource(
+                            when (generationDefaults.preset) {
+                                GenerationPreset.Precise -> R.string.generation_style_precise
+                                GenerationPreset.Balanced -> R.string.generation_style_balanced
+                                GenerationPreset.Creative -> R.string.generation_style_creative
+                                GenerationPreset.Custom -> R.string.generation_style_custom
+                            },
+                        )
+                        stringResource(
+                            R.string.generation_list_summary,
+                            style,
+                            "%.2f".format(generationDefaults.temperature),
+                        )
+                    }
                     else -> stringResource(summaryRes)
                 }
                 Row(
@@ -3018,7 +3047,7 @@ private fun ProviderScreen(
     var genTopCustom by remember { mutableStateOf(initial.generationOverride.topP != null) }
     var genMaxCustom by remember { mutableStateOf(initial.generationOverride.maxTokens != null) }
     var genPresetCustom by remember { mutableStateOf(initial.generationOverride.preset != null) }
-    var genTemplateCustom by remember { mutableStateOf(initial.generationOverride.instructionTemplate != null) }
+    var genTemplateCustom by remember { mutableStateOf(initial.generationOverride.instructionTemplateId != null) }
     var testing by remember { mutableStateOf(false) }
     var testingCapabilities by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf<String?>(null) }
@@ -3045,7 +3074,7 @@ private fun ProviderScreen(
         genTopCustom = config.generationOverride.topP != null
         genMaxCustom = config.generationOverride.maxTokens != null
         genPresetCustom = config.generationOverride.preset != null
-        genTemplateCustom = config.generationOverride.instructionTemplate != null
+        genTemplateCustom = config.generationOverride.instructionTemplateId != null
         status = null
     }
 
@@ -3074,7 +3103,7 @@ private fun ProviderScreen(
             maxTokens = generationOverride.maxTokens.takeIf { genMaxCustom },
             topP = generationOverride.topP.takeIf { genTopCustom },
             preset = generationOverride.preset.takeIf { genPresetCustom },
-            instructionTemplate = generationOverride.instructionTemplate.takeIf { genTemplateCustom },
+            instructionTemplateId = generationOverride.instructionTemplateId.takeIf { genTemplateCustom },
         ),
     )
     fun rememberSavedConfig(savedTask: ProviderTask, config: ProviderConfig) {
@@ -3337,18 +3366,19 @@ private fun ProviderScreen(
                         custom = genTemplateCustom,
                         onToggle = { on ->
                             genTemplateCustom = on
-                            if (on && generationOverride.instructionTemplate == null) {
+                            if (on && generationOverride.instructionTemplateId == null) {
                                 generationOverride = generationOverride.copy(
-                                    instructionTemplate = globalGenerationDefaults.instructionTemplate,
+                                    instructionTemplateId = globalGenerationDefaults.instructionTemplateId,
                                 )
                             }
                         },
                     ) {
                         InstructionTemplateChips(
-                            selected = generationOverride.instructionTemplate
-                                ?: globalGenerationDefaults.instructionTemplate,
-                            onSelect = { template ->
-                                generationOverride = generationOverride.copy(instructionTemplate = template)
+                            library = globalGenerationDefaults.instructionLibrary,
+                            selectedId = generationOverride.instructionTemplateId
+                                ?: globalGenerationDefaults.instructionTemplateId,
+                            onSelect = { templateId ->
+                                generationOverride = generationOverride.copy(instructionTemplateId = templateId)
                             },
                         )
                     }
