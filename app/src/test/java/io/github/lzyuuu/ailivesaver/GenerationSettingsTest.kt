@@ -9,10 +9,34 @@ import org.junit.Test
 
 class GenerationSettingsTest {
     @Test fun presetsProvide451Values() {
-        assertEquals(0.2f, GenerationPreset.Precise.temperature)
-        assertEquals(0.7f, GenerationPreset.Balanced.temperature)
-        assertEquals(1.1f, GenerationPreset.Creative.temperature)
-        assertEquals(2048, GenerationSettings().maxTokens)
+        assertEquals(0.4f, GenerationPreset.Precise.temperature)
+        assertEquals(1024, GenerationPreset.Precise.maxTokens)
+        assertEquals(0.10f, GenerationPreset.Precise.minP)
+        assertEquals(0.0f, GenerationPreset.Precise.xtcSurprise)
+        assertEquals(1.05f, GenerationPreset.Precise.repetitionPenalty)
+        assertEquals(0.80f, GenerationPreset.Balanced.temperature)
+        assertEquals(1024, GenerationPreset.Balanced.maxTokens)
+        assertEquals(0.05f, GenerationPreset.Balanced.minP)
+        assertEquals(0.0f, GenerationPreset.Balanced.xtcSurprise)
+        assertEquals(1.0f, GenerationPreset.Balanced.repetitionPenalty)
+        assertEquals(1.05f, GenerationPreset.Creative.temperature)
+        assertEquals(1024, GenerationPreset.Creative.maxTokens)
+        assertEquals(0.02f, GenerationPreset.Creative.minP)
+        assertEquals(0.5f, GenerationPreset.Creative.xtcSurprise)
+        assertEquals(1.03f, GenerationPreset.Creative.repetitionPenalty)
+        assertEquals(0.80f, GenerationSettings().temperature)
+        assertEquals(1024, GenerationSettings().maxTokens)
+        assertEquals(0.95f, GenerationSettings().topP)
+        assertEquals(GenerationPreset.Balanced, GenerationSettings().preset)
+        assertEquals(0.05f, GenerationSettings().expertSampling.minP)
+        assertEquals(1.0f, GenerationSettings().expertSampling.repetitionPenalty)
+        assertEquals(64, GenerationSettings().expertSampling.penaltyWindow)
+        assertEquals(0.0f, GenerationSettings().expertSampling.xtcSurprise)
+        assertEquals(0.10f, GenerationSettings().expertSampling.xtcFloor)
+        assertEquals(0.0f, GenerationSettings().expertSampling.dryLoopBreaker)
+        assertEquals(1.75f, GenerationSettings().expertSampling.drySteepness)
+        assertEquals(2, GenerationSettings().expertSampling.dryAllowedRepeat)
+        assertEquals(0.0f, GenerationSettings().expertSampling.dynamicTemperature)
     }
 
     @Test fun factoryInstructionLibraryMatchesReferenceV451() {
@@ -303,6 +327,217 @@ class GenerationSettingsTest {
         val afterDeleteOther = deleteInstructionTemplate(library, selectedId = "user-2", deleteId = FACTORY_INSTRUCTION_DIRECT_ID)
         assertEquals(3, afterDeleteOther.size)
         assertTrue(afterDeleteOther.none { it.id == FACTORY_INSTRUCTION_DIRECT_ID })
+    }
+
+    @Test fun uncustomizedOldFactoryBalancedMigratesToReferenceBalanced() {
+        val migrated = decodeGenerationSettings(
+            """{"temperature":0.7,"max_tokens":2048,"top_p":0.95,"preset":"Balanced","instruction_template":"Roleplay"}""",
+        )
+        assertEquals(0.80f, migrated.temperature)
+        assertEquals(1024, migrated.maxTokens)
+        assertEquals(0.95f, migrated.topP)
+        assertEquals(GenerationPreset.Balanced, migrated.preset)
+        assertEquals(ExpertSampling(), migrated.expertSampling)
+        assertEquals(FACTORY_INSTRUCTION_ROLEPLAY_ID, migrated.instructionTemplateId)
+        assertEquals(factoryInstructionLibrary(), migrated.instructionLibrary)
+    }
+
+    @Test fun customizedSamplingNumbersStayUnmigrated() {
+        val custom = decodeGenerationSettings(
+            """{"temperature":0.7,"max_tokens":2048,"top_p":0.90,"preset":"Custom","instruction_template":"Direct"}""",
+        )
+        assertEquals(0.7f, custom.temperature)
+        assertEquals(2048, custom.maxTokens)
+        assertEquals(0.90f, custom.topP)
+        assertEquals(GenerationPreset.Custom, custom.preset)
+        val preciseLike = decodeGenerationSettings(
+            """{"temperature":0.4,"max_tokens":512,"top_p":0.8,"preset":"Balanced","instruction_template":"Direct"}""",
+        )
+        assertEquals(0.4f, preciseLike.temperature)
+        assertEquals(512, preciseLike.maxTokens)
+        assertEquals(0.8f, preciseLike.topP)
+    }
+
+    @Test fun expertSamplingCodecRoundTripsAsGlobalPreference() {
+        val expert = ExpertSampling(
+            minP = 0.12f,
+            repetitionPenalty = 1.12f,
+            penaltyWindow = 128,
+            xtcSurprise = 0.35f,
+            xtcFloor = 0.2f,
+            dryLoopBreaker = 0.8f,
+            drySteepness = 2.25f,
+            dryAllowedRepeat = 4,
+            dynamicTemperature = 0.3f,
+        )
+        val settings = GenerationSettings(
+            temperature = 1.05f,
+            maxTokens = 1024,
+            topP = 0.95f,
+            preset = GenerationPreset.Creative,
+            expertSampling = expert,
+        ).normalized()
+        val encoded = encodeGenerationSettings(settings)
+        val restored = decodeGenerationSettings(encoded)
+        assertEquals(settings, restored)
+        val json = JSONObject(encoded).getJSONObject("expert_sampling")
+        assertEquals(0.12, json.getDouble("min_p"), 0.0001)
+        assertEquals(1.12, json.getDouble("repetition_penalty"), 0.0001)
+        assertEquals(128, json.getInt("penalty_window"))
+        assertEquals(0.35, json.getDouble("xtc_probability"), 0.0001)
+        assertEquals(0.2, json.getDouble("xtc_threshold"), 0.0001)
+        assertEquals(0.8, json.getDouble("dry_multiplier"), 0.0001)
+        assertEquals(2.25, json.getDouble("dry_base"), 0.0001)
+        assertEquals(4, json.getInt("dry_allowed_length"))
+        assertEquals(0.3, json.getDouble("dynatemp_range"), 0.0001)
+        val overrides = encodeGenerationOverrides(
+            GenerationOverrides(temperature = 0.4f, preset = GenerationPreset.Precise),
+        )
+        assertFalse(overrides.contains("expert_sampling"))
+        assertFalse(overrides.contains("min_p"))
+        assertFalse(overrides.contains("xtc_probability"))
+        val resolved = effectiveGeneration(
+            settings,
+            GenerationOverrides(temperature = 0.2f, maxTokens = 512),
+        )
+        assertEquals(0.2f, resolved.temperature)
+        assertEquals(512, resolved.maxTokens)
+        assertEquals(expert.normalized(), resolved.expertSampling)
+    }
+
+    @Test fun cloudPayloadOmitsExpertSamplingKeys() {
+        val settings = GenerationSettings(
+            expertSampling = ExpertSampling(
+                minP = 0.2f,
+                repetitionPenalty = 1.2f,
+                penaltyWindow = 256,
+                xtcSurprise = 0.5f,
+                xtcFloor = 0.25f,
+                dryLoopBreaker = 1.1f,
+                drySteepness = 3f,
+                dryAllowedRepeat = 6,
+                dynamicTemperature = 0.4f,
+            ),
+        )
+        val payloads = listOf(
+            ProviderProtocol.chatRequest("m", "hello", settings, stream = true),
+            ProviderProtocol.streamingChatBody("m", JSONArray(), settings),
+            ProviderProtocol.structuredRequest("m", "sys", "user", settings = settings),
+            ProviderProtocol.visionRequest("m", "data:image/png;base64,AAAA", settings = settings),
+        )
+        val forbidden = listOf(
+            "min_p",
+            "xtc_probability",
+            "xtc_threshold",
+            "repetition_penalty",
+            "penalty_window",
+            "dry_multiplier",
+            "dry_base",
+            "dry_allowed_length",
+            "dynatemp_range",
+            "expert_sampling",
+        )
+        payloads.forEach { payload ->
+            forbidden.forEach { key ->
+                assertFalse(payload.has(key))
+                assertFalse(payload.toString().contains(key))
+            }
+            assertTrue(payload.has("temperature"))
+            assertTrue(payload.has("max_tokens"))
+            assertTrue(payload.has("top_p"))
+        }
+    }
+
+    @Test fun resetRestoresBalancedSamplingWithoutWipingInstructionLibrary() {
+        val customLibrary = factoryInstructionLibrary() + InstructionTemplateEntry(
+            "user-keep",
+            "Keep me",
+            "custom speaking style",
+            factory = false,
+        )
+        val dirty = GenerationSettings(
+            temperature = 1.4f,
+            maxTokens = 4096,
+            topP = 0.5f,
+            preset = GenerationPreset.Custom,
+            instructionTemplateId = "user-keep",
+            instructionLibrary = customLibrary,
+            imagePromptTemplate = "CHANGED IMAGE PROMPT TEMPLATE",
+            expertSampling = ExpertSampling(
+                minP = 0.2f,
+                repetitionPenalty = 1.3f,
+                penaltyWindow = 256,
+                xtcSurprise = 0.6f,
+                xtcFloor = 0.3f,
+                dryLoopBreaker = 1.5f,
+                drySteepness = 3.5f,
+                dryAllowedRepeat = 8,
+                dynamicTemperature = 0.7f,
+            ),
+        )
+        val reset = resetGenerationSampling(dirty)
+        assertEquals(0.80f, reset.temperature)
+        assertEquals(1024, reset.maxTokens)
+        assertEquals(0.95f, reset.topP)
+        assertEquals(GenerationPreset.Balanced, reset.preset)
+        assertEquals(ExpertSampling(), reset.expertSampling)
+        assertEquals("user-keep", reset.instructionTemplateId)
+        assertEquals(customLibrary, reset.instructionLibrary)
+        assertEquals("CHANGED IMAGE PROMPT TEMPLATE", reset.imagePromptTemplate)
+    }
+
+    @Test fun namedPresetUpdatesOwnedKnobsAndLeavesDryDynatempWindow() {
+        val previous = GenerationSettings(
+            temperature = 0.80f,
+            maxTokens = 1024,
+            topP = 0.95f,
+            preset = GenerationPreset.Balanced,
+            expertSampling = ExpertSampling(
+                minP = 0.05f,
+                repetitionPenalty = 1.0f,
+                penaltyWindow = 256,
+                xtcSurprise = 0.0f,
+                xtcFloor = 0.22f,
+                dryLoopBreaker = 1.2f,
+                drySteepness = 2.5f,
+                dryAllowedRepeat = 5,
+                dynamicTemperature = 0.4f,
+            ),
+        )
+        val precise = applyNamedGenerationPreset(previous, GenerationPreset.Precise)
+        assertEquals(GenerationPreset.Precise, precise.preset)
+        assertEquals(0.4f, precise.temperature)
+        assertEquals(1024, precise.maxTokens)
+        assertEquals(0.8f, precise.topP)
+        assertEquals(0.10f, precise.expertSampling.minP)
+        assertEquals(0.0f, precise.expertSampling.xtcSurprise)
+        assertEquals(1.05f, precise.expertSampling.repetitionPenalty)
+        assertEquals(256, precise.expertSampling.penaltyWindow)
+        assertEquals(0.22f, precise.expertSampling.xtcFloor)
+        assertEquals(1.2f, precise.expertSampling.dryLoopBreaker)
+        assertEquals(2.5f, precise.expertSampling.drySteepness)
+        assertEquals(5, precise.expertSampling.dryAllowedRepeat)
+        assertEquals(0.4f, precise.expertSampling.dynamicTemperature)
+        val creative = applyNamedGenerationPreset(precise, GenerationPreset.Creative)
+        assertEquals(GenerationPreset.Creative, creative.preset)
+        assertEquals(1.05f, creative.temperature)
+        assertEquals(1024, creative.maxTokens)
+        assertEquals(0.95f, creative.topP)
+        assertEquals(0.02f, creative.expertSampling.minP)
+        assertEquals(0.5f, creative.expertSampling.xtcSurprise)
+        assertEquals(1.03f, creative.expertSampling.repetitionPenalty)
+        assertEquals(256, creative.expertSampling.penaltyWindow)
+        assertEquals(0.22f, creative.expertSampling.xtcFloor)
+        assertEquals(1.2f, creative.expertSampling.dryLoopBreaker)
+        assertEquals(2.5f, creative.expertSampling.drySteepness)
+        assertEquals(5, creative.expertSampling.dryAllowedRepeat)
+        assertEquals(0.4f, creative.expertSampling.dynamicTemperature)
+        val custom = applyNamedGenerationPreset(creative, GenerationPreset.Custom)
+        assertEquals(GenerationPreset.Custom, custom.preset)
+        assertEquals(creative.temperature, custom.temperature)
+        assertEquals(creative.maxTokens, custom.maxTokens)
+        assertEquals(creative.topP, custom.topP)
+        assertEquals(creative.expertSampling, custom.expertSampling)
     }
 
     @Test fun imagePromptPersistsWithoutChangingCompose() {

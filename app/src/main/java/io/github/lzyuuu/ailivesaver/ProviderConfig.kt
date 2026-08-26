@@ -107,9 +107,48 @@ internal data class CapabilityResult(
     val detail: String = "",
 )
 
-internal enum class GenerationPreset(val temperature: Float, val maxTokens: Int, val topP: Float) {
-    Precise(0.2f, 1024, 0.8f), Balanced(0.7f, 2048, 0.95f), Creative(1.1f, 4096, 0.95f), Custom(0.7f, 2048, 0.95f)
+internal enum class GenerationPreset(
+    val temperature: Float,
+    val maxTokens: Int,
+    val topP: Float,
+    val minP: Float,
+    val xtcSurprise: Float,
+    val repetitionPenalty: Float,
+) {
+    Precise(0.4f, 1024, 0.8f, 0.10f, 0.0f, 1.05f),
+    Balanced(0.8f, 1024, 0.95f, 0.05f, 0.0f, 1.0f),
+    Creative(1.05f, 1024, 0.95f, 0.02f, 0.5f, 1.03f),
+    Custom(0.8f, 1024, 0.95f, 0.05f, 0.0f, 1.0f),
 }
+
+/** 专家采样：只存全局默认，不进推理配置覆盖，也不写入云端请求（ADR-0064）。 */
+internal data class ExpertSampling(
+    val minP: Float = 0.05f,
+    val repetitionPenalty: Float = 1.0f,
+    val penaltyWindow: Int = 64,
+    val xtcSurprise: Float = 0.0f,
+    val xtcFloor: Float = 0.10f,
+    val dryLoopBreaker: Float = 0.0f,
+    val drySteepness: Float = 1.75f,
+    val dryAllowedRepeat: Int = 2,
+    val dynamicTemperature: Float = 0.0f,
+) {
+    fun normalized() = copy(
+        minP = minP.coerceIn(0f, 0.5f),
+        repetitionPenalty = repetitionPenalty.coerceIn(1f, 1.5f),
+        penaltyWindow = penaltyWindow.coerceIn(0, 1024),
+        xtcSurprise = xtcSurprise.coerceIn(0f, 1f),
+        xtcFloor = xtcFloor.coerceIn(0.05f, 0.5f),
+        dryLoopBreaker = dryLoopBreaker.coerceIn(0f, 2f),
+        drySteepness = drySteepness.coerceIn(1f, 4f),
+        dryAllowedRepeat = dryAllowedRepeat.coerceIn(0, 10),
+        dynamicTemperature = dynamicTemperature.coerceIn(0f, 1f),
+    )
+}
+
+private const val OLD_FACTORY_BALANCED_TEMPERATURE = 0.7f
+private const val OLD_FACTORY_BALANCED_MAX_TOKENS = 2048
+private const val OLD_FACTORY_BALANCED_TOP_P = 0.95f
 
 internal const val FACTORY_INSTRUCTION_ROLEPLAY_ID = "Roleplay"
 internal const val FACTORY_INSTRUCTION_DIRECT_ID = "Direct"
@@ -159,18 +198,20 @@ internal fun factoryInstructionLibrary(): List<InstructionTemplateEntry> = listO
 )
 
 internal data class GenerationSettings(
-    val temperature: Float = 0.7f,
-    val maxTokens: Int = 2048,
-    val topP: Float = 0.95f,
+    val temperature: Float = GenerationPreset.Balanced.temperature,
+    val maxTokens: Int = GenerationPreset.Balanced.maxTokens,
+    val topP: Float = GenerationPreset.Balanced.topP,
     val preset: GenerationPreset = GenerationPreset.Balanced,
     val instructionTemplateId: String = FACTORY_INSTRUCTION_ROLEPLAY_ID,
     val instructionLibrary: List<InstructionTemplateEntry> = factoryInstructionLibrary(),
     val imagePromptTemplate: String = FACTORY_IMAGE_PROMPT_TEMPLATE,
+    val expertSampling: ExpertSampling = ExpertSampling(),
 ) {
     fun normalized() = copy(
         temperature = temperature.coerceIn(0f, 2f),
         maxTokens = maxTokens.coerceIn(128, 8192),
         topP = topP.coerceIn(0f, 1f),
+        expertSampling = expertSampling.normalized(),
     )
 
     fun selectedInstructionEntry(): InstructionTemplateEntry =
@@ -209,15 +250,20 @@ internal fun encodeGenerationSettings(settings: GenerationSettings): String {
         .put("instruction_template", settings.instructionTemplateId)
         .put("instruction_library", library)
         .put("image_prompt_template", settings.imagePromptTemplate)
+        .put("expert_sampling", encodeExpertSampling(settings.expertSampling))
         .toString()
 }
 
 internal fun decodeGenerationSettings(raw: String?): GenerationSettings = runCatching {
     val json = JSONObject(raw.orEmpty())
+    val temperature = json.getDouble("temperature").toFloat()
+    val maxTokens = json.getInt("max_tokens")
+    val topP = json.getDouble("top_p").toFloat()
+    val uncustomizedOldFactory = isUncustomizedOldFactoryBalanced(temperature, maxTokens, topP)
     GenerationSettings(
-        temperature = json.getDouble("temperature").toFloat(),
-        maxTokens = json.getInt("max_tokens"),
-        topP = json.getDouble("top_p").toFloat(),
+        temperature = if (uncustomizedOldFactory) GenerationPreset.Balanced.temperature else temperature,
+        maxTokens = if (uncustomizedOldFactory) GenerationPreset.Balanced.maxTokens else maxTokens,
+        topP = topP,
         preset = enumValueOrNull<GenerationPreset>(json.optString("preset")) ?: GenerationPreset.Balanced,
         instructionTemplateId = json.optString("instruction_template").ifBlank { FACTORY_INSTRUCTION_ROLEPLAY_ID },
         instructionLibrary = decodeInstructionLibrary(json.optJSONArray("instruction_library")),
@@ -226,8 +272,41 @@ internal fun decodeGenerationSettings(raw: String?): GenerationSettings = runCat
         } else {
             FACTORY_IMAGE_PROMPT_TEMPLATE
         },
+        expertSampling = decodeExpertSampling(json.optJSONObject("expert_sampling")),
     ).normalized()
 }.getOrDefault(GenerationSettings())
+
+private fun isUncustomizedOldFactoryBalanced(temperature: Float, maxTokens: Int, topP: Float): Boolean =
+    maxTokens == OLD_FACTORY_BALANCED_MAX_TOKENS &&
+        kotlin.math.abs(temperature - OLD_FACTORY_BALANCED_TEMPERATURE) < 0.0001f &&
+        kotlin.math.abs(topP - OLD_FACTORY_BALANCED_TOP_P) < 0.0001f
+
+private fun encodeExpertSampling(expert: ExpertSampling): JSONObject = JSONObject()
+    .put("min_p", expert.minP.toDouble())
+    .put("repetition_penalty", expert.repetitionPenalty.toDouble())
+    .put("penalty_window", expert.penaltyWindow)
+    .put("xtc_probability", expert.xtcSurprise.toDouble())
+    .put("xtc_threshold", expert.xtcFloor.toDouble())
+    .put("dry_multiplier", expert.dryLoopBreaker.toDouble())
+    .put("dry_base", expert.drySteepness.toDouble())
+    .put("dry_allowed_length", expert.dryAllowedRepeat)
+    .put("dynatemp_range", expert.dynamicTemperature.toDouble())
+
+private fun decodeExpertSampling(raw: JSONObject?): ExpertSampling {
+    if (raw == null) return ExpertSampling()
+    val defaults = ExpertSampling()
+    return ExpertSampling(
+        minP = raw.optDouble("min_p", defaults.minP.toDouble()).toFloat(),
+        repetitionPenalty = raw.optDouble("repetition_penalty", defaults.repetitionPenalty.toDouble()).toFloat(),
+        penaltyWindow = raw.optInt("penalty_window", defaults.penaltyWindow),
+        xtcSurprise = raw.optDouble("xtc_probability", defaults.xtcSurprise.toDouble()).toFloat(),
+        xtcFloor = raw.optDouble("xtc_threshold", defaults.xtcFloor.toDouble()).toFloat(),
+        dryLoopBreaker = raw.optDouble("dry_multiplier", defaults.dryLoopBreaker.toDouble()).toFloat(),
+        drySteepness = raw.optDouble("dry_base", defaults.drySteepness.toDouble()).toFloat(),
+        dryAllowedRepeat = raw.optInt("dry_allowed_length", defaults.dryAllowedRepeat),
+        dynamicTemperature = raw.optDouble("dynatemp_range", defaults.dynamicTemperature.toDouble()).toFloat(),
+    )
+}
 
 private fun decodeInstructionLibrary(raw: JSONArray?): List<InstructionTemplateEntry> {
     if (raw == null || raw.length() == 0) return factoryInstructionLibrary()
@@ -288,6 +367,7 @@ internal fun effectiveGeneration(
     instructionTemplateId = overrides?.instructionTemplateId ?: defaults.instructionTemplateId,
     instructionLibrary = defaults.instructionLibrary,
     imagePromptTemplate = defaults.imagePromptTemplate,
+    expertSampling = defaults.expertSampling,
 ).normalized()
 
 internal fun resolveInstructionEntry(
@@ -350,6 +430,31 @@ internal fun restoreFactoryInstructionLibrary(settings: GenerationSettings): Gen
         instructionTemplateId = FACTORY_INSTRUCTION_ROLEPLAY_ID,
         instructionLibrary = factoryInstructionLibrary(),
     )
+
+internal fun resetGenerationSampling(settings: GenerationSettings): GenerationSettings =
+    GenerationSettings(
+        instructionTemplateId = settings.instructionTemplateId,
+        instructionLibrary = settings.instructionLibrary,
+        imagePromptTemplate = settings.imagePromptTemplate,
+    )
+
+internal fun applyNamedGenerationPreset(
+    settings: GenerationSettings,
+    preset: GenerationPreset,
+): GenerationSettings {
+    if (preset == GenerationPreset.Custom) return settings.copy(preset = GenerationPreset.Custom)
+    return settings.copy(
+        temperature = preset.temperature,
+        maxTokens = preset.maxTokens,
+        topP = preset.topP,
+        preset = preset,
+        expertSampling = settings.expertSampling.copy(
+            minP = preset.minP,
+            xtcSurprise = preset.xtcSurprise,
+            repetitionPenalty = preset.repetitionPenalty,
+        ),
+    ).normalized()
+}
 
 internal data class ProviderConfig(
     val preset: ProviderPreset = ProviderPreset.DeepSeek,

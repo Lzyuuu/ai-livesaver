@@ -44,7 +44,7 @@ class EndToEndFlowTest {
         )
         val request = ProviderProtocol.chatRequest("deepseek-v4-flash", "hello", effective, stream = true)
         assertEquals(0.4, request.getDouble("temperature"), 0.001)
-        assertEquals(2048, request.getInt("max_tokens"))
+        assertEquals(1024, request.getInt("max_tokens"))
         assertEquals(0.95, request.getDouble("top_p"), 0.001)
         assertTrue(
             request.getJSONArray("messages").getJSONObject(0).getString("content")
