@@ -3,6 +3,10 @@ package io.github.lzyuuu.ailivesaver
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.TimeoutException
+import java.util.concurrent.atomic.AtomicReference
 
 /**
  * DuckDuckGo 检索（spec-v451 §1 / ticket #51）：请求 html 端点、解析标题+摘要，
@@ -76,31 +80,62 @@ internal fun webResultsForPrompt(results: List<WebSearchResult>): String {
 }
 
 /**
- * 同步检索；调用方负责放到后台线程。任何异常（网络不可用、超时、解析失败）都返回空列表。
+ * 同步检索；调用方负责放到后台线程。
+ * [timeoutMs] 是整体 wall-clock 上限（默认 8s）；[socketTimeoutMs] 默认与之相同，供测试把 socket 超时拉长以证明 wall-clock 才是硬界。
+ * wall-clock 到期、非 200（含 202 挑战页）、或任何异常，一律空列表，绝不把聊天流式请求堵在检索上。
  */
 internal fun searchDuckDuckGo(
     query: String,
     timeoutMs: Int = WEB_SEARCH_TIMEOUT_MS,
     limit: Int = DEFAULT_WEB_RESULT_LIMIT,
+    endpointUrl: String = duckDuckGoSearchUrl(query),
+    socketTimeoutMs: Int = timeoutMs,
 ): List<WebSearchResult> {
     if (query.trim().isEmpty()) return emptyList()
     return runCatching {
-        val connection = URL(duckDuckGoSearchUrl(query)).openConnection() as HttpURLConnection
+        val connectionRef = AtomicReference<HttpURLConnection?>(null)
+        val executor = Executors.newSingleThreadExecutor { runnable ->
+            Thread(runnable, "ddg-search").apply { isDaemon = true }
+        }
         try {
-            connection.connectTimeout = timeoutMs
-            connection.readTimeout = timeoutMs
-            connection.instanceFollowRedirects = true
-            connection.setRequestProperty(
-                "User-Agent",
-                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36",
-            )
-            if (connection.responseCode != 200) return@runCatching emptyList()
-            val body = connection.inputStream.bufferedReader(Charsets.UTF_8).use { reader ->
-                reader.readText()
+            val future = executor.submit<List<WebSearchResult>> {
+                fetchDuckDuckGo(endpointUrl, socketTimeoutMs, limit, connectionRef)
             }
-            parseDuckDuckGoResults(body, limit)
+            try {
+                future.get(timeoutMs.toLong().coerceAtLeast(1L), TimeUnit.MILLISECONDS)
+            } catch (_: TimeoutException) {
+                connectionRef.get()?.disconnect()
+                future.cancel(true)
+                emptyList()
+            }
         } finally {
-            connection.disconnect()
+            executor.shutdownNow()
         }
     }.getOrElse { emptyList() }
+}
+
+private fun fetchDuckDuckGo(
+    endpointUrl: String,
+    socketTimeoutMs: Int,
+    limit: Int,
+    connectionRef: AtomicReference<HttpURLConnection?>,
+): List<WebSearchResult> {
+    val connection = URL(endpointUrl).openConnection() as HttpURLConnection
+    connectionRef.set(connection)
+    try {
+        connection.connectTimeout = socketTimeoutMs
+        connection.readTimeout = socketTimeoutMs
+        connection.instanceFollowRedirects = true
+        connection.setRequestProperty(
+            "User-Agent",
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36",
+        )
+        if (connection.responseCode != 200) return emptyList()
+        val body = connection.inputStream.bufferedReader(Charsets.UTF_8).use { reader ->
+            reader.readText()
+        }
+        return parseDuckDuckGoResults(body, limit)
+    } finally {
+        connection.disconnect()
+    }
 }

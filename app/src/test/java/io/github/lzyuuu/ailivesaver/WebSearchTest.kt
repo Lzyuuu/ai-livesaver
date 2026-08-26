@@ -3,6 +3,9 @@ package io.github.lzyuuu.ailivesaver
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.io.Closeable
+import java.net.ServerSocket
+import kotlin.concurrent.thread
 
 class WebSearchTest {
 
@@ -79,5 +82,88 @@ class WebSearchTest {
             webResults = listOf(WebSearchResult("Weather", "Sunny in Tokyo today")),
         )
         assertTrue(prompt.contains("- Weather: Sunny in Tokyo today"))
+    }
+
+    @Test(timeout = 4_000)
+    fun searchReturnsEmptyWithinWallClockWhenHttpIgnoresSocketTimeout() {
+        LocalHttpServer { Thread.sleep(60_000) }.use { server ->
+            val startedAt = System.nanoTime()
+            val results = searchDuckDuckGo(
+                query = "sunset harbor",
+                timeoutMs = 300,
+                endpointUrl = server.url(),
+                socketTimeoutMs = 20_000,
+            )
+            val elapsedMs = (System.nanoTime() - startedAt) / 1_000_000
+            assertTrue(results.isEmpty())
+            assertTrue("wall-clock ${elapsedMs}ms exceeded 1500ms", elapsedMs < 1_500)
+        }
+    }
+
+    @Test
+    fun searchTreatsChallengeAndNonOkStatusAsEmpty() {
+        resultServer(202, "<a class=\"result__a\">Should not surface</a>").use { accepted ->
+            assertTrue(
+                searchDuckDuckGo("sunset", endpointUrl = accepted.url()).isEmpty(),
+            )
+        }
+        resultServer(403, "<a class=\"result__a\">Forbidden page</a>").use { forbidden ->
+            assertTrue(
+                searchDuckDuckGo("sunset", endpointUrl = forbidden.url()).isEmpty(),
+            )
+        }
+    }
+
+    @Test
+    fun searchParsesOkHtmlFromInjectedEndpoint() {
+        val html = """<a class="result__a" href="x">Harbor lights</a><a class="result__snippet">Sunset over still water</a>"""
+        resultServer(200, html).use { ok ->
+            val results = searchDuckDuckGo("sunset", endpointUrl = ok.url())
+            assertEquals(1, results.size)
+            assertEquals("Harbor lights", results.single().title)
+            assertEquals("Sunset over still water", results.single().snippet)
+        }
+    }
+}
+
+/** 本地 HTTP：handler 决定挂起或回写，用来钉住 wall-clock 与状态码降级。 */
+private class LocalHttpServer(private val handle: (java.net.Socket) -> Unit) : Closeable {
+    private val server = ServerSocket(0)
+    private val worker = thread {
+        try {
+            while (true) {
+                server.accept().use(handle)
+            }
+        } catch (_: Exception) {
+            // 测试结束关闭套接字。
+        }
+    }
+
+    fun url() = "http://127.0.0.1:${server.localPort}/"
+
+    override fun close() {
+        server.close()
+        worker.interrupt()
+        worker.join(2_000)
+    }
+}
+
+private fun resultServer(status: Int, body: String): LocalHttpServer {
+    val reason = when (status) {
+        200 -> "OK"
+        202 -> "Accepted"
+        403 -> "Forbidden"
+        else -> "Status"
+    }
+    val payload = body.toByteArray(Charsets.UTF_8)
+    return LocalHttpServer { socket ->
+        socket.getInputStream().bufferedReader().readLine()
+        val head =
+            "HTTP/1.1 $status $reason\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: ${payload.size}\r\nConnection: close\r\n\r\n"
+        socket.getOutputStream().use { out ->
+            out.write(head.toByteArray())
+            out.write(payload)
+            out.flush()
+        }
     }
 }
