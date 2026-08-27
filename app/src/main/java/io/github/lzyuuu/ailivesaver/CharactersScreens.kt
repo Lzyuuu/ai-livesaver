@@ -86,18 +86,18 @@ import java.text.DateFormat
 import java.util.Date
 import java.util.UUID
 
-/** Live v4.47 Characters shell: dark English, not the Fancy OS desktop cream shell. */
-private val CharactersBg = Color(0xFF0A0E14)
-private val CharactersTopBar = Color(0xFF111622)
-private val CharactersInk = Color(0xFFF2F2F2)
-private val CharactersMuted = Color(0xFF9A9EA8)
-private val CharactersDisabled = Color(0xFF636565)
-private val CharactersAccent = FancyGold
-private val CharactersField = Color(0xFF121722)
-private val CharactersBorder = Color(0xFF27292E)
-private val CharactersFab = Color(0xFF1A2130)
+/** Characters 壳（批次 D 收敛：色值对齐 ReferencePalette，文案中文化归 E6 余项）。 */
+private val CharactersBg = ReferencePalette.PageBg
+private val CharactersTopBar = ReferencePalette.Card
+private val CharactersInk = ReferencePalette.TextPrimary
+private val CharactersMuted = ReferencePalette.TextSecondary
+private val CharactersDisabled = ReferencePalette.Faint
+private val CharactersAccent = ReferencePalette.Gold
+private val CharactersField = ReferencePalette.Card
+private val CharactersBorder = ReferencePalette.Hairline
+private val CharactersFab = ReferencePalette.Card
 private val CharactersDanger = Color(0xFFB44A4A)
-private val CharactersPortraitBg = Color(0xFF1C2230)
+private val CharactersPortraitBg = ReferencePalette.Card
 
 /** material-icons-core 无 Download，按参考顶栏导入图标本地绘制。 */
 private val CharactersDownloadIcon: ImageVector by lazy {

@@ -36,7 +36,7 @@ internal fun GalleryScreen(contentPadding: PaddingValues, store: WorldStore, rev
     var backendFilter by rememberSaveable { mutableStateOf<String?>(null) }
     var deleteCandidate by remember { mutableStateOf<CreativeAsset?>(null) }
     val visibleAssets = assets.filter { (statusFilter == null || it.status == statusFilter) && (backendFilter == null || it.backend == backendFilter) }
-    Column(Modifier.fillMaxSize().background(FancyInk).padding(contentPadding).testTag("gallery-screen")) {
+    Column(Modifier.fillMaxSize().background(ReferencePalette.PageBg).padding(contentPadding).testTag("gallery-screen")) {
         Row(Modifier.fillMaxWidth().padding(8.dp)) { IconButton(onBack, Modifier.testTag("gallery-back")) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回") }; Text("Gallery", color=FancyCream, modifier=Modifier.padding(12.dp)) }
         Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             FilterChip(selected = statusFilter == null, onClick = { statusFilter = null }, label = { Text("全部状态") }, modifier = Modifier.testTag("gallery-filter-all"))

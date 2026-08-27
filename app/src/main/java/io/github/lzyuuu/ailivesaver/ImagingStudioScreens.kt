@@ -249,15 +249,15 @@ internal object ForgeClient {
     }
 }
 
-private val ImagingBg = Color(0xFF0B0B0F)
-private val ImagingCard = Color(0xFF18181F)
-private val ImagingCardBorder = Color(0xFF2E2E38)
-private val ImagingSegment = Color(0xFF121218)
-private val ImagingSegmentSelected = Color(0xFF27344A)
-private val ImagingSegmentSelectedBorder = Color(0xFF3D4F66)
-private val ImagingPreviewInner = Color(0xFF22222C)
-private val ImagingMuted = Color(0xFF8E8E9A)
-private val ImagingCta = Color(0xFFC4A05A)
+private val ImagingBg = ReferencePalette.PageBg
+private val ImagingCard = ReferencePalette.Card
+private val ImagingCardBorder = ReferencePalette.Hairline
+private val ImagingSegment = ReferencePalette.PageBg
+private val ImagingSegmentSelected = ReferencePalette.Gold.copy(alpha = 0.22f)
+private val ImagingSegmentSelectedBorder = ReferencePalette.Gold.copy(alpha = 0.55f)
+private val ImagingPreviewInner = ReferencePalette.Card
+private val ImagingMuted = ReferencePalette.TextSecondary
+private val ImagingCta = ReferencePalette.Gold
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
