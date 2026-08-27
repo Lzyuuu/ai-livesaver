@@ -763,16 +763,34 @@ private fun RebbitTopBar(
                 tint = RebbitInk,
             )
         }
-        Text(
-            "Rebbit",
-            color = RebbitInk,
-            fontFamily = FontFamily.Serif,
-            fontWeight = FontWeight.Bold,
-            fontSize = 22.sp,
+        // 参考 ref-72 顶栏：eyebrow「社交」+ 居中标题 + 金色「发布」。
+        Column(
             modifier = Modifier.weight(1f),
-        )
-        IconButton(onClick = onCompose, modifier = Modifier.testTag("rebbit-compose")) {
-            Icon(Icons.Default.Edit, contentDescription = stringResource(R.string.rebbit_compose), tint = RebbitToolbarAction)
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text(
+                stringResource(R.string.y_eyebrow_social),
+                color = RebbitMuted,
+                fontSize = 11.sp,
+            )
+            Text(
+                "Rebbit",
+                color = RebbitInk,
+                fontFamily = FontFamily.Serif,
+                fontWeight = FontWeight.Bold,
+                fontSize = 22.sp,
+            )
+        }
+        TextButton(
+            onClick = onCompose,
+            modifier = Modifier.testTag("rebbit-compose"),
+        ) {
+            Text(
+                stringResource(R.string.y_publish),
+                color = ReferencePalette.Gold,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 16.sp,
+            )
         }
         IconButton(
             onClick = onGenerate,

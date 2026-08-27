@@ -594,22 +594,34 @@ private fun UstagramTopBar(
                 tint = UstagramInk,
             )
         }
-        Text(
-            text = "Ustagram",
-            color = UstagramInk,
-            fontFamily = FontFamily.Serif,
-            fontWeight = FontWeight.Bold,
-            fontSize = 22.sp,
+        // 参考 ref-71 顶栏：eyebrow「社交」+ 居中标题 + 金色「发布」。
+        Column(
             modifier = Modifier.weight(1f),
-        )
-        IconButton(
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text(
+                stringResource(R.string.y_eyebrow_social),
+                color = UstagramMuted,
+                fontSize = 11.sp,
+            )
+            Text(
+                text = "Ustagram",
+                color = UstagramInk,
+                fontFamily = FontFamily.Serif,
+                fontWeight = FontWeight.Bold,
+                fontSize = 22.sp,
+            )
+        }
+        TextButton(
             onClick = onCompose,
+            enabled = true,
             modifier = Modifier.semantics { testTag = "ustagram-compose" },
         ) {
-            Icon(
-                Icons.Default.Edit,
-                contentDescription = stringResource(R.string.ustagram_compose),
-                tint = UstagramInk,
+            Text(
+                stringResource(R.string.y_publish),
+                color = FancyGold,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 16.sp,
             )
         }
         IconButton(

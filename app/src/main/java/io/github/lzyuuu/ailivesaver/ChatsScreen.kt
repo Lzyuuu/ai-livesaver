@@ -88,6 +88,7 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -621,14 +622,24 @@ private fun ChatListScreen(
                     )
                 }
             }
-            Text(
-                stringResource(R.string.messenger_title),
-                color = FancyCream,
-                fontFamily = FontFamily.Serif,
-                fontWeight = FontWeight.Bold,
-                style = MaterialTheme.typography.headlineSmall,
-            )
-            Spacer(Modifier.weight(1f))
+            // 参考 ref-10 顶栏：eyebrow「消息」+ 居中大标题「聊天」。
+            Column(
+                modifier = Modifier.weight(1f),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text(
+                    stringResource(R.string.messenger_eyebrow),
+                    color = FancyCream.copy(alpha = 0.55f),
+                    fontSize = 11.sp,
+                )
+                Text(
+                    stringResource(R.string.messenger_title_chat),
+                    color = FancyCream,
+                    fontFamily = FontFamily.Serif,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 24.sp,
+                )
+            }
             Box {
                 IconButton(
                     onClick = { listMenuExpanded = true },
@@ -645,7 +656,7 @@ private fun ChatListScreen(
                     onDismissRequest = { listMenuExpanded = false },
                 ) {
                     DropdownMenuItem(
-                        text = { Text("Edit prompt") },
+                        text = { Text("编辑提示词") },
                         onClick = {
                             listMenuExpanded = false
                             rootPrompt = characters.firstOrNull { it.name.equals("Root", true) }?.persona.orEmpty()
@@ -654,7 +665,7 @@ private fun ChatListScreen(
                         modifier = Modifier.testTag("messenger-edit-prompt"),
                     )
                     DropdownMenuItem(
-                        text = { Text("Back up") },
+                        text = { Text("备份") },
                         onClick = { listMenuExpanded = false; onOpenBackup() },
                         modifier = Modifier.testTag("messenger-back-up"),
                     )

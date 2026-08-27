@@ -65,7 +65,9 @@
     <string name="chats_title">Chats</string>
     <string name="no_matching_conversations">没有匹配的会话。</string>
     <string name="messenger_title">Messenger</string>
-    <string name="messenger_recent_chats">Recent Chats</string>
+    <string name="messenger_recent_chats">最近聊天</string>
+    <string name="messenger_eyebrow">消息</string>
+    <string name="messenger_title_chat">聊天</string>
     <string name="messenger_new_character_action">+ New Character</string>
     <string name="messenger_list_settings">Messenger settings</string>
     <string name="messenger_chats">Chats</string>
@@ -80,7 +82,7 @@
     <string name="chat_image_attached">附件图片</string>
     <string name="messenger_import">Import</string>
     <string name="messenger_browse">Browse</string>
-    <string name="messenger_search_placeholder">Search chats and characters</string>
+    <string name="messenger_search_placeholder">按名称搜索</string>
     <string name="messenger_groups">Groups</string>
     <string name="messenger_new_group">New group</string>
     <string name="messenger_new_group_title">New group</string>
