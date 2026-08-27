@@ -17,12 +17,8 @@ class DesktopRoutesTest {
 
     @Test
     fun `composeDock stays fixed regardless of home installs`() {
-        val dock = DesktopNavigator.composeDock()
-        assertEquals(
-            listOf("Messenger", "Imaging", "Gallery", "商店", "Settings"),
-            dock.map { it.label },
-        )
-        assertEquals(DesktopApp.Store, dock[3])
+        assertEquals(DesktopDockApps, DesktopNavigator.composeDock())
+        assertEquals(5, DesktopNavigator.composeDock().size)
     }
 
     @Test

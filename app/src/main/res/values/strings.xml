@@ -375,7 +375,7 @@
     <string name="character_appearance_supplement">外观补充</string>
     <string name="character_fill_from_description">从描述填充</string>
     <string name="character_fill_from_description_working">正在提取...</string>
-    <string name="character_fill_from_description_llm">已根据角色卡智能提取外观关键词</string>
+    <string name="character_fill_from_description_llm">已根据描述智能提取外观关键词</string>
     <string name="character_fill_from_description_local">已根据本地规则填充（配置 Provider 后效果更好）</string>
     <string name="character_usual_clothing">Usual clothing</string>
     <string name="character_negative_prompt">Negative prompt</string>
@@ -591,7 +591,7 @@
     <string name="generation_min_p">Min-P</string>
     <string name="generation_min_p_note">丢弃概率远低于最高候选的词语。这是应用主要的长尾筛选参数：调高可让输出更稳，调低则允许更意外的用词。</string>
     <string name="generation_repetition_penalty">重复防护</string>
-    <string name="generation_repetition_penalty_note">降低刚使用过的词语再次出现的概率。轻微调整即可；惩罚过重会迫使模型绕开必要用词。</string>
+    <string name="generation_repetition_penalty_note">降低刚使用过的词语再次出现的概率。轻微调整即可；调得过重会迫使模型绕开必要用词。</string>
     <string name="generation_penalty_window">惩罚窗口</string>
     <string name="generation_penalty_window_note">重复防护会回看多远的文本。</string>
     <string name="generation_last_tokens_format">最近 %1$d 个 token</string>
