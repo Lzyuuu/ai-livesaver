@@ -66,16 +66,15 @@ class YFeedTest {
     }
 
     @Test
-    fun usesLightCreamSocialPalette() {
-        assertEquals(FancyCream, YFeedPalette.pageBackground)
-        assertEquals(FancyCream, YFeedPalette.chromeBackground)
-        assertEquals(FancyCream, YFeedPalette.statusBarColor)
-        assertEquals(Color.Black, YFeedPalette.title)
-        assertEquals(FancyGold, YFeedPalette.generateAccent)
-        assertTrue(YFeedPalette.usesLightSystemBarIcons)
-        assertNotEquals(Color(0xFF0A0E14), YFeedPalette.pageBackground)
-        assertNotEquals(Color(0xFF111621), YFeedPalette.chromeBackground)
-        assertNotEquals(Color(0xFF1A1C1E), YFeedPalette.cardBackground)
+    fun usesReferenceDarkSocialPalette() {
+        // 参考 V4.51（ref-70 实测采样）：近黑背景 + 金 accent + 白标题，批次 D 迁移。
+        assertEquals(ReferencePalette.PageBg, YFeedPalette.pageBackground)
+        assertEquals(ReferencePalette.PageBg, YFeedPalette.chromeBackground)
+        assertEquals(ReferencePalette.PageBg, YFeedPalette.statusBarColor)
+        assertEquals(ReferencePalette.TextPrimary, YFeedPalette.title)
+        assertEquals(ReferencePalette.Gold, YFeedPalette.generateAccent)
+        assertTrue(YFeedPalette.usesLightSystemBarIcons.not())
+        assertEquals(ReferencePalette.Card, YFeedPalette.cardBackground)
     }
 
     @Test

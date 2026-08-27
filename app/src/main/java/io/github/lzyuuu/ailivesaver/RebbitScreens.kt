@@ -86,19 +86,19 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.core.view.WindowCompat
 import java.io.File
 
-/** Live v4.47 Rebbit palette — ImageMagick-sampled on emulator-5556. */
-internal val RebbitStatusBar = Color(0xFF6750A4)
+/** 参考 V4.51 深色 palette（ref-72 基调采样，批次 D 迁移：原 v4.47 浅色版已弃）。 */
+internal val RebbitStatusBar = ReferencePalette.PageBg
 internal val RebbitNavBar = Color.Black
-internal val RebbitChrome = Color(0xFFFAF7F2)
-internal val RebbitFeed = Color(0xFFFAF7F2)
-internal val RebbitCard = Color(0xFFFBF8F2)
-internal val RebbitCardBorder = Color(0xFFE0DDD6)
-internal val RebbitDisclaimerBg = Color(0xFFFAF7F2)
-internal val RebbitInk = Color(0xFF1A1A1A)
-internal val RebbitToolbarAction = Color(0xFF5F5B52)
-internal val RebbitMuted = Color(0xFF8E8E93)
-internal val RebbitReplyIdle = Color(0xFFD1D5DB)
-internal val RebbitField = Color(0xFFFBF8F2)
+internal val RebbitChrome = ReferencePalette.PageBg
+internal val RebbitFeed = ReferencePalette.PageBg
+internal val RebbitCard = ReferencePalette.Card
+internal val RebbitCardBorder = ReferencePalette.Hairline
+internal val RebbitDisclaimerBg = ReferencePalette.PageBg
+internal val RebbitInk = ReferencePalette.TextPrimary
+internal val RebbitToolbarAction = ReferencePalette.TextPrimary
+internal val RebbitMuted = ReferencePalette.TextSecondary
+internal val RebbitReplyIdle = ReferencePalette.Faint
+internal val RebbitField = ReferencePalette.Card
 internal val RebbitDestructive = Color(0xFFFF6B6B)
 private val RebbitBg = RebbitChrome
 

@@ -16,10 +16,11 @@ class UstagramChromeTest {
 
     @Test
     fun chromeColorsMatchLiveLightReference() {
-        assertEquals(0xFFF5F3EE.toInt(), UstagramChrome.toArgb())
-        assertEquals(0xFFFFFCF7.toInt(), UstagramCard.toArgb())
-        assertEquals(0xFFF5F3EE.toInt(), UstagramFeed.toArgb())
-        assertEquals(0xFFE0DDD6.toInt(), UstagramCardBorder.toArgb())
+        // 参考 V4.51（ref-71）：深色 chrome，批次 D 迁移。
+        assertEquals(ReferencePalette.PageBg.toArgb(), UstagramChrome.toArgb())
+        assertEquals(ReferencePalette.Card.toArgb(), UstagramCard.toArgb())
+        assertEquals(ReferencePalette.PageBg.toArgb(), UstagramFeed.toArgb())
+        assertEquals(ReferencePalette.Hairline.toArgb(), UstagramCardBorder.toArgb())
     }
 
     @Test

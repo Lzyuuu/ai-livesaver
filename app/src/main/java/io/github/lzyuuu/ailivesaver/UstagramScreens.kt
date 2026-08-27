@@ -91,18 +91,18 @@ import android.app.Activity
 import androidx.core.view.WindowCompat
 import java.io.File
 
-/** Live v4.47 Ustagram light chrome (cream/off-white canvas). */
-internal val UstagramChrome = Color(0xFFF5F3EE)
-internal val UstagramFeed = Color(0xFFF5F3EE)
-internal val UstagramCard = Color(0xFFFFFCF7)
-internal val UstagramCardBorder = Color(0xFFE0DDD6)
-internal val UstagramDisclaimerBand = Color(0xFFF5F3EE)
-internal val UstagramInk = Color(0xFF1A1A1A)
-internal val UstagramMuted = Color(0xFF8E8E93)
-internal val UstagramReplyIdle = Color(0xFFD1D5DB)
-internal val UstagramEmptyText = Color(0xFF8E8E93)
-internal val UstagramComposerSurface = Color(0xFFF3F0F8)
-internal val UstagramComposerScrim = Color(0x99A8A29E)
+/** 参考 V4.51 深色 chrome（ref-71 基调采样，批次 D 迁移：原 v4.47 浅色版已弃）。 */
+internal val UstagramChrome = ReferencePalette.PageBg
+internal val UstagramFeed = ReferencePalette.PageBg
+internal val UstagramCard = ReferencePalette.Card
+internal val UstagramCardBorder = ReferencePalette.Hairline
+internal val UstagramDisclaimerBand = ReferencePalette.PageBg
+internal val UstagramInk = ReferencePalette.TextPrimary
+internal val UstagramMuted = ReferencePalette.TextSecondary
+internal val UstagramReplyIdle = ReferencePalette.Faint
+internal val UstagramEmptyText = ReferencePalette.TextSecondary
+internal val UstagramComposerSurface = ReferencePalette.Card
+internal val UstagramComposerScrim = Color(0x990B0E11)
 
 internal fun normalizeUstagramAuthorName(authorName: String): String =
     authorName

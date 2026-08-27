@@ -59,9 +59,10 @@ class RebbitSubredditTest {
 
     @Test
     fun rebbitPaletteMatchesLiveReference() {
-        assertEquals(0xFF6750A4.toInt(), RebbitStatusBar.toArgb())
-        assertEquals(0xFFFAF7F2.toInt(), RebbitChrome.toArgb())
-        assertEquals(0xFFFBF8F2.toInt(), RebbitCard.toArgb())
+        // 参考 V4.51（ref-72）：深色 chrome + 金 accent，批次 D 迁移。
+        assertEquals(ReferencePalette.PageBg.toArgb(), RebbitStatusBar.toArgb())
+        assertEquals(ReferencePalette.PageBg.toArgb(), RebbitChrome.toArgb())
+        assertEquals(ReferencePalette.Card.toArgb(), RebbitCard.toArgb())
         assertEquals(0xFF000000.toInt(), RebbitNavBar.toArgb())
     }
 

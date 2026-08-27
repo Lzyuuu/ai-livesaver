@@ -112,21 +112,21 @@ internal fun yRelativeTimeLabel(
     return if (minutes == 1) "1 minute ago" else "$minutes minutes ago"
 }
 
-/** Light social chrome aligned with validated Ustagram / live v4.47 Y. */
+/** 深色社交 chrome，一比一对齐参考 V4.51（ref-70 实测采样，批次 D 迁移）。 */
 internal object YFeedPalette {
-    val pageBackground = FancyCream
-    val chromeBackground = FancyCream
-    val cardBackground = Color(0xFFFFFCF5)
-    val cardBorder = Color(0xFFD6D2C6)
-    val bodyText = Color(0xFF1C1C1C)
-    val toolbarIcon = Color(0xFF141414)
-    val title = Color.Black
-    val metadata = Color(0xFF6F7468)
-    val emptyState = Color(0xFF8A8F82)
-    val generateAccent = FancyGold
-    val menuSurface = Color(0xFFFFFCF5)
-    val statusBarColor = FancyCream
-    const val usesLightSystemBarIcons = true
+    val pageBackground = ReferencePalette.PageBg
+    val chromeBackground = ReferencePalette.PageBg
+    val cardBackground = ReferencePalette.Card
+    val cardBorder = ReferencePalette.Hairline
+    val bodyText = ReferencePalette.TextPrimary
+    val toolbarIcon = ReferencePalette.TextPrimary
+    val title = ReferencePalette.TextPrimary
+    val metadata = ReferencePalette.TextSecondary
+    val emptyState = ReferencePalette.TextSecondary
+    val generateAccent = ReferencePalette.Gold
+    val menuSurface = ReferencePalette.Card
+    val statusBarColor = ReferencePalette.PageBg
+    const val usesLightSystemBarIcons = false
 }
 
 private val YPageBg = YFeedPalette.pageBackground
@@ -510,7 +510,7 @@ internal fun YScreen(
 
             Text(
                 stringResource(R.string.y_ai_disclaimer),
-                color = FancyGold,
+                color = YFeedPalette.emptyState,
                 fontSize = 13.sp,
                 lineHeight = 18.sp,
                 fontFamily = FontFamily.SansSerif,
