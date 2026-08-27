@@ -375,7 +375,7 @@
     <string name="character_appearance_supplement">外观补充</string>
     <string name="character_fill_from_description">从描述填充</string>
     <string name="character_fill_from_description_working">正在提取...</string>
-    <string name="character_fill_from_description_llm">已根据人设智能提取外观关键词</string>
+    <string name="character_fill_from_description_llm">已根据角色卡智能提取外观关键词</string>
     <string name="character_fill_from_description_local">已根据本地规则填充（配置 Provider 后效果更好）</string>
     <string name="character_usual_clothing">Usual clothing</string>
     <string name="character_negative_prompt">Negative prompt</string>
@@ -549,9 +549,9 @@
     <string name="instruction_template_actions">模板</string>
     <string name="instruction_save_as_new">另存为新建</string>
     <string name="instruction_name_template">命名此模板</string>
+    <string name="instruction_name_field">名称</string>
     <string name="instruction_restore_factory">恢复初始模板</string>
     <string name="instruction_restore_warning">恢复后会重新加入应用自带的三个模板，并删除你创建的模板。请先保存想保留的内容。</string>
-    <string name="instruction_confirm">确定</string>
     <string name="generation_settings">生成</string>
     <string name="generation_settings_summary">均衡 · 温度 0.80</string>
     <string name="generation_title">生成</string>
@@ -590,10 +590,10 @@
     <string name="generation_expert_sampling_subtitle">预设背后的高级参数。每项都会收窄或放宽模型下一步可选择的内容。</string>
     <string name="generation_min_p">Min-P</string>
     <string name="generation_min_p_note">丢弃概率远低于最高候选的词语。这是应用主要的长尾筛选参数：调高可让输出更稳，调低则允许更意外的用词。</string>
-    <string name="generation_repetition_penalty">重复惩罚</string>
+    <string name="generation_repetition_penalty">重复防护</string>
     <string name="generation_repetition_penalty_note">降低刚使用过的词语再次出现的概率。轻微调整即可；惩罚过重会迫使模型绕开必要用词。</string>
     <string name="generation_penalty_window">惩罚窗口</string>
-    <string name="generation_penalty_window_note">重复惩罚会回看多远的文本。</string>
+    <string name="generation_penalty_window_note">重复防护会回看多远的文本。</string>
     <string name="generation_last_tokens_format">最近 %1$d 个 token</string>
     <string name="generation_xtc_surprise">XTC — 惊喜</string>
     <string name="generation_xtc_surprise_note">偶尔故意舍弃最显而易见的词，避免场景总用相同表达。这是“创意”预设的关键参数。</string>

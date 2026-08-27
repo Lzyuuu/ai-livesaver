@@ -589,7 +589,6 @@ internal fun InstructionSettingsScreen(
     }
     var saveAsName by remember { mutableStateOf("") }
     var showSaveAs by remember { mutableStateOf(false) }
-    var showRestore by remember { mutableStateOf(false) }
     val selected = settings.selectedInstructionEntry()
 
     fun persist(next: GenerationSettings) {
@@ -753,7 +752,7 @@ internal fun InstructionSettingsScreen(
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         TextButton(
                             onClick = {
-                                saveAsName = selected.name
+                                saveAsName = ""
                                 showSaveAs = true
                             },
                             modifier = Modifier.testTag("instruction-save-as-new"),
@@ -761,7 +760,7 @@ internal fun InstructionSettingsScreen(
                             Text(stringResource(R.string.instruction_save_as_new))
                         }
                         TextButton(
-                            onClick = { showRestore = true },
+                            onClick = { persist(restoreFactoryInstructionLibrary(settings)) },
                             modifier = Modifier.testTag("instruction-restore-factory"),
                         ) {
                             Text(stringResource(R.string.instruction_restore_factory))
@@ -786,6 +785,7 @@ internal fun InstructionSettingsScreen(
                     value = saveAsName,
                     onValueChange = { saveAsName = it },
                     singleLine = true,
+                    label = { Text(stringResource(R.string.instruction_name_field)) },
                     modifier = Modifier.fillMaxWidth().testTag("instruction-save-as-name"),
                 )
             },
@@ -802,34 +802,11 @@ internal fun InstructionSettingsScreen(
                         showSaveAs = false
                     },
                 ) {
-                    Text(stringResource(R.string.instruction_confirm))
+                    Text(stringResource(R.string.save))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showSaveAs = false }) {
-                    Text(stringResource(R.string.cancel))
-                }
-            },
-        )
-    }
-    if (showRestore) {
-        AlertDialog(
-            onDismissRequest = { showRestore = false },
-            title = { Text(stringResource(R.string.instruction_restore_factory)) },
-            text = { Text(stringResource(R.string.instruction_restore_warning)) },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        persist(restoreFactoryInstructionLibrary(settings))
-                        showRestore = false
-                    },
-                    modifier = Modifier.testTag("instruction-restore-confirm"),
-                ) {
-                    Text(stringResource(R.string.instruction_confirm))
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showRestore = false }) {
                     Text(stringResource(R.string.cancel))
                 }
             },
