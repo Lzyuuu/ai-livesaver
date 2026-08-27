@@ -73,6 +73,8 @@
     <string name="messenger_clear_chat">Clear chat</string>
     <string name="messenger_message_placeholder">Message…</string>
     <string name="messenger_attach_image">Attach image</string>
+    <string name="chat_image_missing">图片文件已不存在</string>
+    <string name="chat_image_attached">附件图片</string>
     <string name="messenger_import">Import</string>
     <string name="messenger_browse">Browse</string>
     <string name="messenger_search_placeholder">Search chats and characters</string>

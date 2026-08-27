@@ -49,6 +49,10 @@ internal fun generateYPost(
                         false
                     } else {
                         runCatching {
+                            // 发布执行前核对 Y 平台授权（spec-v451 §1）：抽屉关闭即静默不发。
+                            check(postAllowed(store.chatControls(actor.id), Y_POST_KIND)) {
+                                "Y posting authorization is revoked"
+                            }
                             store.createPost(
                                 kind = Y_POST_KIND,
                                 authorName = actor.name,

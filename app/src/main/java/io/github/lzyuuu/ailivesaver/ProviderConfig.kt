@@ -998,6 +998,7 @@ internal object ProviderChatClient {
         systemPromptAppendix: String = "",
         webResults: List<WebSearchResult> = emptyList(),
         historyWindowMessages: Int = Int.MAX_VALUE,
+        imageDataUrlFor: (String) -> String? = { null },
         onDelta: (String) -> Unit,
         callback: (Result<ProviderResponse>) -> Unit,
         handle: ProviderStreamHandle = ProviderStreamHandle(),
@@ -1027,12 +1028,32 @@ internal object ProviderChatClient {
                 recentMessagesForContext(messages, recap, recentBudget)
                     .take(historyWindowMessages)
                     .forEach { message ->
-                    requestMessages.put(
-                        JSONObject()
-                            .put("role", if (message.sender == "user") "user" else "assistant")
-                            .put("content", message.body),
-                    )
-                }
+                        // 图片附件（参考 V4.51 聊天附件）：user 图片消息转 OpenAI 视觉 content 数组。
+                        val imagePath = if (message.sender == "user") imageMessagePath(message.body) else null
+                        val imageDataUrl = imagePath?.let(imageDataUrlFor)
+                        requestMessages.put(
+                            JSONObject()
+                                .put("role", if (message.sender == "user") "user" else "assistant")
+                                .put(
+                                    "content",
+                                    if (imageDataUrl != null) {
+                                        JSONArray()
+                                            .put(
+                                                JSONObject()
+                                                    .put("type", "text")
+                                                    .put("text", "（用户发送了一张图片，请结合图片内容回应）"),
+                                            )
+                                            .put(
+                                                JSONObject()
+                                                    .put("type", "image_url")
+                                                    .put("image_url", JSONObject().put("url", imageDataUrl)),
+                                            )
+                                    } else {
+                                        message.body
+                                    },
+                                ),
+                        )
+                    }
                 var lastFailure: Throwable? = null
                 for (candidate in providerCandidates(config)) {
                     if (handle.isCancelled()) throw ProviderStreamCancelledException()

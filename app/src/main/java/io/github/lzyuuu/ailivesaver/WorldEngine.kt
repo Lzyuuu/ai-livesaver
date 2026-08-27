@@ -700,6 +700,10 @@ internal object WorldEngine {
                             recordFailure(context, "Provider returned an empty social post")
                             return@fold false
                         }
+                        // 发布执行前核对 Ustagram（moment）平台授权（spec-v451 §1 双保险）。
+                        check(postAllowed(store.chatControls(actor.id), "moment")) {
+                            "Moment posting authorization is revoked"
+                        }
                         store.createPost(
                             kind = "moment",
                             authorName = actor.name,
@@ -997,6 +1001,10 @@ internal object WorldEngine {
                 body.trim().takeIf(::isValidRebbitGeneratedBody) ?: return false
             }
             return runCatching {
+                // 发布执行前核对 Rebbit（forum）平台授权（spec-v451 §1）。
+                check(postAllowed(store.chatControls(character.id), "forum")) {
+                    "Forum posting authorization is revoked"
+                }
                 store.createPost(
                     kind = "forum",
                     authorName = character.name,

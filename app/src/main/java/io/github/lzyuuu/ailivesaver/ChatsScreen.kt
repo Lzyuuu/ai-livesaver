@@ -3,6 +3,8 @@ package io.github.lzyuuu.ailivesaver
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import android.graphics.BitmapFactory
+import androidx.compose.foundation.Image
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -18,6 +20,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import java.io.File
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -1305,8 +1311,14 @@ private fun ConversationScreen(
         ActivityResultContracts.PickVisualMedia(),
     ) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
-        store.addMessage(character.id, "user", "[image]")
-        onChanged()
+        val relativePath = ChatImages.saveFromUri(context, uri)
+        if (relativePath != null) {
+            store.addMessage(character.id, "user", "[image:$relativePath]")
+            onChanged()
+        } else {
+            store.addMessage(character.id, "user", "[image]")
+            onChanged()
+        }
     }
     val formatter = remember {
         DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT)
@@ -1357,6 +1369,9 @@ private fun ConversationScreen(
                 userContext = store.memberWorldContext("user"),
                 characterContext = store.memberWorldContext("character:${character.id}"),
                 relationship = relationship,
+                imageDataUrlFor = { relativePath ->
+                    ChatImages.readDataUrl(context.applicationContext, relativePath)
+                },
                 webResults = webResults,
                 onDelta = { body ->
                     streamingText = body
@@ -1404,6 +1419,10 @@ private fun ConversationScreen(
                                                 response.text,
                                             )
                                         }
+                                    }
+                                    // 记忆页「云端自动记忆」：额外一次结构化请求提取长期事实。
+                                    runCatching {
+                                        autoExtractMemories(context.applicationContext, character.id)
                                     }
                                 }
                             },
@@ -1965,7 +1984,30 @@ private fun MessageBubble(
                         ),
                 ) {
                     Column(Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
-                        if (visibleBody.isBlank() && message.status == "streaming") {
+                        val attachedImagePath = if (isUser) imageMessagePath(message.body) else null
+                        if (attachedImagePath != null) {
+                            // 图片消息：渲染附件缩略图（参考 V4.51 聊天附件）。
+                            val attachedBitmap = remember(attachedImagePath) {
+                                runCatching {
+                                    BitmapFactory.decodeFile(File(context.filesDir, attachedImagePath).absolutePath)
+                                }.getOrNull()
+                            }
+                            if (attachedBitmap != null) {
+                                Image(
+                                    bitmap = attachedBitmap.asImageBitmap(),
+                                    contentDescription = stringResource(R.string.chat_image_attached),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .heightIn(max = 240.dp),
+                                    contentScale = androidx.compose.ui.layout.ContentScale.FillWidth,
+                                )
+                            } else {
+                                Text(
+                                    stringResource(R.string.chat_image_missing),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        } else if (visibleBody.isBlank() && message.status == "streaming") {
                             TypingIndicator(
                                 modifier = Modifier.padding(vertical = 6.dp),
                             )
