@@ -123,6 +123,7 @@ internal fun GeneralSettingsScreen(
     val prefs = remember { context.getSharedPreferences(UI_PREFS, android.content.Context.MODE_PRIVATE) }
     val identity = remember { store.identity() }
     var name by rememberSaveable { mutableStateOf(identity.name.takeUnless { it == "你" }.orEmpty()) }
+    var username by rememberSaveable { mutableStateOf(identity.username) }
     var bio by rememberSaveable { mutableStateOf(identity.bio) }
     var avatarPath by rememberSaveable { mutableStateOf(identity.avatarPath) }
     var profileStatus by remember { mutableStateOf<String?>(null) }
@@ -197,6 +198,14 @@ internal fun GeneralSettingsScreen(
                     modifier = Modifier.fillMaxWidth(),
                 )
                 OutlinedTextField(
+                    value = username,
+                    onValueChange = { username = it },
+                    label = { Text(stringResource(R.string.general_profile_username_label)) },
+                    supportingText = { Text(stringResource(R.string.general_profile_username_hint)) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
                     value = bio,
                     onValueChange = { bio = it },
                     label = { Text(stringResource(R.string.general_bio_label)) },
@@ -206,7 +215,7 @@ internal fun GeneralSettingsScreen(
                 )
                 Button(
                     onClick = {
-                        store.updateIdentity(name.ifBlank { "你" }, identity.addressPreference, bio, avatarPath)
+                        store.updateIdentity(name.ifBlank { "你" }, identity.addressPreference, bio, avatarPath, username)
                         onChanged()
                         profileStatus = savedText
                     },
@@ -477,10 +486,17 @@ internal fun MemorySettingsScreen(
 @Composable
 internal fun CleanupSettingsScreen(
     contentPadding: PaddingValues,
+    store: WorldStore,
+    onChanged: () -> Unit,
     onBack: () -> Unit,
 ) {
     val context = LocalContext.current
     var cacheBytes by remember { mutableStateOf(directoryBytes(context.cacheDir)) }
+    var orphanRows by remember { mutableIntStateOf(store.countOrphanMessages()) }
+    var driedMemories by remember { mutableIntStateOf(store.countDriedMemories()) }
+    var duplicatePosts by remember { mutableIntStateOf(store.countDuplicatePosts()) }
+    var lastRemoved by remember { mutableStateOf<String?>(null) }
+
     fun formatSize(bytes: Long): String = when {
         bytes >= 1 shl 20 -> "${bytes / (1 shl 20)} MB"
         bytes >= 1 shl 10 -> "${bytes / (1 shl 10)} kB"
@@ -511,17 +527,93 @@ internal fun CleanupSettingsScreen(
                             context.cacheDir.listFiles()?.forEach { it.deleteRecursively() }
                             context.externalCacheDir?.listFiles()?.forEach { it.deleteRecursively() }
                             cacheBytes = directoryBytes(context.cacheDir)
+                            lastRemoved = context.getString(R.string.cleanup_removed_toast)
                         },
                         colors = ButtonDefaults.buttonColors(),
                     ) { Text(stringResource(R.string.cleanup_remove)) }
                 }
             }
         }
+        // 孤立行 / 枯竭的记忆 / 重复的帖子：仅在有残留时显示（与参考一致，干净态只有缓存卡）。
+        item {
+            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                CleanupRowCard(
+                    titleRes = R.string.cleanup_orphan_title,
+                    noteRes = R.string.cleanup_orphan_note,
+                    count = orphanRows,
+                    onRemove = {
+                        store.deleteOrphanMessages().also {
+                            orphanRows = store.countOrphanMessages()
+                            onChanged()
+                        }
+                    },
+                )
+                CleanupRowCard(
+                    titleRes = R.string.cleanup_dried_title,
+                    noteRes = R.string.cleanup_dried_note,
+                    count = driedMemories,
+                    onRemove = {
+                        store.deleteDriedMemories().also {
+                            driedMemories = store.countDriedMemories()
+                            onChanged()
+                        }
+                    },
+                )
+                CleanupRowCard(
+                    titleRes = R.string.cleanup_duplicate_title,
+                    noteRes = R.string.cleanup_duplicate_note,
+                    count = duplicatePosts,
+                    onRemove = {
+                        store.deleteDuplicatePosts().also {
+                            duplicatePosts = store.countDuplicatePosts()
+                            onChanged()
+                        }
+                    },
+                )
+            }
+        }
+        lastRemoved?.let { removed -> item { StatusCard(removed) } }
     }
 }
 
 internal fun directoryBytes(dir: File?): Long =
     dir?.walkTopDown()?.filter { it.isFile }?.sumOf { it.length() } ?: 0L
+
+@Composable
+private fun CleanupRowCard(
+    titleRes: Int,
+    noteRes: Int,
+    count: Int,
+    onRemove: () -> Int,
+) {
+    val context = LocalContext.current
+    if (count <= 0) return
+    var lastRemoved by remember { mutableStateOf<String?>(null) }
+    PageCard {
+        Text(stringResource(titleRes), fontWeight = FontWeight.Bold)
+        Text(
+            stringResource(noteRes),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("$count", style = MaterialTheme.typography.titleLarge)
+            Button(
+                onClick = {
+                    val removed = onRemove()
+                    if (removed > 0) {
+                        lastRemoved = context.getString(R.string.cleanup_removed_rows, removed)
+                    }
+                },
+                colors = ButtonDefaults.buttonColors(),
+            ) { Text(stringResource(R.string.cleanup_remove)) }
+        }
+        lastRemoved?.let { StatusCard(it) }
+    }
+}
 
 @Composable
 internal fun ModelEngineSettingsScreen(
@@ -540,6 +632,100 @@ internal fun ModelEngineSettingsScreen(
                     stringResource(R.string.models_engine_stub_note),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+            }
+        }
+    }
+}
+
+@Composable
+internal fun DeveloperSettingsScreen(
+    contentPadding: PaddingValues,
+    onBack: () -> Unit,
+    onOpenUpdates: () -> Unit,
+    onOpenWelcome: () -> Unit,
+    onOpenPrivacy: () -> Unit,
+    onOpenStorage: () -> Unit,
+    onOpenHelp: () -> Unit,
+    onOpenDiagnostics: () -> Unit,
+) {
+    val context = LocalContext.current
+    val pm = remember { context.packageManager }
+    val packageInfo = remember { pm.getPackageInfo(context.packageName, 0) }
+    val versionText = remember {
+        "${packageInfo.versionName} (${packageInfo.longVersionCode})"
+    }
+    val deviceText = remember {
+        "${android.os.Build.MODEL} · Android ${android.os.Build.VERSION.RELEASE} (API ${android.os.Build.VERSION.SDK_INT})"
+    }
+    val hardwareText = remember {
+        val abi = android.os.Build.SUPPORTED_ABIS.firstOrNull() ?: "unknown"
+        val memoryInfo = android.app.ActivityManager.MemoryInfo()
+        (context.getSystemService(android.app.Activity.ACTIVITY_SERVICE) as? android.app.ActivityManager)
+            ?.let { it.getMemoryInfo(memoryInfo) }
+        "${android.os.Build.HARDWARE} · $abi · ${memoryInfo.totalMem / (1L shl 20)} MB RAM"
+    }
+    val appStorageText = remember {
+        val bytes = directoryBytes(context.filesDir) + directoryBytes(context.cacheDir) + directoryBytes(context.getDatabasePath("world.db"))
+        val mb = bytes / (1L shl 20)
+        if (mb >= 1) "$mb MB" else "${bytes / (1L shl 10)} kB"
+    }
+
+    @Composable
+    fun InfoRow(label: String, value: String) {
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            Text(
+                label,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.fillMaxWidth(0.3f),
+            )
+            Text(value)
+        }
+    }
+
+    SettingsPageScaffold(R.string.settings_developer_title, "developer-settings-screen", contentPadding, onBack) {
+        item {
+            Text(
+                stringResource(R.string.developer_section_this_version),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+            )
+            PageCard {
+                InfoRow("版本", versionText)
+                InfoRow(stringResource(R.string.developer_device_label), deviceText)
+                InfoRow(stringResource(R.string.developer_hardware_label), hardwareText)
+                InfoRow(stringResource(R.string.developer_app_storage_label), appStorageText)
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    stringResource(R.string.developer_storage_note),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        item {
+            Text(
+                stringResource(R.string.developer_about_section),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+            )
+            PageCard {
+                TextButton(onClick = onOpenUpdates) { Text(stringResource(R.string.developer_whats_new)) }
+                TextButton(onClick = onOpenWelcome) { Text(stringResource(R.string.developer_replay_intro)) }
+                TextButton(onClick = onOpenPrivacy) { Text(stringResource(R.string.developer_privacy_policy)) }
+                TextButton(onClick = onOpenStorage) { Text(stringResource(R.string.developer_storage_entry)) }
+                TextButton(onClick = onOpenHelp) { Text(stringResource(R.string.developer_help_entry)) }
+            }
+        }
+        item {
+            Text(
+                stringResource(R.string.developer_diagnostics_section),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+            )
+            PageCard {
+                TextButton(onClick = onOpenDiagnostics) { Text(stringResource(R.string.developer_runtime_entry)) }
             }
         }
     }

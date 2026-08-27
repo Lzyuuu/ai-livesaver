@@ -24,6 +24,7 @@ internal data class UserIdentity(
     val addressPreference: String,
     val bio: String,
     val avatarPath: String = "",
+    val username: String = "",
 )
 
 internal data class CharacterTurningPoint(
@@ -332,7 +333,7 @@ internal data class MemberWorldContext(
     val timeZone: String,
 )
 
-internal const val WORLD_DATABASE_VERSION = 25
+internal const val WORLD_DATABASE_VERSION = 26
 
 internal class WorldStore(
     context: Context,
@@ -371,6 +372,7 @@ internal class WorldStore(
                 address_preference TEXT NOT NULL DEFAULT '',
                 bio TEXT NOT NULL DEFAULT '',
                 avatar_path TEXT NOT NULL DEFAULT '',
+                username TEXT NOT NULL DEFAULT '',
                 updated_at INTEGER NOT NULL DEFAULT 0
             )
             """.trimIndent(),
@@ -549,6 +551,9 @@ internal class WorldStore(
         }
         if (oldVersion < 24) createSettingsDomainTables(database)
         if (oldVersion < 25) createStoreTables(database)
+        if (oldVersion < 26) {
+            database.execSQL("ALTER TABLE profile ADD COLUMN username TEXT NOT NULL DEFAULT ''")
+        }
     }
 
     private fun createRebbitSubredditTables(database: SQLiteDatabase) {
@@ -1078,17 +1083,75 @@ internal class WorldStore(
     ).use { cursor -> cursor.moveToFirst() && cursor.getInt(0) == 1 }
 
     fun identity(): UserIdentity = readableDatabase.rawQuery(
-        "SELECT name, address_preference, bio, avatar_path FROM profile WHERE id = 1",
+        "SELECT name, address_preference, bio, avatar_path, username FROM profile WHERE id = 1",
         null,
     ).use { cursor ->
         if (cursor.moveToFirst()) {
-            UserIdentity(cursor.getString(0), cursor.getString(1), cursor.getString(2), cursor.getString(3))
+            UserIdentity(
+                cursor.getString(0),
+                cursor.getString(1),
+                cursor.getString(2),
+                cursor.getString(3),
+                cursor.getString(4) ?: "",
+            )
         } else {
             UserIdentity("你", "", "")
         }
     }
 
     fun userName(): String = identity().name
+
+    // —— 清理页（参考 V4.51「清理」）：孤立行 / 枯竭的记忆 / 重复的帖子 ——
+
+    fun countOrphanMessages(): Int = readableDatabase.rawQuery(
+        "SELECT COUNT(*) FROM messages WHERE character_id NOT IN (SELECT id FROM characters)",
+        null,
+    ).use { cursor ->
+        cursor.moveToFirst()
+        cursor.getInt(0)
+    }
+
+    fun deleteOrphanMessages(): Int = writableDatabase.compileStatement(
+        "DELETE FROM messages WHERE character_id NOT IN (SELECT id FROM characters)",
+    ).executeUpdateDelete().toInt()
+
+    fun countDriedMemories(): Int = readableDatabase.rawQuery(
+        "SELECT COUNT(*) FROM memories WHERE LENGTH(TRIM(body)) < 2",
+        null,
+    ).use { cursor ->
+        cursor.moveToFirst()
+        cursor.getInt(0)
+    }
+
+    fun deleteDriedMemories(): Int = writableDatabase.compileStatement(
+        "DELETE FROM memories WHERE LENGTH(TRIM(body)) < 2",
+    ).executeUpdateDelete().toInt()
+
+    fun countDuplicatePosts(): Int = readableDatabase.rawQuery(
+        """
+        SELECT COUNT(*) FROM social_posts
+        WHERE author_kind = 'user' AND id NOT IN (
+            SELECT MIN(id) FROM social_posts
+            WHERE author_kind = 'user'
+            GROUP BY kind, TRIM(title), TRIM(body)
+        )
+        """.trimIndent(),
+        null,
+    ).use { cursor ->
+        cursor.moveToFirst()
+        cursor.getInt(0)
+    }
+
+    fun deleteDuplicatePosts(): Int = writableDatabase.compileStatement(
+        """
+        DELETE FROM social_posts
+        WHERE author_kind = 'user' AND id NOT IN (
+            SELECT MIN(id) FROM social_posts
+            WHERE author_kind = 'user'
+            GROUP BY kind, TRIM(title), TRIM(body)
+        )
+        """.trimIndent(),
+    ).executeUpdateDelete().toInt()
 
     fun createWorld(
         userName: String,
@@ -1137,17 +1200,20 @@ internal class WorldStore(
         addressPreference: String,
         bio: String,
         avatarPath: String? = null,
+        username: String? = null,
     ) {
         val current = identity()
         val nextName = name.trim()
         val nextAddressPreference = addressPreference.trim()
         val nextBio = bio.trim()
         val nextAvatarPath = avatarPath ?: current.avatarPath
+        val nextUsername = (username ?: current.username).trim().removePrefix("@")
         val previousAvatarPath = current.avatarPath
         val changed = current.name != nextName ||
             current.addressPreference != nextAddressPreference ||
             current.bio != nextBio ||
-            current.avatarPath != nextAvatarPath
+            current.avatarPath != nextAvatarPath ||
+            current.username != nextUsername
         writableDatabase.beginTransaction()
         try {
             writableDatabase.update(
@@ -1157,6 +1223,7 @@ internal class WorldStore(
                     put("address_preference", nextAddressPreference)
                     put("bio", nextBio)
                     put("avatar_path", nextAvatarPath)
+                    put("username", nextUsername)
                     put("updated_at", System.currentTimeMillis())
                 },
                 "id = 1",

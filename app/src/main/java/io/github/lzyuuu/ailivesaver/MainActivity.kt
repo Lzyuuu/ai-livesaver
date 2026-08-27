@@ -349,6 +349,7 @@ private fun AiLivesaverApp(
     var showMemorySettings by rememberSaveable { mutableStateOf(false) }
     var showCleanupSettings by rememberSaveable { mutableStateOf(false) }
     var showModelsEngine by rememberSaveable { mutableStateOf(false) }
+    var showDeveloperSettings by rememberSaveable { mutableStateOf(false) }
     var showWelcomeGuide by rememberSaveable { mutableStateOf(false) }
     var requestedChatCharacterId by rememberSaveable { mutableStateOf<Long?>(null) }
     var pendingSocialPostRoute by remember { mutableStateOf<PendingSocialPostRoute?>(null) }
@@ -381,6 +382,22 @@ private fun AiLivesaverApp(
             homeInstalls = homeInstalls,
             products = storeProducts,
         )
+    }
+    // 常规页「社交媒体 · 自动发布」：仅应用前台时按间隔自动发布社交帖子。
+    val lifecycleOwner = androidx.compose.ui.platform.LocalLifecycleOwner.current
+    LaunchedEffect(Unit) {
+        while (true) {
+            val autoPostPrefs = context.getSharedPreferences(UI_PREFS, android.content.Context.MODE_PRIVATE)
+            val minutes = autoPostPrefs.getInt(PREF_AUTO_POST_INTERVAL, 240).coerceAtLeast(1)
+            kotlinx.coroutines.delay(minutes * 60_000L)
+            val enabled = autoPostPrefs.getBoolean(PREF_AUTO_POST, false)
+            val foreground = lifecycleOwner.lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)
+            if (enabled && foreground) {
+                runCatching {
+                    generateYPost(context, "", existingStore = worldStore) { worldRevision++ }
+                }
+            }
+        }
     }
 
     fun isAppInstalled(app: DesktopApp): Boolean {
@@ -525,7 +542,8 @@ private fun AiLivesaverApp(
         showWorldKnowledge || showWorldChronicle || showImageGeneration || showImagingStudio ||
         showSettingsAppearance || showDiagnostics || showPrivacy || showBackups || showIdentity ||
         showCharacters || showVoiceCalls || showStorage || showWelcomeGuide ||
-        showGeneralSettings || showMemorySettings || showCleanupSettings || showModelsEngine
+        showGeneralSettings || showMemorySettings || showCleanupSettings || showModelsEngine ||
+        showDeveloperSettings
 
     BackHandler(enabled = settingsOpen || activeDesktopApp != null || activeHub != null || activeGameId != null) {
         when {
@@ -553,6 +571,7 @@ private fun AiLivesaverApp(
                 showMemorySettings = false
                 showCleanupSettings = false
                 showModelsEngine = false
+                showDeveloperSettings = false
             }
             activeGameId != null -> backFromGamePlaceholder()
             activeDesktopApp == DesktopApp.Games -> backFromGamesHub()
@@ -717,12 +736,43 @@ private fun AiLivesaverApp(
         } else if (showCleanupSettings) {
             CleanupSettingsScreen(
                 contentPadding = padding,
+                store = worldStore,
+                onChanged = { worldRevision++ },
                 onBack = { showCleanupSettings = false },
             )
         } else if (showModelsEngine) {
             ModelEngineSettingsScreen(
                 contentPadding = padding,
                 onBack = { showModelsEngine = false },
+            )
+        } else if (showDeveloperSettings) {
+            DeveloperSettingsScreen(
+                contentPadding = padding,
+                onBack = { showDeveloperSettings = false },
+                onOpenUpdates = {
+                    showDeveloperSettings = false
+                    showUpdates = true
+                },
+                onOpenWelcome = {
+                    showDeveloperSettings = false
+                    showWelcomeGuide = true
+                },
+                onOpenPrivacy = {
+                    showDeveloperSettings = false
+                    showPrivacy = true
+                },
+                onOpenStorage = {
+                    showDeveloperSettings = false
+                    showStorage = true
+                },
+                onOpenHelp = {
+                    showDeveloperSettings = false
+                    showWelcomeGuide = true
+                },
+                onOpenDiagnostics = {
+                    showDeveloperSettings = false
+                    showDiagnostics = true
+                },
             )
         } else {
             when (activeDesktopApp) {
@@ -880,6 +930,7 @@ private fun AiLivesaverApp(
                         onOpenMemory = { showMemorySettings = true },
                         onOpenCleanup = { showCleanupSettings = true },
                         onOpenModelsEngine = { showModelsEngine = true },
+                        onOpenDeveloper = { showDeveloperSettings = true },
                     )
                 }
                 DesktopApp.Characters -> Unit
@@ -1712,6 +1763,7 @@ private fun MeScreen(
     onOpenMemory: () -> Unit,
     onOpenCleanup: () -> Unit,
     onOpenModelsEngine: () -> Unit,
+    onOpenDeveloper: () -> Unit,
 ) {
     val myPosts = remember(revision) {
         (store.posts("moment") + store.posts("forum"))
@@ -1761,7 +1813,7 @@ private fun MeScreen(
             SettingsDestination.INSTRUCTION -> onOpenInstruction()
             SettingsDestination.GENERATION -> onOpenGeneration()
             SettingsDestination.BACKUPS -> onOpenBackups()
-            SettingsDestination.DEVELOPER, SettingsDestination.DIAGNOSTICS, SettingsDestination.RUNTIME -> onOpenDiagnostics()
+            SettingsDestination.DEVELOPER, SettingsDestination.DIAGNOSTICS, SettingsDestination.RUNTIME -> onOpenDeveloper()
             SettingsDestination.APPEARANCE, SettingsDestination.APP -> onOpenAppearance()
             SettingsDestination.WORLD -> onOpenWorldSettings()
             SettingsDestination.KNOWLEDGE -> onOpenWorldKnowledge()
