@@ -35,6 +35,8 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
@@ -417,46 +419,40 @@ internal fun YScreen(
                         modifier = Modifier.size(YToolbarIcon),
                     )
                 }
-                Text(
-                    "Y",
-                    color = YTitleColor,
-                    fontFamily = FontFamily.Serif,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = YTitleSize,
-                    lineHeight = YTitleSize,
-                    modifier = Modifier.padding(start = 0.dp),
-                )
-                Spacer(Modifier.weight(1f))
-                IconButton(
-                    onClick = { composerOpen = true },
-                    enabled = character != null,
-                    modifier = Modifier
-                        .size(48.dp)
-                        .testTag("y-compose"),
+                // 参考 ref-70 顶栏：eyebrow「社交」+ 居中标题。
+                Column(
+                    modifier = Modifier.weight(1f),
+                    horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
-                    Icon(
-                        Icons.Default.Edit,
-                        contentDescription = stringResource(R.string.compose_y),
-                        tint = YIcon,
-                        modifier = Modifier.size(YToolbarIcon),
+                    Text(
+                        stringResource(R.string.y_eyebrow_social),
+                        color = ReferencePalette.TextSecondary,
+                        fontSize = 11.sp,
+                    )
+                    Text(
+                        "Y",
+                        color = YTitleColor,
+                        fontFamily = FontFamily.Serif,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = YTitleSize,
+                        lineHeight = YTitleSize,
                     )
                 }
-                IconButton(
-                    onClick = { generatePost() },
-                    enabled = character != null && !generating,
-                    modifier = Modifier
-                        .size(48.dp)
-                        .testTag("y-generate"),
+                // 金色「发布」文字按钮（参考顶栏右侧）。
+                TextButton(
+                    onClick = { composerOpen = true },
+                    enabled = character != null,
+                    modifier = Modifier.testTag("y-compose"),
                 ) {
-                    Icon(
-                        YSparklesIcon,
-                        contentDescription = stringResource(R.string.y_generate),
-                        tint = if (character != null && !generating) {
+                    Text(
+                        stringResource(R.string.y_publish),
+                        color = if (character != null) {
                             YFeedPalette.generateAccent
                         } else {
                             YMuted.copy(alpha = 0.4f)
                         },
-                        modifier = Modifier.size(YToolbarIcon),
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 16.sp,
                     )
                 }
                 Box {
@@ -523,6 +519,32 @@ internal fun YScreen(
                     .testTag("y-disclaimer"),
             )
 
+            // 参考 ref-70：免责条下方右侧金色「生成」pill。
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.End,
+            ) {
+                Button(
+                    onClick = { generatePost() },
+                    enabled = character != null && !generating,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = YFeedPalette.generateAccent,
+                        contentColor = Color(0xFF14161A),
+                    ),
+                    shape = RoundedCornerShape(50),
+                    modifier = Modifier
+                        .height(44.dp)
+                        .testTag("y-generate-pill"),
+                ) {
+                    Text(
+                        stringResource(if (generating) R.string.y_generating else R.string.y_generate),
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+            }
+
             if (queuedResponseCount > 0) {
                 TextButton(
                     onClick = onResumeQueuedResponses,
@@ -568,14 +590,28 @@ internal fun YScreen(
                             .testTag("y-empty"),
                         contentAlignment = Alignment.Center,
                     ) {
-                        Text(
-                            stringResource(R.string.no_y_yet),
-                            color = YEmpty,
-                            fontSize = 15.sp,
-                            lineHeight = 22.sp,
-                            fontFamily = FontFamily.SansSerif,
-                            textAlign = TextAlign.Center,
-                        )
+                        // 参考 ref-70 空态两行：白粗标题 + 灰副行。
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            Text(
+                                stringResource(R.string.no_y_yet_title),
+                                color = ReferencePalette.TextPrimary,
+                                fontSize = 17.sp,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = FontFamily.SansSerif,
+                                textAlign = TextAlign.Center,
+                            )
+                            Text(
+                                stringResource(R.string.no_y_yet_hint),
+                                color = YEmpty,
+                                fontSize = 15.sp,
+                                lineHeight = 22.sp,
+                                fontFamily = FontFamily.SansSerif,
+                                textAlign = TextAlign.Center,
+                            )
+                        }
                     }
                 }
                 else -> {

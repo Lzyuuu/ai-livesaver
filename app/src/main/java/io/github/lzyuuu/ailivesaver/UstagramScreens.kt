@@ -348,17 +348,26 @@ internal fun UstagramAppScreen(
                     .background(UstagramFeed),
                 contentAlignment = Alignment.Center,
             ) {
-                Text(
-                    text = buildAnnotatedString {
-                        append(stringResource(R.string.ustagram_empty_prefix))
-                        withStyle(SpanStyle(color = FancyGold)) { append("✨") }
-                        append(stringResource(R.string.ustagram_empty_suffix))
-                    },
-                    color = UstagramEmptyText,
-                    style = MaterialTheme.typography.bodyLarge,
-                    textAlign = TextAlign.Center,
+                // 参考 ref-71 空态两行：白粗标题 + 灰副行。
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
                     modifier = Modifier.padding(32.dp),
-                )
+                ) {
+                    Text(
+                        stringResource(R.string.ustagram_empty_title),
+                        color = UstagramInk,
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.Center,
+                    )
+                    Text(
+                        stringResource(R.string.ustagram_empty_hint),
+                        color = UstagramEmptyText,
+                        style = MaterialTheme.typography.bodyLarge,
+                        textAlign = TextAlign.Center,
+                    )
+                }
             }
         } else {
             LazyColumn(

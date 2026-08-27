@@ -527,12 +527,25 @@ internal fun RebbitScreen(
                     .testTag("rebbit-empty"),
                 contentAlignment = Alignment.Center,
             ) {
-                Text(
-                    stringResource(R.string.rebbit_empty),
-                    color = RebbitInk,
-                    fontSize = 15.sp,
-                    textAlign = TextAlign.Center,
-                )
+                // 参考 ref-72 空态两行：白粗标题 + 灰副行。
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Text(
+                        stringResource(R.string.rebbit_empty_title),
+                        color = RebbitInk,
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.Center,
+                    )
+                    Text(
+                        stringResource(R.string.rebbit_empty_hint),
+                        color = RebbitMuted,
+                        fontSize = 15.sp,
+                        textAlign = TextAlign.Center,
+                    )
+                }
             }
         } else {
             LazyColumn(
