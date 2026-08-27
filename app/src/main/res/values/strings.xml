@@ -43,7 +43,7 @@
     <string name="world_event_source">来源：%1$s · %2$s</string>
     <string name="no_moments_yet">尚未发生社交流事件。</string>
     <string name="no_commons_yet">尚未形成主题论坛讨论。</string>
-    <string name="no_y_yet">No posts yet. Tap ✨ to generate one.</string>
+    <string name="no_y_yet">Y 上还没有内容\n发布一条帖子，或让角色先开个头。</string>
     <string name="y_ai_disclaimer">This feed contains AI-generated content.\nAll posts are simulated.</string>
     <string name="compose_y">New Y post</string>
     <string name="y_compose_hint">What\'s on your mind?</string>
@@ -162,8 +162,8 @@
     <string name="edit">编辑</string>
     <string name="delete">删除</string>
     <string name="ustagram_disclaimer">This feed contains AI-generated content. All posts are\nsimulated.</string>
-    <string name="ustagram_empty_prefix">No posts yet. Tap </string>
-    <string name="ustagram_empty_suffix"> to generate one.</string>
+    <string name="ustagram_empty_prefix">Ustagram 上还没有内容\n发布一条帖子，或</string>
+    <string name="ustagram_empty_suffix">让角色先发一张。</string>
     <string name="ustagram_image_prompt">Image prompt</string>
     <string name="ustagram_new_post">New Ustagram post</string>
     <string name="ustagram_prompt_or_caption">Image prompt or caption...</string>
@@ -213,7 +213,7 @@
     <string name="vote_up">顶</string>
     <string name="vote_down">踩</string>
     <string name="rebbit_ai_banner">This feed contains AI-generated content. All posts are simulated.</string>
-    <string name="rebbit_empty">No posts yet. Tap ✨ to generate one.</string>
+    <string name="rebbit_empty">Rebbit 上还没有内容\n选择社区，或让角色自己创建一个。</string>
     <string name="rebbit_new_post">New Rebbit post</string>
     <string name="rebbit_whats_on_mind">What\'s on your mind?</string>
     <string name="rebbit_attach_ai_image">Attach AI-generated image</string>
