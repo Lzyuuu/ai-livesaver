@@ -1428,6 +1428,7 @@ private fun ConversationScreen(
                     }
                 },
                 defaults = provider.loadDefaultGeneration(),
+                historyWindowMessages = readHistoryWindowMessages(context),
                 handle = handle,
             )
         }.start()

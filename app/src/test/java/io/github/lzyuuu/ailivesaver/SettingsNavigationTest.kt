@@ -6,9 +6,47 @@ import org.junit.Test
 
 class SettingsNavigationTest {
     @Test
-    fun resolvesAllLegacyRouteAliases() {
+    fun primaryIndexMatchesReferenceV451Order() {
+        // 参考 V4.51 设置索引固定 10 行，顺序一比一。
+        assertEquals(
+            listOf(
+                "general",
+                "models_engine",
+                "cloud_llm_image",
+                "voice",
+                "instruction",
+                "generation",
+                "memory",
+                "backups",
+                "cleanup",
+                "developer",
+            ),
+            settingsPrimaryOrder.map { it.name.lowercase() },
+        )
+    }
+
+    @Test
+    fun extendedSectionHoldsOurExtrasOnly() {
+        assertEquals(
+            listOf(
+                "appearance",
+                "world",
+                "knowledge",
+                "privacy",
+                "storage",
+                "help",
+                "update",
+            ),
+            settingsExtendedOrder.map { it.name.lowercase() },
+        )
+        // 扩展组不与主列表重叠，参考没有的行不混入主列表。
+        assertTrue(settingsPrimaryOrder.intersect(settingsExtendedOrder.toSet()).isEmpty())
+    }
+
+    @Test
+    fun resolvesLegacyRouteAliases() {
         mapOf(
-            "providers" to SettingsDestination.PROVIDER,
+            "providers" to SettingsDestination.CLOUD_LLM_IMAGE,
             "voice" to SettingsDestination.VOICE,
             "dream" to SettingsDestination.LOCAL_DREAM,
             "world" to SettingsDestination.WORLD,
@@ -24,33 +62,19 @@ class SettingsNavigationTest {
     }
 
     @Test
-    fun searchTieBreakIsExactAndStable() {
-        val result = searchSettings("a")
+    fun instructionAndGenerationSearchableAndOrdered() {
         assertEquals(
-            result.sortedWith(compareByDescending<SettingsSearchResult> { it.score }.thenBy { it.destination.section.ordinal }.thenBy { it.destination.ordinal }),
-            result,
-        )
-        assertTrue(result.size > 1)
-    }
-
-    @Test
-    fun imageGenerationEntriesRouteToDistinctDestinations() {
-        assertEquals(SettingsDestination.LOCAL_DREAM, resolveSettingsDestination("dream"))
-        assertEquals(SettingsDestination.IMAGING, resolveSettingsDestination("imaging"))
-        assertEquals(
-            R.string.settings_entry_imaging,
-            settingsDestinationTitleRes(SettingsDestination.IMAGING),
+            SettingsDestination.INSTRUCTION,
+            searchSettings("指令").firstOrNull()?.destination,
         )
         assertEquals(
-            R.string.local_dream_settings,
-            settingsDestinationTitleRes(SettingsDestination.LOCAL_DREAM),
+            SettingsDestination.GENERATION,
+            searchSettings("生成").firstOrNull()?.destination,
         )
-    }
-
-    @Test
-    fun instructionAndGenerationAreSeparateAiModelEntries() {
-        assertEquals(SettingsDestination.INSTRUCTION, resolveSettingsDestination("指令"))
-        assertEquals(SettingsDestination.GENERATION, resolveSettingsDestination("生成"))
+        assertTrue(
+            settingsPrimaryOrder.indexOf(SettingsDestination.INSTRUCTION) <
+                settingsPrimaryOrder.indexOf(SettingsDestination.GENERATION),
+        )
         assertEquals(
             R.string.instruction_settings,
             settingsDestinationTitleRes(SettingsDestination.INSTRUCTION),
@@ -59,24 +83,15 @@ class SettingsNavigationTest {
             R.string.generation_settings,
             settingsDestinationTitleRes(SettingsDestination.GENERATION),
         )
-        val aiEntries = settingsDestinationsInOrder().filter { it.section == SettingsSection.CHAT_BRAIN }
-        assertTrue(aiEntries.contains(SettingsDestination.INSTRUCTION))
-        assertTrue(aiEntries.contains(SettingsDestination.GENERATION))
-        assertTrue(
-            aiEntries.indexOf(SettingsDestination.INSTRUCTION) <
-                aiEntries.indexOf(SettingsDestination.GENERATION),
-        )
     }
 
     @Test
-    fun appearanceAndAppShareThemeSummary() {
+    fun searchTieBreakIsExactAndStable() {
+        val result = searchSettings("a")
         assertEquals(
-            R.string.appearance_settings_summary,
-            settingsDestinationSummaryRes(SettingsDestination.APPEARANCE),
+            result.sortedWith(compareByDescending<SettingsSearchResult> { it.score }.thenBy { settingsDestinationsInOrder().indexOf(it.destination) }),
+            result,
         )
-        assertEquals(
-            R.string.appearance_settings_summary,
-            settingsDestinationSummaryRes(SettingsDestination.APP),
-        )
+        assertTrue(result.size > 1)
     }
 }

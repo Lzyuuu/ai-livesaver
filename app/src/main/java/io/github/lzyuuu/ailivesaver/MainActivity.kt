@@ -174,6 +174,19 @@ class MainActivity : ComponentActivity() {
     private var notificationCharacterId by mutableStateOf<Long?>(null)
     private var openDesktopAppRoute by mutableStateOf<String?>(null)
 
+    override fun attachBaseContext(base: android.content.Context) {
+        // 常规页「语言」：系统默认跟随手机；选中文则覆盖配置。
+        val language = base.getSharedPreferences(UI_PREFS, MODE_PRIVATE)
+            .getString(PREF_LANGUAGE, "system")
+        if (language == "zh") {
+            val config = android.content.res.Configuration(base.resources.configuration)
+            config.setLocale(java.util.Locale.SIMPLIFIED_CHINESE)
+            super.attachBaseContext(base.createConfigurationContext(config))
+        } else {
+            super.attachBaseContext(base)
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         WorldBackup.recoverInterruptedRestore(this)
@@ -187,6 +200,16 @@ class MainActivity : ComponentActivity() {
             var dynamicColor by rememberSaveable { mutableStateOf(readDynamicColor(this)) }
             val themeMode = runCatching { ThemeMode.valueOf(themeModeName) }
                 .getOrDefault(ThemeMode.System)
+            val baseDensity = androidx.compose.ui.platform.LocalDensity.current
+            val fontScaleKey = getSharedPreferences(UI_PREFS, MODE_PRIVATE)
+                .getString(PREF_FONT_SCALE, "default") ?: "default"
+            val fontMultiplier = TEXT_SIZE_SCALES[fontScaleKey] ?: 1f
+            androidx.compose.runtime.CompositionLocalProvider(
+                androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(
+                    density = baseDensity.density * fontMultiplier,
+                    fontScale = baseDensity.fontScale,
+                ),
+            ) {
             AiLivesaverTheme(themeMode, dynamicColor) {
                 AiLivesaverApp(
                     themeMode = themeMode,
@@ -204,6 +227,7 @@ class MainActivity : ComponentActivity() {
                         dynamicColor = enabled
                     },
                 )
+            }
             }
         }
     }
@@ -321,6 +345,10 @@ private fun AiLivesaverApp(
     var showCharacters by rememberSaveable { mutableStateOf(false) }
     var showVoiceCalls by rememberSaveable { mutableStateOf(false) }
     var showStorage by rememberSaveable { mutableStateOf(false) }
+    var showGeneralSettings by rememberSaveable { mutableStateOf(false) }
+    var showMemorySettings by rememberSaveable { mutableStateOf(false) }
+    var showCleanupSettings by rememberSaveable { mutableStateOf(false) }
+    var showModelsEngine by rememberSaveable { mutableStateOf(false) }
     var showWelcomeGuide by rememberSaveable { mutableStateOf(false) }
     var requestedChatCharacterId by rememberSaveable { mutableStateOf<Long?>(null) }
     var pendingSocialPostRoute by remember { mutableStateOf<PendingSocialPostRoute?>(null) }
@@ -496,7 +524,8 @@ private fun AiLivesaverApp(
     val settingsOpen = showUpdates || showProviders || showGeneration || showInstruction || showWorldSettings ||
         showWorldKnowledge || showWorldChronicle || showImageGeneration || showImagingStudio ||
         showSettingsAppearance || showDiagnostics || showPrivacy || showBackups || showIdentity ||
-        showCharacters || showVoiceCalls || showStorage || showWelcomeGuide
+        showCharacters || showVoiceCalls || showStorage || showWelcomeGuide ||
+        showGeneralSettings || showMemorySettings || showCleanupSettings || showModelsEngine
 
     BackHandler(enabled = settingsOpen || activeDesktopApp != null || activeHub != null || activeGameId != null) {
         when {
@@ -520,6 +549,10 @@ private fun AiLivesaverApp(
                 showVoiceCalls = false
                 showStorage = false
                 showWelcomeGuide = false
+                showGeneralSettings = false
+                showMemorySettings = false
+                showCleanupSettings = false
+                showModelsEngine = false
             }
             activeGameId != null -> backFromGamePlaceholder()
             activeDesktopApp == DesktopApp.Games -> backFromGamesHub()
@@ -668,6 +701,28 @@ private fun AiLivesaverApp(
                 store = worldStore,
                 revision = worldRevision,
                 onBack = { showStorage = false },
+            )
+        } else if (showGeneralSettings) {
+            GeneralSettingsScreen(
+                contentPadding = padding,
+                store = worldStore,
+                onChanged = { worldRevision++ },
+                onBack = { showGeneralSettings = false },
+            )
+        } else if (showMemorySettings) {
+            MemorySettingsScreen(
+                contentPadding = padding,
+                onBack = { showMemorySettings = false },
+            )
+        } else if (showCleanupSettings) {
+            CleanupSettingsScreen(
+                contentPadding = padding,
+                onBack = { showCleanupSettings = false },
+            )
+        } else if (showModelsEngine) {
+            ModelEngineSettingsScreen(
+                contentPadding = padding,
+                onBack = { showModelsEngine = false },
             )
         } else {
             when (activeDesktopApp) {
@@ -821,6 +876,10 @@ private fun AiLivesaverApp(
                         onOpenHelpGuide = { showWelcomeGuide = true },
                         onOpenMoments = { openDesktopApp(DesktopApp.Ustagram) },
                         onOpenCommons = { openDesktopApp(DesktopApp.Rebbit) },
+                        onOpenGeneral = { showGeneralSettings = true },
+                        onOpenMemory = { showMemorySettings = true },
+                        onOpenCleanup = { showCleanupSettings = true },
+                        onOpenModelsEngine = { showModelsEngine = true },
                     )
                 }
                 DesktopApp.Characters -> Unit
@@ -1649,55 +1708,72 @@ private fun MeScreen(
     onOpenHelpGuide: () -> Unit,
     onOpenMoments: () -> Unit,
     onOpenCommons: () -> Unit,
+    onOpenGeneral: () -> Unit,
+    onOpenMemory: () -> Unit,
+    onOpenCleanup: () -> Unit,
+    onOpenModelsEngine: () -> Unit,
 ) {
     val myPosts = remember(revision) {
         (store.posts("moment") + store.posts("forum"))
             .filter { it.authorKind == "user" }
             .sortedByDescending(SocialPost::createdAt)
     }
-    val settings = settingsDestinationsInOrder().map { destination ->
-        SettingRow(destination, when (destination.section) {
-            SettingsSection.CHAT_BRAIN -> Icons.Default.Settings
-            SettingsSection.VOICE_CALLS -> Icons.Default.Call
-            SettingsSection.IMAGE_GENERATION -> Icons.Default.Star
-            SettingsSection.YOU_PERSONAS -> Icons.Default.Person
-            SettingsSection.APP -> Icons.Default.Home
-            SettingsSection.DEVELOPER_ABOUT -> Icons.Default.Info
-            SettingsSection.SYSTEM_SETTINGS -> Icons.Default.Info
-            SettingsSection.HELP_GUIDE, SettingsSection.UPDATE -> Icons.Default.Info
-        })
+    val context = LocalContext.current
+    val indexProviderStore = remember { ProviderStore(context) }
+    val generalPrefs = remember { context.getSharedPreferences(UI_PREFS, android.content.Context.MODE_PRIVATE) }
+    val autoPostOn = remember(revision) { generalPrefs.getBoolean(PREF_AUTO_POST, false) }
+    val cloudLlmFallback = stringResource(R.string.settings_cloud_llm_summary)
+    val cloudLlmSummary = remember(revision) {
+        val config = indexProviderStore.load()
+        if (config.apiKey.isBlank()) cloudLlmFallback else "自定义端点 · ${config.model}"
     }
+    val appVersion = remember {
+        runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull().orEmpty()
+    }
+    val generationDefaults = remember(revision) { indexProviderStore.loadDefaultGeneration() }
+    val instructionSummary = generationDefaults.selectedInstructionName()
+    val generationStyle = stringResource(
+        when (generationDefaults.preset) {
+            GenerationPreset.Precise -> R.string.generation_style_precise
+            GenerationPreset.Balanced -> R.string.generation_style_balanced
+            GenerationPreset.Creative -> R.string.generation_style_creative
+            GenerationPreset.Custom -> R.string.generation_style_custom
+        },
+    )
+    val generationSummary = stringResource(
+        R.string.generation_list_summary,
+        generationStyle,
+        "%.2f".format(generationDefaults.temperature),
+    )
+    val developerSummary = stringResource(R.string.settings_developer_summary, appVersion)
+    val generalSummary = stringResource(
+        if (autoPostOn) R.string.settings_general_summary_on else R.string.settings_general_summary,
+    )
+
     fun openSetting(destination: SettingsDestination) {
         when (destination) {
-            SettingsDestination.PROVIDER -> onOpenProviders()
+            SettingsDestination.GENERAL -> onOpenGeneral()
+            SettingsDestination.MODELS_ENGINE -> onOpenModelsEngine()
+            SettingsDestination.MEMORY -> onOpenMemory()
+            SettingsDestination.CLEANUP -> onOpenCleanup()
+            SettingsDestination.CLOUD_LLM_IMAGE, SettingsDestination.PROVIDER, SettingsDestination.CHAT_BRAIN -> onOpenProviders()
+            SettingsDestination.VOICE, SettingsDestination.CALLS -> onOpenVoiceCalls()
             SettingsDestination.INSTRUCTION -> onOpenInstruction()
             SettingsDestination.GENERATION -> onOpenGeneration()
-            SettingsDestination.CHAT_BRAIN -> onOpenProviders()
-            SettingsDestination.VOICE, SettingsDestination.CALLS -> onOpenVoiceCalls()
-            SettingsDestination.LOCAL_DREAM -> onOpenLocalDream()
-            SettingsDestination.IMAGING -> onOpenImagingStudio()
-            SettingsDestination.IDENTITY -> onOpenIdentity()
-            SettingsDestination.CHARACTERS -> onOpenCharacters()
-            SettingsDestination.APPEARANCE -> onOpenAppearance()
+            SettingsDestination.BACKUPS -> onOpenBackups()
+            SettingsDestination.DEVELOPER, SettingsDestination.DIAGNOSTICS, SettingsDestination.RUNTIME -> onOpenDiagnostics()
+            SettingsDestination.APPEARANCE, SettingsDestination.APP -> onOpenAppearance()
             SettingsDestination.WORLD -> onOpenWorldSettings()
             SettingsDestination.KNOWLEDGE -> onOpenWorldKnowledge()
             SettingsDestination.PRIVACY -> onOpenPrivacy()
-            SettingsDestination.APP -> onOpenAppearance()
-            SettingsDestination.BACKUPS -> onOpenBackups()
-            SettingsDestination.DIAGNOSTICS, SettingsDestination.RUNTIME, SettingsDestination.ABOUT -> onOpenDiagnostics()
             SettingsDestination.STORAGE, SettingsDestination.SYSTEM -> onOpenStorage()
             SettingsDestination.HELP -> onOpenHelpGuide()
             SettingsDestination.UPDATE -> onOpenUpdates()
+            SettingsDestination.IDENTITY -> onOpenIdentity()
+            SettingsDestination.CHARACTERS -> onOpenCharacters()
+            SettingsDestination.LOCAL_DREAM -> onOpenLocalDream()
+            SettingsDestination.IMAGING -> onOpenImagingStudio()
         }
-    }
-    var settingsQuery by rememberSaveable { mutableStateOf("") }
-    var expandedSections by rememberSaveable { mutableStateOf(defaultExpandedSettingsSections()) }
-    val searchResults = searchSettings(settingsQuery)
-    val visibleSettings = if (settingsQuery.isBlank()) settings else searchResults.map { result ->
-        settings.first { it.destination == result.destination }
-    }
-    val categorizedSettings = SettingsSection.entries.map { section ->
-        Triple(section.name.lowercase(), section, visibleSettings.filter { it.destination.section == section })
     }
     LazyColumn(
         modifier = Modifier
@@ -1719,122 +1795,39 @@ private fun MeScreen(
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
             )
-            OutlinedTextField(
-                value = settingsQuery,
-                onValueChange = { settingsQuery = it },
-                modifier = Modifier.fillMaxWidth().testTag("settings-search"),
-                label = { Text(stringResource(R.string.settings_search_label)) },
-                trailingIcon = {
-                    if (settingsQuery.isNotEmpty()) {
-                        TextButton(onClick = { settingsQuery = "" }) {
-                            Text(stringResource(R.string.settings_search_clear))
-                        }
-                    }
-                },
-                singleLine = true,
-            )
-            if (settingsQuery.isNotBlank() && searchResults.isEmpty()) {
-                Text(
-                    stringResource(R.string.settings_search_no_results),
-                    modifier = Modifier.testTag("settings-no-results"),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
         }
-        categorizedSettings.forEach { (categoryTag, category, entries) ->
-            val rootVisible = settingsQuery.isBlank() || entries.isNotEmpty()
-            if (rootVisible) {
-                val expanded = settingsQuery.isNotBlank() || expandedSections.getValue(category)
-                item {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("settings-root-$categoryTag")
-                            .clickable {
-                                expandedSections = expandedSections + (category to !expandedSections.getValue(category))
-                            }
-                            .padding(vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            settingsSectionTitle(category),
-                            modifier = Modifier.weight(1f),
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                        )
-                        Text(
-                            if (expanded) "−" else "+",
-                            modifier = Modifier.testTag("settings-section-toggle-$categoryTag"),
-                            style = MaterialTheme.typography.titleLarge,
-                        )
-                    }
-                }
-                if (expanded) {
-                    item {
-                        SettingGroup(
-                            settings = entries,
-                            identity = identity,
-                            onOpen = ::openSetting,
-                            expandAllSections = settingsQuery.isNotBlank(),
-                        )
-                    }
-                }
-                item {
-                    HorizontalDivider(
-                        modifier = Modifier.testTag("settings-section-divider-$categoryTag"),
-                        color = MaterialTheme.colorScheme.outlineVariant,
-                    )
-                }
+        settingsPrimaryOrder.forEach { destination ->
+            item {
+                SettingsIndexCard(
+                    destination = destination,
+                    summary = when (destination) {
+                        SettingsDestination.GENERAL -> generalSummary
+                        SettingsDestination.CLOUD_LLM_IMAGE -> cloudLlmSummary
+                        SettingsDestination.INSTRUCTION -> instructionSummary
+                        SettingsDestination.GENERATION -> generationSummary
+                        SettingsDestination.DEVELOPER -> developerSummary
+                        else -> stringResource(settingsDestinationSummaryRes(destination))
+                    },
+                    onClick = { openSetting(destination) },
+                )
             }
         }
         item {
             Text(
-                stringResource(R.string.my_posts),
-                style = MaterialTheme.typography.titleLarge,
+                stringResource(R.string.settings_extended_section),
+                modifier = Modifier.testTag("settings-extended-section"),
+                style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
-            )
-            Text(
-                stringResource(R.string.my_posts_summary),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        if (myPosts.isEmpty()) {
-            item { StatusCard(stringResource(R.string.no_my_posts)) }
-        } else {
-            items(myPosts.take(5), key = { "me-post-${it.id}" }) { post ->
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.66f),
-                    ),
-                ) {
-                    Column(
-                        Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp),
-                    ) {
-                        Text(
-                            if (post.kind == "moment") {
-                                stringResource(R.string.moments_title)
-                            } else {
-                                stringResource(R.string.commons_title)
-                            },
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.primary,
-                        )
-                        Text(
-                            post.title.ifBlank { post.body },
-                            maxLines = 3,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        TextButton(
-                            onClick = {
-                                if (post.kind == "moment") onOpenMoments() else onOpenCommons()
-                            },
-                        ) {
-                            Text(stringResource(R.string.open))
-                        }
-                    }
-                }
+        settingsExtendedOrder.forEach { destination ->
+            item {
+                SettingsIndexCard(
+                    destination = destination,
+                    summary = stringResource(settingsDestinationSummaryRes(destination)),
+                    onClick = { openSetting(destination) },
+                )
             }
         }
         item {
@@ -1843,6 +1836,48 @@ private fun MeScreen(
                 stringResource(R.string.tagline),
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.primary,
+            )
+        }
+    }
+}
+
+@Composable
+private fun SettingsIndexCard(
+    destination: SettingsDestination,
+    summary: String,
+    onClick: () -> Unit,
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("me-setting-${destination.name.lowercase()}"),
+        onClick = onClick,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        ),
+    ) {
+        Row(
+            Modifier.padding(horizontal = 18.dp, vertical = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(
+                Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Text(
+                    stringResource(settingsDestinationTitleRes(destination)),
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    summary,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Text(
+                "›",
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }

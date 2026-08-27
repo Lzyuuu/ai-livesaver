@@ -997,6 +997,7 @@ internal object ProviderChatClient {
         relationship: RelationshipState,
         systemPromptAppendix: String = "",
         webResults: List<WebSearchResult> = emptyList(),
+        historyWindowMessages: Int = Int.MAX_VALUE,
         onDelta: (String) -> Unit,
         callback: (Result<ProviderResponse>) -> Unit,
         handle: ProviderStreamHandle = ProviderStreamHandle(),
@@ -1023,7 +1024,9 @@ internal object ProviderChatClient {
                         estimatedTokenCount(system) -
                         RESPONSE_TOKEN_RESERVE
                     ).coerceAtLeast(MIN_RECENT_MESSAGE_BUDGET)
-                recentMessagesForContext(messages, recap, recentBudget).forEach { message ->
+                recentMessagesForContext(messages, recap, recentBudget)
+                    .take(historyWindowMessages)
+                    .forEach { message ->
                     requestMessages.put(
                         JSONObject()
                             .put("role", if (message.sender == "user") "user" else "assistant")
