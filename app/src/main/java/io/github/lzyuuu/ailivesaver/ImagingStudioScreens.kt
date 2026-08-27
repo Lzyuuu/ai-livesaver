@@ -86,7 +86,7 @@ import java.util.Base64
 import kotlin.random.Random
 
 internal enum class ImagingBackend(val label: String, val route: String) {
-    OnDevice("On-device", "on_device"),
+    OnDevice("本机", "on_device"),
     Forge("Forge", "forge"),
     LocalDream("Local Dream", "local_dream"),
     ;
@@ -396,7 +396,7 @@ internal fun ImagingStudioScreen(
                             status = "Local Dream generation ready · seed ${image.seed}"
                             WorldStore(context).use { store ->
                                 store.createImportedMediaPost(
-                                    body = "Imaging Studio",
+                                    body = "图像工作室",
                                     path = image.path,
                                     description = trimmed,
                                     audience = "world",
@@ -481,11 +481,11 @@ internal fun ImagingStudioScreen(
             Text(
                 when (settings.backend) {
                     ImagingBackend.OnDevice ->
-                        "Generates on this phone from an installed model."
+                        "直接在此手机上生成，完全无需联网。"
                     ImagingBackend.Forge ->
-                        "Generates on an AUTOMATIC1111 / Forge server on your network. Set the address in Settings → Image Generation."
+                        "在你的网络上由 AUTOMATIC1111 / Forge 服务器生成。地址在设置 → 云 LLM 与图像中配置。"
                     ImagingBackend.LocalDream ->
-                        "Generates on a Local Dream server on your network. Set the address in Settings → Image Generation."
+                        "在你的网络上由 Local Dream 服务器生成。地址在设置 → 云 LLM 与图像中配置。"
                 },
                 color = ImagingMuted,
                 fontSize = 11.sp,
@@ -570,7 +570,7 @@ internal fun ImagingStudioScreen(
                     modifier = Modifier.size(14.dp),
                 )
                 Spacer(Modifier.width(5.dp))
-                Text("Prompt", color = ImagingCta, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                Text("提示词", color = ImagingCta, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
             }
             OutlinedTextField(
                 value = prompt,
@@ -579,7 +579,7 @@ internal fun ImagingStudioScreen(
                     .fillMaxWidth()
                     .heightIn(min = 64.dp)
                     .testTag("imaging-prompt"),
-                label = { Text("Generation Prompt") },
+                label = { Text("生成提示词") },
                 colors = imagingFieldColors(),
                 shape = RoundedCornerShape(10.dp),
             )
@@ -610,10 +610,10 @@ internal fun ImagingStudioScreen(
     if (showClearConfirm) {
         androidx.compose.material3.AlertDialog(
             onDismissRequest = { showClearConfirm = false },
-            confirmButton = { Button(onClick = { prompt = ""; resultPath = null; status = null; progressStep = 0; progressTotal = 0; showClearConfirm = false }) { Text("Clear") } },
-            dismissButton = { Button(onClick = { showClearConfirm = false }) { Text("Cancel") } },
-            title = { Text("Clear Studio?") },
-            text = { Text("Only clears this studio input, preview, and temporary state. Gallery assets are kept.") },
+            confirmButton = { Button(onClick = { prompt = ""; resultPath = null; status = null; progressStep = 0; progressTotal = 0; showClearConfirm = false }) { Text("清除") } },
+            dismissButton = { Button(onClick = { showClearConfirm = false }) { Text("取消") } },
+            title = { Text("清空工作室？") },
+            text = { Text("只清空本工作室的输入、预览与临时状态，图库资产保留。") },
         )
     }
 
@@ -656,7 +656,7 @@ private fun ImagingTopBar(
             )
         }
         Text(
-            "Imaging Studio",
+            "图像工作室",
             color = FancyCream,
             fontFamily = FontFamily.Serif,
             fontWeight = FontWeight.SemiBold,
@@ -756,13 +756,13 @@ private fun OnDeviceModelCard() {
             .testTag("imaging-on-device-card"),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Text("Selected model", color = ImagingMuted, fontSize = 11.sp)
+        Text("选定的模型", color = ImagingMuted, fontSize = 11.sp)
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                if (modelReady) "CyberRealistic (SD 1.5 · LCM · MNN)" else "None selected",
+                if (modelReady) "CyberRealistic (SD 1.5 · LCM · MNN)" else "选择模型",
                 color = if (modelReady) Color.White else Color(0xFFA6A6B0),
                 fontWeight = FontWeight.Normal,
                 fontSize = 15.sp,
@@ -781,7 +781,7 @@ private fun OnDeviceModelCard() {
             if (modelReady) {
                 "模型已就绪，可在 On-device 模式下生成本地图片。"
             } else {
-                "No image model installed yet — download one to generate images on-device."
+                "尚未安装图像模型——下载后即可在手机上生成。"
             },
             color = ImagingMuted,
             fontSize = 11.sp,
@@ -894,7 +894,7 @@ private fun PreviewCard(
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         ImagingPaletteGlyph(modifier = Modifier.size(32.dp), color = ImagingMuted)
                         Spacer(Modifier.height(8.dp))
-                        Text("Your image will appear here", color = ImagingMuted, fontSize = 12.sp)
+                        Text("你的图像显示在这里", color = ImagingMuted, fontSize = 12.sp)
                     }
                 }
             }
@@ -920,7 +920,7 @@ private fun AdvancedSheet(
             .testTag("imaging-advanced-sheet"),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Text("Advanced", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+        Text("高级", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
         Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
             OutlinedTextField(
                 value = stepsText,
@@ -931,7 +931,7 @@ private fun AdvancedSheet(
                     }
                 },
                 modifier = Modifier.weight(1f).testTag("imaging-steps"),
-                label = { Text("Steps") },
+                label = { Text("步数") },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 colors = imagingOutlinedFieldColors(),
@@ -946,7 +946,7 @@ private fun AdvancedSheet(
                     }
                 },
                 modifier = Modifier.weight(1f).testTag("imaging-cfg"),
-                label = { Text("CFG Scale") },
+                label = { Text("CFG") },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                 colors = imagingOutlinedFieldColors(),
@@ -970,7 +970,7 @@ private fun AdvancedSheet(
                     it.toLongOrNull()?.let { seed -> onChange(settings.copy(seed = seed)) }
                 },
                 modifier = Modifier.weight(1f).testTag("imaging-seed"),
-                label = { Text("Seed") },
+                label = { Text("种子") },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 colors = imagingOutlinedFieldColors(),
@@ -1027,7 +1027,7 @@ private fun AdvancedSheet(
                     onChange(settings.copy(forgeUrl = normalizeForgeBaseUrl(it)))
                 },
                 modifier = Modifier.fillMaxWidth().testTag("imaging-forge-url"),
-                label = { Text("Forge Server URL") },
+                label = { Text("Forge 服务器地址") },
                 singleLine = true,
                 colors = imagingOutlinedFieldColors(),
                 shape = RoundedCornerShape(12.dp),
