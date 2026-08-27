@@ -106,6 +106,7 @@ class RealProviderInstrumentationTest {
                 userContext = MemberWorldContext("user", "", ""),
                 characterContext = MemberWorldContext("character:$characterId", "", ""),
                 relationship = RelationshipState("new", "", null, 0),
+                defaults = GenerationSettings(),
                 onDelta = { handle.cancel() },
                 callback = done,
                 handle = handle,
@@ -368,6 +369,7 @@ class RealProviderInstrumentationTest {
                 characterContext = MemberWorldContext("character:$characterId", "", ""),
                 relationship = RelationshipState("new", "", null, 0),
                 systemPromptAppendix = appendix,
+                defaults = GenerationSettings(),
                 onDelta = {},
                 callback = done,
             )

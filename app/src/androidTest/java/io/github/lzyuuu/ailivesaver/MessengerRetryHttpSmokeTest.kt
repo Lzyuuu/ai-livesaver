@@ -101,6 +101,7 @@ class MessengerRetryHttpSmokeTest {
             userContext = MemberWorldContext("user", "", ""),
             characterContext = MemberWorldContext("character:${character.id}", "", ""),
             relationship = RelationshipState("new", "", null, 0),
+            defaults = GenerationSettings(),
             onDelta = {},
             callback = { response ->
                 result = response
