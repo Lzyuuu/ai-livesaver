@@ -1,0 +1,1078 @@
+{
+  "components": [
+    {
+      "id": "litert-gemma4-e2b",
+      "type": "litert",
+      "name": "Gemma 4 E2B — LiteRT GPU",
+      "description": "Google's Gemma 4 E2B on the LiteRT-LM engine — GPU-accelerated on-device chat, an alternative brain to llama.cpp. Needs a 6 GB+ phone. License: Gemma.",
+      "quant": "int4",
+      "minRamMb": 6000,
+      "url": "https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm/resolve/main/gemma-4-E2B-it.litertlm",
+      "sizeBytes": 2588147712,
+      "sha256": "181938105e0eefd105961417e8da75903eacda102c4fce9ce90f50b97139a63c"
+    },
+    {
+      "id": "litert-gemma4-e4b",
+      "type": "litert",
+      "name": "Gemma 4 E4B — LiteRT GPU",
+      "description": "Google's Gemma 4 E4B on the LiteRT-LM engine — GPU-accelerated on-device chat, higher quality than E2B. Needs an 8 GB+ phone. License: Gemma.",
+      "quant": "int4",
+      "minRamMb": 8000,
+      "url": "https://huggingface.co/litert-community/gemma-4-E4B-it-litert-lm/resolve/main/gemma-4-E4B-it.litertlm",
+      "sizeBytes": 3659530240,
+      "sha256": "0b2a8980ce155fd97673d8e820b4d29d9c7d99b8fa6806f425d969b145bd52e0"
+    },
+    {
+      "id": "gguf-gemma4-e4b",
+      "type": "chat",
+      "name": "Gemma 4 E4B — llama.cpp (CPU/GPU)",
+      "description": "Google's Gemma 4 E4B using the highly-optimized Q4_0 format. Runs universally on all devices using the llama.cpp backend, supporting Adreno GPU and Hexagon DSP acceleration. License: Gemma.",
+      "quant": "Q4_0",
+      "minRamMb": 6000,
+      "url": "https://huggingface.co/unsloth/gemma-4-E4B-it-GGUF/resolve/main/gemma-4-E4B-it-Q4_0.gguf",
+      "sizeBytes": 4836002944,
+      "sha256": "4a403d2e4d80281063e4f517b1c061ded8476b4011a4fc2ba7dbff707075547e"
+    },
+    {
+      "id": "embed-minilm-l6-v2",
+      "type": "embed",
+      "name": "Semantic Memory — all-MiniLM-L6-v2",
+      "description": "Recommended. Tiny embedding model that powers semantic memory: characters auto-save and recall the right memories in the background (even when your wording differs) and the chat sends less to the main model each reply, so replies stay fast. Fully offline, runs on any phone. Apache-2.0.",
+      "quant": "F16",
+      "minRamMb": 1000,
+      "url": "https://huggingface.co/second-state/All-MiniLM-L6-v2-Embedding-GGUF/resolve/main/all-MiniLM-L6-v2-ggml-model-f16.gguf",
+      "sizeBytes": 45949216,
+      "sha256": "797b70c4edf85907fe0a49eb85811256f65fa0f7bf52166b147fd16be2be4662"
+    },
+    {
+      "id": "asr-whisper-base",
+      "type": "asr",
+      "name": "Speech-to-Text — Whisper Base",
+      "description": "On-device voice transcription for calls — fully offline, multilingual. Recommended balance of accuracy and speed. Runs on any phone. MIT.",
+      "quant": "ggml",
+      "minRamMb": 1000,
+      "url": "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin",
+      "sizeBytes": 147951465,
+      "sha256": "60ed5bc3dd14eea856493d334349b405782ddcaf0028d4b5df4088345fba2efe"
+    },
+    {
+      "id": "asr-whisper-tiny",
+      "type": "asr",
+      "name": "Speech-to-Text — Whisper Tiny",
+      "description": "Smallest on-device voice transcription for calls — fully offline, multilingual. Fastest, slightly lower accuracy. Runs on any phone. MIT.",
+      "quant": "ggml",
+      "minRamMb": 1000,
+      "url": "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin",
+      "sizeBytes": 77691713,
+      "sha256": "be07e048e1e599ad46341c8d2a135645097a538221678b7acdd1b1919c6e1b21"
+    },
+    {
+      "id": "asr-whisper-large-v3-turbo",
+      "type": "asr",
+      "name": "Speech-to-Text — Whisper Turbo",
+      "description": "Most accurate on-device voice transcription for calls — fully offline, multilingual. Larger download; best on a 6 GB+ phone. MIT.",
+      "quant": "ggml q5_0",
+      "minRamMb": 3000,
+      "url": "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo-q5_0.bin",
+      "sizeBytes": 574041195,
+      "sha256": "394221709cd5ad1f40c46e6031ca61bce88931e6e088c188294c6d5a55ffa7e2"
+    },
+    {
+      "id": "cyberrealistic-lcm",
+      "type": "sd",
+      "name": "CyberRealistic LCM",
+      "description": "Pre-converted on-device SD 1.5 LCM model (MNN format). credit: Cyberdelia.",
+      "quant": "int8",
+      "files": [
+        {
+          "role": "model",
+          "url": "https://huggingface.co/Mr-J-369/Fancy-AI-Apple/resolve/main/cyberrealistic/unet.mnn",
+          "name": "unet.mnn",
+          "sha256": "6b5314275c54386fdd01e898276ea66d3767ae2bfaac8b061dc63d427f01b5ce",
+          "sizeBytes": 1107376
+        },
+        {
+          "role": "model_weight",
+          "url": "https://huggingface.co/Mr-J-369/Fancy-AI-Apple/resolve/main/cyberrealistic/unet.mnn.weight",
+          "name": "unet.mnn.weight",
+          "sha256": "faa31de878c7eb06c947df5f34a008048a8d48a37cd7b6174219774d99c1d9b7",
+          "sizeBytes": 908377536
+        },
+        {
+          "role": "clip",
+          "url": "https://huggingface.co/Mr-J-369/Fancy-AI-Apple/resolve/main/cyberrealistic/clip_v2.mnn",
+          "name": "clip_v2.mnn",
+          "sha256": "0383c3a1b1d3435f320ed8a942b749c59182ab758b2d18ecf68c76f8bf1eebb4",
+          "sizeBytes": 147192
+        },
+        {
+          "role": "clip_weight",
+          "url": "https://huggingface.co/Mr-J-369/Fancy-AI-Apple/resolve/main/cyberrealistic/clip_v2.mnn.weight",
+          "name": "clip_v2.mnn.weight",
+          "sha256": "7401ebb1691e56a870ea8f56de1b2606ba8afc48286515e41f6d258af54b476d",
+          "sizeBytes": 156158976
+        },
+        {
+          "role": "vae_decoder",
+          "url": "https://huggingface.co/Mr-J-369/Fancy-AI-Apple/resolve/main/cyberrealistic/vae_decoder.mnn",
+          "name": "vae_decoder.mnn",
+          "sha256": "01b2e0444ca917c81e04aa8a884852f5728e78f6fc4d34e192a577e42067f63c",
+          "sizeBytes": 153688
+        },
+        {
+          "role": "vae_decoder_weight",
+          "url": "https://huggingface.co/Mr-J-369/Fancy-AI-Apple/resolve/main/cyberrealistic/vae_decoder.mnn.weight",
+          "name": "vae_decoder.mnn.weight",
+          "sha256": "f97ef277f3d0345c18906cfc07d4ad93f99ed605f7164747013b601f11a36cbe",
+          "sizeBytes": 98963772
+        },
+        {
+          "role": "vae_encoder",
+          "url": "https://huggingface.co/Mr-J-369/Fancy-AI-Apple/resolve/main/cyberrealistic/vae_encoder.mnn",
+          "name": "vae_encoder.mnn",
+          "sha256": "d3ad5c728b9ba9c9ad5af3fe5dc1e9f00d5a2f261ad9647149eaed86b202b53d",
+          "sizeBytes": 121904
+        },
+        {
+          "role": "vae_encoder_weight",
+          "url": "https://huggingface.co/Mr-J-369/Fancy-AI-Apple/resolve/main/cyberrealistic/vae_encoder.mnn.weight",
+          "name": "vae_encoder.mnn.weight",
+          "sha256": "89e1a9d8a74c64c5226f650e9603550337f042e63cb10086b2356e3edd0acd1d",
+          "sizeBytes": 68317120
+        },
+        {
+          "role": "tokenizer",
+          "url": "https://huggingface.co/Mr-J-369/Fancy-AI-Apple/resolve/main/cyberrealistic/tokenizer.json",
+          "name": "tokenizer.json",
+          "sha256": "5f120510b5c01ccdb9a7d29d2beca07cac667f76472cab123ffb1c2f0b27cdeb",
+          "sizeBytes": 3642034
+        },
+        {
+          "role": "pos_emb",
+          "url": "https://huggingface.co/Mr-J-369/Fancy-AI-Apple/resolve/main/cyberrealistic/pos_emb.bin",
+          "name": "pos_emb.bin",
+          "sha256": "790fb5de2fd1756121be6b90ec6dbfa4f749f819accf64aacae06064fd5e7df3",
+          "sizeBytes": 236544
+        },
+        {
+          "role": "token_emb",
+          "url": "https://huggingface.co/Mr-J-369/Fancy-AI-Apple/resolve/main/cyberrealistic/token_emb.bin",
+          "name": "token_emb.bin",
+          "sha256": "2497ae10858500dee05b79ef4acb7a2aad5e37bd7260b996b16ef6e34f935e26",
+          "sizeBytes": 75890688
+        }
+      ]
+    },
+    {
+      "id": "tts-ar-jo-kareem",
+      "name": "Kareem",
+      "type": "tts",
+      "description": "Natural Arabic (Jordan) voice for calls and read-aloud.",
+      "version": 1,
+      "language": "Arabic (Jordan)",
+      "tags": [
+        "ar"
+      ],
+      "url": "https://huggingface.co/Mr-J-369/TTS-AR/resolve/main/tts-ar-jo-kareem.zip",
+      "sha256": "41beae64cdbe411bdfcfb3496b1abd8c04bad8a0c7578ed6a1734868a2f36969",
+      "sizeBytes": 67392229
+    },
+    {
+      "id": "tts-zh-cn-chaowen",
+      "name": "Chaowen",
+      "type": "tts",
+      "description": "Natural Chinese voice for calls and read-aloud.",
+      "version": 1,
+      "language": "Chinese",
+      "tags": [
+        "zh"
+      ],
+      "url": "https://huggingface.co/Mr-J-369/TTS-Chinese/resolve/main/tts-zh-cn-chaowen.zip",
+      "sha256": "97451299e024ced82ec3c4c1b92b080e5a9a59da2c274c9b70546e7df22583b1",
+      "sizeBytes": 67390794
+    },
+    {
+      "id": "tts-zh-cn-huayan",
+      "name": "Huayan",
+      "type": "tts",
+      "description": "Natural Chinese voice for calls and read-aloud.",
+      "version": 1,
+      "language": "Chinese",
+      "tags": [
+        "zh"
+      ],
+      "url": "https://huggingface.co/Mr-J-369/TTS-Chinese/resolve/main/tts-zh-cn-huayan.zip",
+      "sha256": "0c1acb7b7789b5f5f986770fefa5539130a0f30254734f0d173339bcbbc6ff2f",
+      "sizeBytes": 67437012
+    },
+    {
+      "id": "tts-zh-cn-xiao_ya",
+      "name": "Xiao Ya",
+      "type": "tts",
+      "description": "Natural Chinese voice for calls and read-aloud.",
+      "version": 1,
+      "language": "Chinese",
+      "tags": [
+        "zh"
+      ],
+      "url": "https://huggingface.co/Mr-J-369/TTS-Chinese/resolve/main/tts-zh-cn-xiao_ya.zip",
+      "sha256": "b214c2d17bf156c27363e3a925e4656c402a030f4687c38f33ce823e6da98791",
+      "sizeBytes": 67400201
+    },
+    {
+      "id": "tts-en-gb-alan",
+      "name": "Alan",
+      "type": "tts",
+      "description": "Natural English (UK) voice for calls and read-aloud.",
+      "version": 1,
+      "language": "English (UK)",
+      "tags": [
+        "en"
+      ],
+      "url": "https://huggingface.co/Mr-J-369/TTS-EN/resolve/main/GB/tts-en-gb-alan.zip",
+      "sha256": "fa1d7eac96d834d1ff71e5f23f0cca961e016c5e95d204825241ac0f9d441b08",
+      "sizeBytes": 67394593
+    },
+    {
+      "id": "tts-en-gb-alba",
+      "name": "Alba",
+      "type": "tts",
+      "description": "Natural English (UK) voice for calls and read-aloud.",
+      "version": 1,
+      "language": "English (UK)",
+      "tags": [
+        "en"
+      ],
+      "url": "https://huggingface.co/Mr-J-369/TTS-EN/resolve/main/GB/tts-en-gb-alba.zip",
+      "sha256": "3d3cb99eb084862c9028b90e7df506b07518f8cd3726b36827791de06c8990c5",
+      "sizeBytes": 67412063
+    },
+    {
+      "id": "tts-en-gb-aru",
+      "name": "Aru",
+      "type": "tts",
+      "description": "Natural English (UK) voice for calls and read-aloud.",
+      "version": 1,
+      "language": "English (UK)",
+      "tags": [
+        "en"
+      ],
+      "url": "https://huggingface.co/Mr-J-369/TTS-EN/resolve/main/GB/tts-en-gb-aru.zip",
+      "sha256": "bf29e4bcd14283a0319c65a1318b6fbcd290f483b182ce64c68ee636039f7c43",
+      "sizeBytes": 80138534
+    },
+    {
+      "id": "tts-en-gb-cori",
+      "name": "Cori",
+      "type": "tts",
+      "description": "Natural English (UK) voice for calls and read-aloud.",
+      "version": 1,
+      "language": "English (UK)",
+      "tags": [
+        "en"
+      ],
+      "url": "https://huggingface.co/Mr-J-369/TTS-EN/resolve/main/GB/tts-en-gb-cori.zip",
+      "sha256": "e782c884d09ac8f6d86113d14cc3dd9ca71ac085123d6ab026bedfaaac11bc30",
+      "sizeBytes": 67490365
+    },
+    {
+      "id": "tts-en-gb-jenny_dioco",
+      "name": "Jenny Dioco",
+      "type": "tts",
+      "description": "Natural English (UK) voice for calls and read-aloud.",
+      "version": 1,
+      "language": "English (UK)",
+      "tags": [
+        "en"
+      ],
+      "url": "https://huggingface.co/Mr-J-369/TTS-EN/resolve/main/GB/tts-en-gb-jenny_dioco.zip",
+      "sha256": "3f3d1e144d964ba46c4f57f5b08d14b5d9ac094bd9df34aece6eead39c3e6041",
+      "sizeBytes": 67417196
+    },
+    {
+      "id": "tts-en-gb-northern_english_male",
+      "name": "Northern English Male",
+      "type": "tts",
+      "description": "Natural English (UK) voice for calls and read-aloud.",
+      "version": 1,
+      "language": "English (UK)",
+      "tags": [
+        "en"
+      ],
+      "url": "https://huggingface.co/Mr-J-369/TTS-EN/resolve/main/GB/tts-en-gb-northern_english_male.zip",
+      "sha256": "e335bec6138a9cf2613f0b378129aa2d30542c6b14ea2440c00eed7ebdc246d3",
+      "sizeBytes": 67384869
+    },
+    {
+      "id": "tts-en-gb-semaine",
+      "name": "Semaine",
+      "type": "tts",
+      "description": "Natural English (UK) voice for calls and read-aloud.",
+      "version": 1,
+      "language": "English (UK)",
+      "tags": [
+        "en"
+      ],
+      "url": "https://huggingface.co/Mr-J-369/TTS-EN/resolve/main/GB/tts-en-gb-semaine.zip",
+      "sha256": "d3fb6d7b0be747900f4d1bd01957bd6585898739ea49bd2160e25a19ad4b132d",
+      "sizeBytes": 80102223
+    },
+    {
+      "id": "tts-en-gb-southern_english_female",
+      "name": "Southern English Female",
+      "type": "tts",
+      "description": "Natural English (UK) voice for calls and read-aloud.",
+      "version": 1,
+      "language": "English (UK)",
+      "tags": [
+        "en"
+      ],
+      "url": "https://huggingface.co/Mr-J-369/TTS-EN/resolve/main/GB/tts-en-gb-southern_english_female.zip",
+      "sha256": "c48ec10ff5a828744fac89f16887f59b4115e9a6c55aaf6038d140e8b3263bae",
+      "sizeBytes": 67298494
+    },
+    {
+      "id": "tts-en-gb-vctk",
+      "name": "VCTK",
+      "type": "tts",
+      "description": "Natural English (UK) voice for calls and read-aloud.",
+      "version": 1,
+      "language": "English (UK)",
+      "tags": [
+        "en"
+      ],
+      "url": "https://huggingface.co/Mr-J-369/TTS-EN/resolve/main/GB/tts-en-gb-vctk.zip",
+      "sha256": "d4c77d17e6b1050df713396a8959d1bc78397d12f57291a99dfa1932164fc8c3",
+      "sizeBytes": 80330553
+    },
+    {
+      "id": "tts-en-us-amy",
+      "name": "Amy",
+      "type": "tts",
+      "description": "Natural English (US) voice for calls and read-aloud.",
+      "version": 1,
+      "language": "English (US)",
+      "tags": [
+        "en"
+      ],
+      "url": "https://huggingface.co/Mr-J-369/TTS-EN/resolve/main/US/tts-en-us-amy.zip",
+      "sha256": "f359109786c687afbd288cc17a1687dd103ae09459e42e1a25f6b06a3996ceb0",
+      "sizeBytes": 67404028
+    },
+    {
+      "id": "tts-en-us-arctic",
+      "name": "Arctic",
+      "type": "tts",
+      "description": "Natural English (US) voice for calls and read-aloud.",
+      "version": 1,
+      "language": "English (US)",
+      "tags": [
+        "en"
+      ],
+      "url": "https://huggingface.co/Mr-J-369/TTS-EN/resolve/main/US/tts-en-us-arctic.zip",
+      "sha256": "036f29b17c32a908a21e0171b4bfa86faeb4c66d77348c6062dec342fd8663a0",
+      "sizeBytes": 80142106
+    },
+    {
+      "id": "tts-en-us-bryce",
+      "name": "Bryce",
+      "type": "tts",
+      "description": "Natural English (US) voice for calls and read-aloud.",
+      "version": 1,
+      "language": "English (US)",
+      "tags": [
+        "en"
+      ],
+      "url": "https://huggingface.co/Mr-J-369/TTS-EN/resolve/main/US/tts-en-us-bryce.zip",
+      "sha256": "beddeb548ddf5a89caff9c9c190182f930668fe56e3c68e7c5e35bd6c51663bc",
+      "sizeBytes": 67488470
+    },
+    {
+      "id": "tts-en-us-danny",
+      "name": "Danny",
+      "type": "tts",
+      "description": "Natural English (US) voice for calls and read-aloud.",
+      "version": 1,
+      "language": "English (US)",
+      "tags": [
+        "en"
+      ],
+      "url": "https://huggingface.co/Mr-J-369/TTS-EN/resolve/main/US/tts-en-us-danny.zip",
+      "sha256": "b28f922be527b123dc8d3ea35c75f5dc12fcbfcfe83e33b4fca6ca4478acc3fa",
+      "sizeBytes": 67300307
+    },
+    {
+      "id": "tts-en-us-hfc_female",
+      "name": "HFC Female",
+      "type": "tts",
+      "description": "Natural English (US) voice for calls and read-aloud.",
+      "version": 1,
+      "language": "English (US)",
+      "tags": [
+        "en"
+      ],
+      "url": "https://huggingface.co/Mr-J-369/TTS-EN/resolve/main/US/tts-en-us-hfc_female.zip",
+      "sha256": "b9ab3a7b239e99ca91a70efd3190a73799a256ac76022fd8b43e41edd461534e",
+      "sizeBytes": 67413771
+    },
+    {
+      "id": "tts-en-us-hfc_male",
+      "name": "HFC Male",
+      "type": "tts",
+      "description": "Natural English (US) voice for calls and read-aloud.",
+      "version": 1,
+      "language": "English (US)",
+      "tags": [
+        "en"
+      ],
+      "url": "https://huggingface.co/Mr-J-369/TTS-EN/resolve/main/US/tts-en-us-hfc_male.zip",
+      "sha256": "f55f717d53bcd4a8be114460e0ea4872d1ff9e8828513a21a03043917fb73096",
+      "sizeBytes": 67427123
+    },
+    {
+      "id": "tts-en-us-joe",
+      "name": "Joe",
+      "type": "tts",
+      "description": "Natural English (US) voice for calls and read-aloud.",
+      "version": 1,
+      "language": "English (US)",
+      "tags": [
+        "en"
+      ],
+      "url": "https://huggingface.co/Mr-J-369/TTS-EN/resolve/main/US/tts-en-us-joe.zip",
+      "sha256": "563116f4797a922abb867c42a4636edc03c0ecdf74aeb62175f89c463d082983",
+      "sizeBytes": 67379764
+    },
+    {
+      "id": "tts-en-us-john",
+      "name": "John",
+      "type": "tts",
+      "description": "Natural English (US) voice for calls and read-aloud.",
+      "version": 1,
+      "language": "English (US)",
+      "tags": [
+        "en"
+      ],
+      "url": "https://huggingface.co/Mr-J-369/TTS-EN/resolve/main/US/tts-en-us-john.zip",
+      "sha256": "2feb9a4e9fa0bc87cb24ebf99a53d25f4fd59bf751da4f9e697abdd7baff47d6",
+      "sizeBytes": 67498419
+    },
+    {
+      "id": "tts-en-us-kathleen",
+      "name": "Kathleen",
+      "type": "tts",
+      "description": "Natural English (US) voice for calls and read-aloud.",
+      "version": 1,
+      "language": "English (US)",
+      "tags": [
+        "en"
+      ],
+      "url": "https://huggingface.co/Mr-J-369/TTS-EN/resolve/main/US/tts-en-us-kathleen.zip",
+      "sha256": "f7e4e164bd69499037855eaf806cd21130b64f0b72065ddc1e96f133c2a7ed74",
+      "sizeBytes": 67303107
+    },
+    {
+      "id": "tts-en-us-kristin",
+      "name": "Kristin",
+      "type": "tts",
+      "description": "Natural English (US) voice for calls and read-aloud.",
+      "version": 1,
+      "language": "English (US)",
+      "tags": [
+        "en"
+      ],
+      "url": "https://huggingface.co/Mr-J-369/TTS-EN/resolve/main/US/tts-en-us-kristin.zip",
+      "sha256": "d14e4fdc8705bfd2ec395f59a197396c4d83f11b29ab2090d1f53d1b7e70be60",
+      "sizeBytes": 67482626
+    },
+    {
+      "id": "tts-en-us-kusal",
+      "name": "Kusal",
+      "type": "tts",
+      "description": "Natural English (US) voice for calls and read-aloud.",
+      "version": 1,
+      "language": "English (US)",
+      "tags": [
+        "en"
+      ],
+      "url": "https://huggingface.co/Mr-J-369/TTS-EN/resolve/main/US/tts-en-us-kusal.zip",
+      "sha256": "00cd3b258daa7fdbfcb72dc1fd21aec128f5cdb2e329eb6a8f39491ff8aa52f6",
+      "sizeBytes": 67413039
+    },
+    {
+      "id": "tts-en-us-l2arctic",
+      "name": "L2 Arctic",
+      "type": "tts",
+      "description": "Natural English (US) voice for calls and read-aloud.",
+      "version": 1,
+      "language": "English (US)",
+      "tags": [
+        "en"
+      ],
+      "url": "https://huggingface.co/Mr-J-369/TTS-EN/resolve/main/US/tts-en-us-l2arctic.zip",
+      "sha256": "c0414f309ea2858bcbab9aaf91c18eb17adfa1df73681a9825fb2b1e2580c132",
+      "sizeBytes": 80169912
+    },
+    {
+      "id": "tts-en-us-ljspeech",
+      "name": "LJSpeech",
+      "type": "tts",
+      "description": "Natural English (US) voice for calls and read-aloud.",
+      "version": 1,
+      "language": "English (US)",
+      "tags": [
+        "en"
+      ],
+      "url": "https://huggingface.co/Mr-J-369/TTS-EN/resolve/main/US/tts-en-us-ljspeech.zip",
+      "sha256": "45cdf2e4e39fc44e881a3ad0d8bca4cebfb362ff66f36156233280495f02fa15",
+      "sizeBytes": 67436707
+    },
+    {
+      "id": "tts-en-us-libritts_r",
+      "name": "LibriTTS R",
+      "type": "tts",
+      "description": "Natural English (US) voice for calls and read-aloud.",
+      "version": 1,
+      "language": "English (US)",
+      "tags": [
+        "en"
+      ],
+      "url": "https://huggingface.co/Mr-J-369/TTS-EN/resolve/main/US/tts-en-us-libritts_r.zip",
+      "sha256": "05bb04c4237165b260cb058be464d5f3a5b74aae240143a99cc9dd857e6734ba",
+      "sizeBytes": 81817894
+    },
+    {
+      "id": "tts-en-us-mike",
+      "name": "Mike",
+      "type": "tts",
+      "description": "Natural English (US) voice for calls and read-aloud.",
+      "version": 1,
+      "language": "English (US)",
+      "tags": [
+        "en"
+      ],
+      "url": "https://huggingface.co/Mr-J-369/TTS-EN/resolve/main/US/tts-en-us-mike.zip",
+      "sha256": "0a9fba6844a3629f3cfc379fe5a6af8b8fa381d2c3fcc749a11002deb2723bed",
+      "sizeBytes": 67414719
+    },
+    {
+      "id": "tts-en-us-norman",
+      "name": "Norman",
+      "type": "tts",
+      "description": "Natural English (US) voice for calls and read-aloud.",
+      "version": 1,
+      "language": "English (US)",
+      "tags": [
+        "en"
+      ],
+      "url": "https://huggingface.co/Mr-J-369/TTS-EN/resolve/main/US/tts-en-us-norman.zip",
+      "sha256": "1d2f422690c8fb360d475a33b8606b4aecaff41715a1157a359cdde0da9b95db",
+      "sizeBytes": 67450984
+    },
+    {
+      "id": "tts-en-us-ryan",
+      "name": "Ryan",
+      "type": "tts",
+      "description": "Natural English (US) voice for calls and read-aloud.",
+      "version": 1,
+      "language": "English (US)",
+      "tags": [
+        "en"
+      ],
+      "url": "https://huggingface.co/Mr-J-369/TTS-EN/resolve/main/US/tts-en-us-ryan.zip",
+      "sha256": "3ee7c1171d4d373b3b228be491501105ce4a4c5e14a2084d7d220c7bd3045101",
+      "sizeBytes": 67423324
+    },
+    {
+      "id": "tts-en-us-sam",
+      "name": "Sam",
+      "type": "tts",
+      "description": "Natural English (US) voice for calls and read-aloud.",
+      "version": 1,
+      "language": "English (US)",
+      "tags": [
+        "en"
+      ],
+      "url": "https://huggingface.co/Mr-J-369/TTS-EN/resolve/main/US/tts-en-us-sam.zip",
+      "sha256": "da52be77d06a22cf5ca51e59d36c1ca49dced76d2844dcef4e468866bd8f67c2",
+      "sizeBytes": 67408533
+    },
+    {
+      "id": "tts-fr-fr-gilles",
+      "name": "Gilles",
+      "type": "tts",
+      "description": "Natural French voice for calls and read-aloud.",
+      "version": 1,
+      "language": "French",
+      "tags": [
+        "fr"
+      ],
+      "url": "https://huggingface.co/Mr-J-369/TTS-French/resolve/main/tts-fr-fr-gilles.zip",
+      "sha256": "3d758831b5a5f8ed2e411dc07d1819fbe8396f3dfca7cda970ab83ba81229aa1",
+      "sizeBytes": 67296116
+    },
+    {
+      "id": "tts-fr-fr-mls",
+      "name": "MLS",
+      "type": "tts",
+      "description": "Natural French voice for calls and read-aloud.",
+      "version": 1,
+      "language": "French",
+      "tags": [
+        "fr"
+      ],
+      "url": "https://huggingface.co/Mr-J-369/TTS-French/resolve/main/tts-fr-fr-mls.zip",
+      "sha256": "fce35671993153286579f360dec00cc74557b32a84d1677c8433e8623234861a",
+      "sizeBytes": 80469514
+    },
+    {
+      "id": "tts-fr-fr-mls_1840",
+      "name": "MLS 1840",
+      "type": "tts",
+      "description": "Natural French voice for calls and read-aloud.",
+      "version": 1,
+      "language": "French",
+      "tags": [
+        "fr"
+      ],
+      "url": "https://huggingface.co/Mr-J-369/TTS-French/resolve/main/tts-fr-fr-mls_1840.zip",
+      "sha256": "de580a0d0e172c88a421cba08f45102b508a926d4f2f6e6305f4845fc12947d7",
+      "sizeBytes": 67301770
+    },
+    {
+      "id": "tts-fr-fr-siwis",
+      "name": "Siwis",
+      "type": "tts",
+      "description": "Natural French voice for calls and read-aloud.",
+      "version": 1,
+      "language": "French",
+      "tags": [
+        "fr"
+      ],
+      "url": "https://huggingface.co/Mr-J-369/TTS-French/resolve/main/tts-fr-fr-siwis.zip",
+      "sha256": "7dff709e09ea2469acedf2b3f142c41053250612af3a0ebc8efa98a79067a569",
+      "sizeBytes": 67426373
+    },
+    {
+      "id": "tts-fr-fr-tom",
+      "name": "Tom",
+      "type": "tts",
+      "description": "Natural French voice for calls and read-aloud.",
+      "version": 1,
+      "language": "French",
+      "tags": [
+        "fr"
+      ],
+      "url": "https://huggingface.co/Mr-J-369/TTS-French/resolve/main/tts-fr-fr-tom.zip",
+      "sha256": "3b581f5f9b03e075211773898d0035a6c01d58dfb8c7a674de0035e3ff4de0a0",
+      "sizeBytes": 67437987
+    },
+    {
+      "id": "tts-fr-fr-upmc",
+      "name": "Upmc",
+      "type": "tts",
+      "description": "Natural French voice for calls and read-aloud.",
+      "version": 1,
+      "language": "French",
+      "tags": [
+        "fr"
+      ],
+      "url": "https://huggingface.co/Mr-J-369/TTS-French/resolve/main/tts-fr-fr-upmc.zip",
+      "sha256": "21bba0113ff1f78c4f987bbd0cf40e463dab2664edd30cd4c9bfdb744a50a987",
+      "sizeBytes": 80247756
+    },
+    {
+      "id": "tts-de-de-eva_k",
+      "name": "Eva K",
+      "type": "tts",
+      "description": "Natural German voice for calls and read-aloud.",
+      "version": 1,
+      "language": "German",
+      "tags": [
+        "de"
+      ],
+      "url": "https://huggingface.co/Mr-J-369/TTS-Deutsch/resolve/main/tts-de-de-eva_k.zip",
+      "sha256": "70757db32f0864bd1ceaa6441cec3a33c37290302eb8549ef351de00a3418a7b",
+      "sizeBytes": 27738512
+    },
+    {
+      "id": "tts-de-de-karlsson",
+      "name": "Karlsson",
+      "type": "tts",
+      "description": "Natural German voice for calls and read-aloud.",
+      "version": 1,
+      "language": "German",
+      "tags": [
+        "de"
+      ],
+      "url": "https://huggingface.co/Mr-J-369/TTS-Deutsch/resolve/main/tts-de-de-karlsson.zip",
+      "sha256": "823b956a2fe3e128b96c9b456c8f552eaab80a31d46047215b9952d87b09631e",
+      "sizeBytes": 67302514
+    },
+    {
+      "id": "tts-de-de-kerstin",
+      "name": "Kerstin",
+      "type": "tts",
+      "description": "Natural German voice for calls and read-aloud.",
+      "version": 1,
+      "language": "German",
+      "tags": [
+        "de"
+      ],
+      "url": "https://huggingface.co/Mr-J-369/TTS-Deutsch/resolve/main/tts-de-de-kerstin.zip",
+      "sha256": "ccc7aeeb97ede1ca77ca98d6b3781fa124288b2b161b01b2e80844fdc0d279ba",
+      "sizeBytes": 67300596
+    },
+    {
+      "id": "tts-de-de-mls",
+      "name": "MLS",
+      "type": "tts",
+      "description": "Natural German voice for calls and read-aloud.",
+      "version": 1,
+      "language": "German",
+      "tags": [
+        "de"
+      ],
+      "url": "https://huggingface.co/Mr-J-369/TTS-Deutsch/resolve/main/tts-de-de-mls.zip",
+      "sha256": "69761e1c95c2f00db5d3d5a7a12d2412e4359b0c41aa9c1815a5764951976db8",
+      "sizeBytes": 80849072
+    },
+    {
+      "id": "tts-de-de-pavoque",
+      "name": "Pavoque",
+      "type": "tts",
+      "description": "Natural German voice for calls and read-aloud.",
+      "version": 1,
+      "language": "German",
+      "tags": [
+        "de"
+      ],
+      "url": "https://huggingface.co/Mr-J-369/TTS-Deutsch/resolve/main/tts-de-de-pavoque.zip",
+      "sha256": "9af2ba99c42e7cf9577fa40732c488de50b8d922ece3ab9f83fc041187d8a592",
+      "sizeBytes": 67303692
+    },
+    {
+      "id": "tts-de-de-ramona",
+      "name": "Ramona",
+      "type": "tts",
+      "description": "Natural German voice for calls and read-aloud.",
+      "version": 1,
+      "language": "German",
+      "tags": [
+        "de"
+      ],
+      "url": "https://huggingface.co/Mr-J-369/TTS-Deutsch/resolve/main/tts-de-de-ramona.zip",
+      "sha256": "17b71572ff50876e764737a7f8142486b488a0f1571c3b5ea418ddb78d2a789f",
+      "sizeBytes": 67289849
+    },
+    {
+      "id": "tts-de-de-thorsten",
+      "name": "Thorsten",
+      "type": "tts",
+      "description": "Natural German voice for calls and read-aloud.",
+      "version": 1,
+      "language": "German",
+      "tags": [
+        "de"
+      ],
+      "url": "https://huggingface.co/Mr-J-369/TTS-Deutsch/resolve/main/tts-de-de-thorsten.zip",
+      "sha256": "741260e3bf7c184382ef05ac3ca63a7d69eca77b45cb5a7d83a51aa6289bffdf",
+      "sizeBytes": 67426317
+    },
+    {
+      "id": "tts-de-de-thorsten_emotional",
+      "name": "Thorsten Emotional",
+      "type": "tts",
+      "description": "Natural German voice for calls and read-aloud.",
+      "version": 1,
+      "language": "German",
+      "tags": [
+        "de"
+      ],
+      "url": "https://huggingface.co/Mr-J-369/TTS-Deutsch/resolve/main/tts-de-de-thorsten_emotional.zip",
+      "sha256": "f78daf4ad1ae9efdb12da5bd190b9edf2920b8cd3110a362b11f6779cfa963d8",
+      "sizeBytes": 80043021
+    },
+    {
+      "id": "tts-hi-in-pratham",
+      "name": "Pratham",
+      "type": "tts",
+      "description": "Natural Hindi voice for calls and read-aloud.",
+      "version": 1,
+      "language": "Hindi",
+      "tags": [
+        "hi"
+      ],
+      "url": "https://huggingface.co/Mr-J-369/TTS-Hindi/resolve/main/tts-hi-in-pratham.zip",
+      "sha256": "62e733c159930a8eb4e492e59e204b1429c57229a350ce8d50719579004a6a23",
+      "sizeBytes": 67486801
+    },
+    {
+      "id": "tts-hi-in-priyamvada",
+      "name": "Priyamvada",
+      "type": "tts",
+      "description": "Natural Hindi voice for calls and read-aloud.",
+      "version": 1,
+      "language": "Hindi",
+      "tags": [
+        "hi"
+      ],
+      "url": "https://huggingface.co/Mr-J-369/TTS-Hindi/resolve/main/tts-hi-in-priyamvada.zip",
+      "sha256": "f79ad800d8365cdd099e0ea84f7f2beb78135520064335b1822259e71a5b43a2",
+      "sizeBytes": 67492427
+    },
+    {
+      "id": "tts-hi-in-rohan",
+      "name": "Rohan",
+      "type": "tts",
+      "description": "Natural Hindi voice for calls and read-aloud.",
+      "version": 1,
+      "language": "Hindi",
+      "tags": [
+        "hi"
+      ],
+      "url": "https://huggingface.co/Mr-J-369/TTS-Hindi/resolve/main/tts-hi-in-rohan.zip",
+      "sha256": "c42aa0dfae5dc40c9e29f66d5862c1ecd2b3aef9072332bfd8f78e2b2af50e28",
+      "sizeBytes": 67406002
+    },
+    {
+      "id": "tts-id-id-news_tts",
+      "name": "News TTS",
+      "type": "tts",
+      "description": "Natural Indonesian voice for calls and read-aloud.",
+      "version": 1,
+      "language": "Indonesian",
+      "tags": [
+        "id"
+      ],
+      "url": "https://huggingface.co/Mr-J-369/TTS-Indonesian/resolve/main/tts-id-id-news_tts.zip",
+      "sha256": "ce7757ade0e61d34175a1da226c2c788ef93bb5260beb81e3aadfd8cb56572cd",
+      "sizeBytes": 67405470
+    },
+    {
+      "id": "tts-pt-br-cadu",
+      "name": "Cadu",
+      "type": "tts",
+      "description": "Natural Portuguese (Brazil) voice for calls and read-aloud.",
+      "version": 1,
+      "language": "Portuguese (Brazil)",
+      "tags": [
+        "pt"
+      ],
+      "url": "https://huggingface.co/Mr-J-369/TTS-Portuguese/resolve/main/Brazilian/tts-pt-br-cadu.zip",
+      "sha256": "b712cc6ba2cc4e175d74b0ef4e06ef4db9354f80d842268ffb7c331a18e61044",
+      "sizeBytes": 67402459
+    },
+    {
+      "id": "tts-pt-br-edresson",
+      "name": "Edresson",
+      "type": "tts",
+      "description": "Natural Portuguese (Brazil) voice for calls and read-aloud.",
+      "version": 1,
+      "language": "Portuguese (Brazil)",
+      "tags": [
+        "pt"
+      ],
+      "url": "https://huggingface.co/Mr-J-369/TTS-Portuguese/resolve/main/Brazilian/tts-pt-br-edresson.zip",
+      "sha256": "bd1271ef8aac9b9a920475fff2760a5eac4c689dcc624f786671adbef638985b",
+      "sizeBytes": 67299435
+    },
+    {
+      "id": "tts-pt-br-faber",
+      "name": "Faber",
+      "type": "tts",
+      "description": "Natural Portuguese (Brazil) voice for calls and read-aloud.",
+      "version": 1,
+      "language": "Portuguese (Brazil)",
+      "tags": [
+        "pt"
+      ],
+      "url": "https://huggingface.co/Mr-J-369/TTS-Portuguese/resolve/main/Brazilian/tts-pt-br-faber.zip",
+      "sha256": "603f63be9fe8407300f4a53316168258c93e9b4585678d0f38e3838e823271d4",
+      "sizeBytes": 67388463
+    },
+    {
+      "id": "tts-pt-br-jeff",
+      "name": "Jeff",
+      "type": "tts",
+      "description": "Natural Portuguese (Brazil) voice for calls and read-aloud.",
+      "version": 1,
+      "language": "Portuguese (Brazil)",
+      "tags": [
+        "pt"
+      ],
+      "url": "https://huggingface.co/Mr-J-369/TTS-Portuguese/resolve/main/Brazilian/tts-pt-br-jeff.zip",
+      "sha256": "7b2c63dbc51547c7f318b2bd8af6e8a95c1aa918340d94d3a7c676b850d05223",
+      "sizeBytes": 67393163
+    },
+    {
+      "id": "tts-pt-pt-tugao",
+      "name": "Tugão",
+      "type": "tts",
+      "description": "Natural Portuguese (Portugal) voice for calls and read-aloud.",
+      "version": 1,
+      "language": "Portuguese (Portugal)",
+      "tags": [
+        "pt"
+      ],
+      "url": "https://huggingface.co/Mr-J-369/TTS-Portuguese/resolve/main/European/tts-pt-pt-tug%C3%A3o.zip",
+      "sha256": "a5f51f98c96e0693159afd876fa293154be9b4ef13f26af5f12c70f831a7abbc",
+      "sizeBytes": 67393399,
+      "name_override": "tts-pt-pt-tugao.zip"
+    },
+    {
+      "id": "tts-ru-ru-denis",
+      "name": "Denis",
+      "type": "tts",
+      "description": "Natural Russian voice for calls and read-aloud.",
+      "version": 1,
+      "language": "Russian",
+      "tags": [
+        "ru"
+      ],
+      "url": "https://huggingface.co/Mr-J-369/TTS-Russian/resolve/main/tts-ru-ru-denis.zip",
+      "sha256": "49ebdfcea96e873060126fd914fe3dcd69af1640bd686b5ebc82535ea92bbc3e",
+      "sizeBytes": 67400970
+    },
+    {
+      "id": "tts-ru-ru-dmitri",
+      "name": "Dmitri",
+      "type": "tts",
+      "description": "Natural Russian voice for calls and read-aloud.",
+      "version": 1,
+      "language": "Russian",
+      "tags": [
+        "ru"
+      ],
+      "url": "https://huggingface.co/Mr-J-369/TTS-Russian/resolve/main/tts-ru-ru-dmitri.zip",
+      "sha256": "2070bae7353f487e6eaa361fb712912dc090c860eb948390c18b622cf0c03a73",
+      "sizeBytes": 67399545
+    },
+    {
+      "id": "tts-ru-ru-irina",
+      "name": "Irina",
+      "type": "tts",
+      "description": "Natural Russian voice for calls and read-aloud.",
+      "version": 1,
+      "language": "Russian",
+      "tags": [
+        "ru"
+      ],
+      "url": "https://huggingface.co/Mr-J-369/TTS-Russian/resolve/main/tts-ru-ru-irina.zip",
+      "sha256": "c84a74e5b84281c5d0df8e1635d18e0c9b7499860bf0cdd56037062026b34bc7",
+      "sizeBytes": 67382273
+    },
+    {
+      "id": "tts-ru-ru-ruslan",
+      "name": "Ruslan",
+      "type": "tts",
+      "description": "Natural Russian voice for calls and read-aloud.",
+      "version": 1,
+      "language": "Russian",
+      "tags": [
+        "ru"
+      ],
+      "url": "https://huggingface.co/Mr-J-369/TTS-Russian/resolve/main/tts-ru-ru-ruslan.zip",
+      "sha256": "e57fee648703379e8ddafb336dd9024ac35b63e1d8e7a32eda89d5aadd735183",
+      "sizeBytes": 67402992
+    },
+    {
+      "id": "tts-es-ar-daniela",
+      "name": "Daniela",
+      "type": "tts",
+      "description": "Natural Spanish (Argentina) voice for calls and read-aloud.",
+      "version": 1,
+      "language": "Spanish (Argentina)",
+      "tags": [
+        "es"
+      ],
+      "url": "https://huggingface.co/Mr-J-369/TTS-Spanish/resolve/main/tts-es-ar-daniela.zip",
+      "sha256": "dc2898a2f3f1ab77d258a016ae41c97b10c76402d3ac1ea1064e0f88c5a228bd",
+      "sizeBytes": 114579202
+    },
+    {
+      "id": "tts-es-mx-ald",
+      "name": "Ald",
+      "type": "tts",
+      "description": "Natural Spanish (Mexico) voice for calls and read-aloud.",
+      "version": 1,
+      "language": "Spanish (Mexico)",
+      "tags": [
+        "es"
+      ],
+      "url": "https://huggingface.co/Mr-J-369/TTS-Spanish/resolve/main/tts-es-mx-ald.zip",
+      "sha256": "630ccba403c468767e5a758c6bb79611509c2fe6b55e78ce7d48c1bdcf05f055",
+      "sizeBytes": 67376514
+    },
+    {
+      "id": "tts-es-es-carlfm",
+      "name": "Carlfm",
+      "type": "tts",
+      "description": "Natural Spanish (Spain) voice for calls and read-aloud.",
+      "version": 1,
+      "language": "Spanish (Spain)",
+      "tags": [
+        "es"
+      ],
+      "url": "https://huggingface.co/Mr-J-369/TTS-Spanish/resolve/main/tts-es-es-carlfm.zip",
+      "sha256": "49898dd046070c3119c2c463af6055f8bac2bd5d5df2db2f0f3cd275dd2b7aab",
+      "sizeBytes": 27847906
+    },
+    {
+      "id": "tts-es-es-davefx",
+      "name": "Davefx",
+      "type": "tts",
+      "description": "Natural Spanish (Spain) voice for calls and read-aloud.",
+      "version": 1,
+      "language": "Spanish (Spain)",
+      "tags": [
+        "es"
+      ],
+      "url": "https://huggingface.co/Mr-J-369/TTS-Spanish/resolve/main/tts-es-es-davefx.zip",
+      "sha256": "d608fa3ed85d6088952fd5437087db0c538373cb4f632d82f11c630425d1325a",
+      "sizeBytes": 67391254
+    },
+    {
+      "id": "tts-es-es-mls_10246",
+      "name": "MLS 10246",
+      "type": "tts",
+      "description": "Natural Spanish (Spain) voice for calls and read-aloud.",
+      "version": 1,
+      "language": "Spanish (Spain)",
+      "tags": [
+        "es"
+      ],
+      "url": "https://huggingface.co/Mr-J-369/TTS-Spanish/resolve/main/tts-es-es-mls_10246.zip",
+      "sha256": "c485ec1e4b59f683027fbb3590fa9e20a26b789a9240ac4bdb7377da38973f70",
+      "sizeBytes": 67294152
+    },
+    {
+      "id": "tts-es-es-mls_9972",
+      "name": "MLS 9972",
+      "type": "tts",
+      "description": "Natural Spanish (Spain) voice for calls and read-aloud.",
+      "version": 1,
+      "language": "Spanish (Spain)",
+      "tags": [
+        "es"
+      ],
+      "url": "https://huggingface.co/Mr-J-369/TTS-Spanish/resolve/main/tts-es-es-mls_9972.zip",
+      "sha256": "0d18d8fdb330c10ca45fc3311fde8e27c9318b2f53a0ae2e5d47a71d4ed8f509",
+      "sizeBytes": 67307393
+    },
+    {
+      "id": "tts-es-es-sharvard",
+      "name": "Sharvard",
+      "type": "tts",
+      "description": "Natural Spanish (Spain) voice for calls and read-aloud.",
+      "version": 1,
+      "language": "Spanish (Spain)",
+      "tags": [
+        "es"
+      ],
+      "url": "https://huggingface.co/Mr-J-369/TTS-Spanish/resolve/main/tts-es-es-sharvard.zip",
+      "sha256": "55639b183b4a328432e1f355b16a5da46651f2d6f84a927e184a717bb567a4a6",
+      "sizeBytes": 80134095
+    }
+  ]
+}
