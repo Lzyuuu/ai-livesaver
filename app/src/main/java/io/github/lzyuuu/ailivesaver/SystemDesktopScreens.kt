@@ -251,7 +251,7 @@ internal fun SystemDesktopScreen(
                 .testTag("desktop-dock"),
             horizontalArrangement = Arrangement.SpaceEvenly,
         ) {
-            DesktopNavigator.composeDock(homeApps).forEach { app ->
+            DesktopNavigator.composeDock().forEach { app ->
                 DockIcon(app = app, onClick = { onOpenApp(app) })
             }
         }

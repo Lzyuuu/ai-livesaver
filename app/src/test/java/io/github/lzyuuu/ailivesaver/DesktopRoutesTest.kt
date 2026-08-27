@@ -16,13 +16,13 @@ class DesktopRoutesTest {
     }
 
     @Test
-    fun `composeDock appends home apps without displacing store`() {
-        val dock = DesktopNavigator.composeDock(listOf(DesktopApp.Y, DesktopApp.Ustagram, DesktopApp.Settings))
+    fun `composeDock stays fixed regardless of home installs`() {
+        val dock = DesktopNavigator.composeDock()
+        assertEquals(
+            listOf("Messenger", "Imaging", "Gallery", "商店", "Settings"),
+            dock.map { it.label },
+        )
         assertEquals(DesktopApp.Store, dock[3])
-        assertTrue(dock.contains(DesktopApp.Y))
-        assertTrue(dock.contains(DesktopApp.Ustagram))
-        assertEquals(1, dock.count { it == DesktopApp.Settings })
-        assertEquals(listOf("Messenger", "Imaging", "Gallery", "商店", "Settings", "Y", "Ustagram"), dock.map { it.label })
     }
 
     @Test

@@ -183,13 +183,10 @@ object DesktopNavigator {
     fun isPaywalled(app: DesktopApp): Boolean = false
 
     /**
-     * 固定 Dock（含商店槽）+ 已添加到首页的目录 App。
-     * 商店槽永不被挤占；已在固定槽的 App 不会重复出现。
+     * Dock 固定 5 格，不随首页安装增长（#70，对齐参考 V4.51 不增长行为）；
+     * 已添加到首页的目录 App 只出现在首页应用网格。
      */
-    fun composeDock(homeApps: List<DesktopApp>): List<DesktopApp> {
-        val extras = homeApps.filter { it !in DesktopDockApps }
-        return DesktopDockApps + extras
-    }
+    fun composeDock(): List<DesktopApp> = DesktopDockApps
 
     /**
      * 首页应用网格：Characters 固定首位，其后为 on_home 商店 App（按 home_order）。
