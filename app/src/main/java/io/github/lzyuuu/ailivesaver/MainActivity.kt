@@ -10,6 +10,7 @@ import android.os.Bundle
 import android.provider.Settings
 import android.text.format.Formatter
 import android.widget.Toast
+import org.json.JSONObject
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -3300,6 +3301,66 @@ private fun ProviderScreen(
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
+            var fetchingModels by remember { mutableStateOf(false) }
+            var fetchedOnce by remember { mutableStateOf(false) }
+            var fetchedModels by remember { mutableStateOf<List<String>>(emptyList()) }
+            TextButton(
+                onClick = {
+                    if (fetchingModels || baseUrl.isBlank()) return@TextButton
+                    fetchingModels = true
+                    Thread {
+                        val result = runCatching {
+                            val conn = java.net.URL("${baseUrl.trim().trimEnd('/')}/models")
+                                .openConnection() as java.net.HttpURLConnection
+                            conn.connectTimeout = 8_000
+                            conn.readTimeout = 15_000
+                            if (apiKey.isNotBlank()) {
+                                conn.setRequestProperty("Authorization", "Bearer $apiKey")
+                            }
+                            val body = conn.inputStream.use { it.readBytes().decodeToString() }
+                            conn.disconnect()
+                            val array = JSONObject(body).optJSONArray("data")
+                            array?.let { arr ->
+                                (0 until arr.length()).mapNotNull { arr.optJSONObject(it)?.optString("id") }
+                            } ?: emptyList()
+                        }
+                        fetchedModels = result.getOrDefault(emptyList())
+                        fetchedOnce = true
+                        fetchingModels = false
+                    }.start()
+                },
+                modifier = Modifier.testTag("provider-fetch-models"),
+            ) {
+                Text(
+                    stringResource(
+                        if (fetchingModels) R.string.provider_fetching_models else R.string.provider_fetch_models,
+                    ),
+                )
+            }
+            if (fetchedOnce && fetchedModels.isEmpty() && !fetchingModels) {
+                Text(
+                    stringResource(R.string.provider_models_empty),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                fetchedModels.take(6).forEach { candidate ->
+                    FilterChip(
+                        selected = model == candidate,
+                        onClick = { model = candidate },
+                        label = { Text(candidate, maxLines = 1) },
+                    )
+                }
+            }
+            if (fetchedModels.size > 6) {
+                Text(
+                    "…+${fetchedModels.size - 6}",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
         item {
             OutlinedTextField(

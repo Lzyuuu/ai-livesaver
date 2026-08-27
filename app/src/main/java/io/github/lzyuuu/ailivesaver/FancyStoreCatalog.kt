@@ -78,7 +78,9 @@ object FancyStoreCatalogParser {
                 val availability = when (o.optString("availability").trim()) {
                     "coming_soon" -> StoreAvailability.COMING_SOON
                     "upcoming" -> StoreAvailability.UPCOMING
-                    else -> if (kind == "package") StoreAvailability.UPCOMING else StoreAvailability.AVAILABLE
+                    "available" -> StoreAvailability.AVAILABLE
+                    // 未标注的 package 不再默认不可用：目录以显式 availability 为准。
+                    else -> StoreAvailability.AVAILABLE
                 }
                 add(
                     StoreProduct(

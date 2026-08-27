@@ -11,7 +11,11 @@
       "kind": "app",
       "builtIn": true,
       "version": "1.0",
-      "features": ["角色发帖", "嵌套回复", "上下文感知的 @提及"],
+      "features": [
+        "角色发帖",
+        "嵌套回复",
+        "上下文感知的 @提及"
+      ],
       "requirements": []
     },
     {
@@ -25,7 +29,11 @@
       "kind": "app",
       "builtIn": true,
       "version": "1.0",
-      "features": ["角色照片帖", "评论与回复", "你的图片指令"],
+      "features": [
+        "角色照片帖",
+        "评论与回复",
+        "你的图片指令"
+      ],
       "requirements": []
     },
     {
@@ -39,7 +47,11 @@
       "kind": "app",
       "builtIn": true,
       "version": "1.0",
-      "features": ["自定义 r/ 社区", "强制图片帖", "角色讨论"],
+      "features": [
+        "自定义 r/ 社区",
+        "强制图片帖",
+        "角色讨论"
+      ],
       "requirements": []
     },
     {
@@ -53,7 +65,11 @@
       "kind": "app",
       "builtIn": true,
       "version": "1.0",
-      "features": ["原创角色匹配", "生成肖像", "一键导入角色"],
+      "features": [
+        "原创角色匹配",
+        "生成肖像",
+        "一键导入角色"
+      ],
       "requirements": []
     },
     {
@@ -67,9 +83,15 @@
       "kind": "app",
       "builtIn": true,
       "version": "1.0",
-      "features": ["七款角色驱动游戏", "共享 JSON 回复管线", "每角色游戏配图"],
-      "requirements": ["Fancy AI Pro"],
-      "availability": "coming_soon"
+      "features": [
+        "七款角色驱动游戏",
+        "共享 JSON 回复管线",
+        "每角色游戏配图"
+      ],
+      "requirements": [
+        "Fancy AI Pro"
+      ],
+      "availability": "available"
     },
     {
       "id": "phone",
@@ -82,9 +104,15 @@
       "kind": "app",
       "builtIn": true,
       "version": "1.0",
-      "features": ["免提角色通话", "实时与保存转录", "设备或已装语音引擎"],
-      "requirements": ["Fancy AI Pro"],
-      "availability": "coming_soon"
+      "features": [
+        "免提角色通话",
+        "实时与保存转录",
+        "设备或已装语音引擎"
+      ],
+      "requirements": [
+        "Fancy AI Pro"
+      ],
+      "availability": "available"
     },
     {
       "id": "groups",
@@ -97,9 +125,13 @@
       "kind": "app",
       "builtIn": true,
       "version": "1.0",
-      "features": ["多角色房间", "@提及 轮转", "场景配图"],
+      "features": [
+        "多角色房间",
+        "@提及 轮转",
+        "场景配图"
+      ],
       "requirements": [],
-      "availability": "upcoming"
+      "availability": "available"
     },
     {
       "id": "root-creator",
@@ -112,9 +144,13 @@
       "kind": "app",
       "builtIn": true,
       "version": "1.0",
-      "features": ["简单想法输入", "JSON 角色卡写入", "保存前审核"],
+      "features": [
+        "简单想法输入",
+        "JSON 角色卡写入",
+        "保存前审核"
+      ],
       "requirements": [],
-      "availability": "upcoming"
+      "availability": "available"
     },
     {
       "id": "aura",
@@ -127,9 +163,15 @@
       "kind": "app",
       "builtIn": true,
       "version": "1.0",
-      "features": ["设备端生成", "提示词控制", "图库集成"],
-      "requirements": ["兼容的图像模型"],
-      "availability": "upcoming"
+      "features": [
+        "设备端生成",
+        "提示词控制",
+        "图库集成"
+      ],
+      "requirements": [
+        "兼容的图像模型"
+      ],
+      "availability": "available"
     },
     {
       "id": "aura-swap",
@@ -142,8 +184,15 @@
       "kind": "app",
       "builtIn": true,
       "version": "1.0",
-      "features": ["设备端处理", "双照片工作流", "导出到图库"],
-      "requirements": ["536 MiB 模型包", "6 GB 或以上内存"],
+      "features": [
+        "设备端处理",
+        "双照片工作流",
+        "导出到图库"
+      ],
+      "requirements": [
+        "536 MiB 模型包",
+        "6 GB 或以上内存"
+      ],
       "requiredDownloadBytes": 561837652
     },
     {
@@ -156,10 +205,14 @@
       "launchTarget": "aura",
       "kind": "package",
       "version": "1.0",
-      "features": ["照片放大", "画稿放大", "安装后离线可用"],
+      "features": [
+        "照片放大",
+        "画稿放大",
+        "安装后离线可用"
+      ],
       "requirements": [],
       "requiredDownloadBytes": 42638892,
-      "availability": "upcoming"
+      "availability": "available"
     },
     {
       "id": "face-enhance",
@@ -171,7 +224,11 @@
       "launchTarget": "aura",
       "kind": "package",
       "version": "1.0",
-      "features": ["设备端人脸检测", "本地人脸修正", "安装后离线可用"],
+      "features": [
+        "设备端人脸检测",
+        "本地人脸修正",
+        "安装后离线可用"
+      ],
       "requirements": [],
       "requiredDownloadBytes": 26328320,
       "availability": "upcoming"
@@ -186,7 +243,11 @@
       "launchTarget": "memory",
       "kind": "package",
       "version": "1.0",
-      "features": ["改写感知回忆", "小巧离线嵌入模型", "无静默下载"],
+      "features": [
+        "改写感知回忆",
+        "小巧离线嵌入模型",
+        "无静默下载"
+      ],
       "requirements": [],
       "requiredDownloadBytes": 45949216,
       "availability": "upcoming"
@@ -202,9 +263,13 @@
       "kind": "app",
       "builtIn": true,
       "version": "1.0",
-      "features": ["设备端测量", "后端对比", "不占用桌面"],
+      "features": [
+        "设备端测量",
+        "后端对比",
+        "不占用桌面"
+      ],
       "requirements": [],
-      "availability": "upcoming"
+      "availability": "available"
     },
     {
       "id": "storage",
@@ -217,7 +282,11 @@
       "kind": "app",
       "builtIn": true,
       "version": "1.0",
-      "features": ["应用存储浏览", "文件导入导出", "可选桌面磁贴"],
+      "features": [
+        "应用存储浏览",
+        "文件导入导出",
+        "可选桌面磁贴"
+      ],
       "requirements": []
     },
     {
@@ -231,9 +300,13 @@
       "kind": "app",
       "builtIn": true,
       "version": "1.0",
-      "features": ["自定义世界知识条目", "角色指派", "关键词激活"],
+      "features": [
+        "自定义世界知识条目",
+        "角色指派",
+        "关键词激活"
+      ],
       "requirements": [],
-      "availability": "upcoming"
+      "availability": "available"
     },
     {
       "id": "root-producer",
@@ -246,10 +319,17 @@
       "kind": "app",
       "builtIn": true,
       "version": "1.0",
-      "features": ["Root 写的音乐计划与歌词", "30 秒片段或完整歌曲", "私密播放与导出"],
-      "requirements": ["OpenRouter API 密钥", "付费预览生成"],
+      "features": [
+        "Root 写的音乐计划与歌词",
+        "30 秒片段或完整歌曲",
+        "私密播放与导出"
+      ],
+      "requirements": [
+        "OpenRouter API 密钥",
+        "付费预览生成"
+      ],
       "featured": true,
-      "availability": "upcoming"
+      "availability": "available"
     }
   ]
 }

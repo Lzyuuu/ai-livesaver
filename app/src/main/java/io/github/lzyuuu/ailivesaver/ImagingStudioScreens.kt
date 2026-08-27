@@ -52,6 +52,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -743,6 +744,9 @@ private fun BackendSelector(
 
 @Composable
 private fun OnDeviceModelCard() {
+    val context = LocalContext.current
+    var downloadPercent by remember { mutableStateOf<Int?>(null) }
+    var modelReady by remember { ImagingModelStore.isReady(context).let { mutableStateOf(it) } }
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -758,28 +762,47 @@ private fun OnDeviceModelCard() {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                "None selected",
-                color = Color(0xFFA6A6B0),
+                if (modelReady) "CyberRealistic (SD 1.5 · LCM · MNN)" else "None selected",
+                color = if (modelReady) Color.White else Color(0xFFA6A6B0),
                 fontWeight = FontWeight.Normal,
                 fontSize = 15.sp,
                 modifier = Modifier.weight(1f),
             )
-            Icon(
-                Icons.AutoMirrored.Filled.ArrowForward,
-                contentDescription = null,
-                tint = ImagingMuted,
-                modifier = Modifier.size(16.dp),
-            )
+            if (!modelReady) {
+                Icon(
+                    Icons.AutoMirrored.Filled.ArrowForward,
+                    contentDescription = null,
+                    tint = ImagingMuted,
+                    modifier = Modifier.size(16.dp),
+                )
+            }
         }
         Text(
-            "No image model installed yet — download one to generate images on-device.",
+            if (modelReady) {
+                "模型已就绪，可在 On-device 模式下生成本地图片。"
+            } else {
+                "No image model installed yet — download one to generate images on-device."
+            },
             color = ImagingMuted,
             fontSize = 11.sp,
             lineHeight = 15.sp,
         )
         Spacer(Modifier.height(2.dp))
         Button(
-            onClick = { /* Model Store is issue #29; CTA matches reference */ },
+            onClick = {
+                if (modelReady || downloadPercent != null) return@Button
+                downloadPercent = 0
+                ImagingModelStore.downloadAll(
+                    context,
+                    onProgress = { done, total ->
+                        downloadPercent = ((done * 100) / total.coerceAtLeast(1L)).toInt().coerceIn(0, 100)
+                    },
+                    onDone = {
+                        downloadPercent = null
+                        modelReady = ImagingModelStore.isReady(context)
+                    },
+                )
+            },
             modifier = Modifier
                 .fillMaxWidth()
                 .height(44.dp)
@@ -790,13 +813,33 @@ private fun OnDeviceModelCard() {
             ),
             shape = RoundedCornerShape(12.dp),
         ) {
-            ImagingDownloadGlyph(modifier = Modifier.size(16.dp), color = ImagingBg)
-            Spacer(Modifier.width(8.dp))
-            Text(
-                "Download CyberRealistic (SD 1.5 · 1.3 GB)",
-                fontWeight = FontWeight.SemiBold,
-                fontSize = 12.sp,
-            )
+            when {
+                downloadPercent != null -> Text(
+                    "下载中 $downloadPercent% （CyberRealistic · 11 个文件 · 1.2 GB）",
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 12.sp,
+                )
+                modelReady -> Text(
+                    "CyberRealistic 已就绪",
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 12.sp,
+                )
+                else -> {
+                    ImagingDownloadGlyph(modifier = Modifier.size(16.dp), color = ImagingBg)
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        "Download CyberRealistic (SD 1.5 · 1.3 GB)",
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 12.sp,
+                    )
+                }
+            }
+        }
+        if (modelReady) {
+            TextButton(onClick = {
+                ImagingModelStore.remove(context)
+                modelReady = false
+            }) { Text("移除模型", color = ImagingMuted, fontSize = 11.sp) }
         }
     }
 }

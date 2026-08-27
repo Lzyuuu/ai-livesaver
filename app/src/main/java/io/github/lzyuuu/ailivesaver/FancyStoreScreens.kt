@@ -47,6 +47,13 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -68,6 +75,10 @@ internal fun FancyStoreScreen(
     var products by remember { mutableStateOf(catalog.loadProducts()) }
     var seg by remember { mutableStateOf("store") }
     var query by remember { mutableStateOf("") }
+    var selectedCategory by rememberSaveable { mutableStateOf("全部") }
+    val storeCategories = remember(products) {
+        listOf("全部") + products.map { it.category }.distinct()
+    }
     var detailId by remember { mutableStateOf<String?>(null) }
     var installs by remember { mutableStateOf(catalog.loadInstallStatus(products)) }
     val downloading = remember { mutableStateListOf<String>() }
@@ -247,57 +258,79 @@ internal fun FancyStoreScreen(
                         },
                     )
                 }
-
-                val available = filtered.filter { it.availability == StoreAvailability.AVAILABLE }
-                val soon = filtered.filter { it.availability == StoreAvailability.COMING_SOON }
-                val upcoming = filtered.filter { it.availability == StoreAvailability.UPCOMING }
-
-                if (available.isNotEmpty()) {
-                    item { StoreSectionLabel("可获取 · ${available.size}") }
-                    items(available) { p ->
-                        val status = installs[p.id] ?: InstallStatus.NOT_INSTALLED
-                        StoreProductRow(
-                            product = p,
-                            status = status,
-                            downloading = downloading.contains(p.id),
-                            onRowClick = { detailId = p.id },
-                            onAction = {
-                                when {
-                                    downloading.contains(p.id) -> Unit
-                                    status == InstallStatus.INSTALLED -> onOpenApp(storeAppForProduct(p))
-                                    else -> beginDownload(p.id)
-                                }
-                            },
-                            actionLabel = if (status == InstallStatus.INSTALLED) "打开" else null,
-                        )
+                // 分类过滤行（参考 V4.51：全部/Social/Characters/… 横向滚动 chips）。
+                item {
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        storeCategories.forEach { category ->
+                            val selected = selectedCategory == category
+                            FilterChip(
+                                selected = selected,
+                                onClick = { selectedCategory = category },
+                                label = { Text(category) },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    containerColor = Color.Transparent,
+                                    selectedContainerColor = FancyGold.copy(alpha = .18f),
+                                    labelColor = FancyCream.copy(alpha = .75f),
+                                    selectedLabelColor = FancyGold,
+                                ),
+                            )
+                        }
                     }
                 }
-                if (soon.isNotEmpty()) {
-                    item { StoreSectionLabel("即将开放 · ${soon.size}") }
-                    items(soon) { p ->
-                        StoreProductRow(
-                            product = p,
-                            status = InstallStatus.NOT_INSTALLED,
-                            downloading = false,
-                            onRowClick = { detailId = p.id },
-                            onAction = {},
-                            actionLabel = "即将开放",
-                            disabled = true,
-                        )
+                val categoryFiltered = if (selectedCategory == "全部") {
+                    filtered
+                } else {
+                    filtered.filter { it.category == selectedCategory }
+                }
+                // 精选位（参考：Root Producer 大卡）。
+                val featured = categoryFiltered.firstOrNull { it.featured }
+                if (featured != null) {
+                    item {
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(20.dp))
+                                .clickable { detailId = featured.id }
+                                .testTag("store-featured"),
+                            colors = CardDefaults.cardColors(
+                                containerColor = FancyGold.copy(alpha = .14f),
+                            ),
+                        ) {
+                            Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Text("精选", color = FancyGold, fontSize = 11.sp)
+                                Text(
+                                    featured.name,
+                                    color = Color.White,
+                                    fontSize = 26.sp,
+                                    fontWeight = FontWeight.Bold,
+                                )
+                                Text(featured.tagline, color = FancyCream.copy(alpha = .7f), fontSize = 14.sp)
+                            }
+                        }
                     }
                 }
-                if (upcoming.isNotEmpty()) {
-                    item { StoreSectionLabel("即将推出 · ${upcoming.size}") }
-                    items(upcoming) { p ->
-                        StoreProductRow(
-                            product = p,
-                            status = InstallStatus.NOT_INSTALLED,
-                            downloading = false,
-                            onRowClick = { detailId = p.id },
-                            onAction = {},
-                            actionLabel = "即将推出",
-                            disabled = true,
-                        )
+                item { StoreSectionLabel("发现") }
+                // 发现网格（参考：2 列卡片，全部可用态可获取）。
+                val gridRows = categoryFiltered.chunked(2)
+                gridRows.forEach { rowProducts ->
+                    item {
+                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            rowProducts.forEach { p ->
+                                StoreGridTile(
+                                    product = p,
+                                    installed = (installs[p.id] ?: InstallStatus.NOT_INSTALLED) == InstallStatus.INSTALLED,
+                                    downloading = downloading.contains(p.id),
+                                    onClick = { detailId = p.id },
+                                    modifier = Modifier.weight(1f),
+                                )
+                            }
+                            if (rowProducts.size == 1) Spacer(Modifier.weight(1f))
+                        }
                     }
                 }
             }
@@ -494,6 +527,65 @@ private fun StatusBadge(product: StoreProduct, status: InstallStatus, downloadin
                 .background(color.copy(alpha = .14f))
                 .padding(horizontal = 7.dp, vertical = 3.dp),
         )
+    }
+}
+
+@Composable
+private fun StoreGridTile(
+    product: StoreProduct,
+    installed: Boolean,
+    downloading: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Card(
+        modifier = modifier
+            .clip(RoundedCornerShape(16.dp))
+            .clickable(onClick = onClick)
+            .testTag("store-tile-${product.id}"),
+        colors = CardDefaults.cardColors(containerColor = FancyNavyMid.copy(alpha = .8f)),
+    ) {
+        Column {
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .height(96.dp)
+                    .background(FancyGold.copy(alpha = .12f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    product.symbol,
+                    color = FancyGold,
+                    fontSize = 34.sp,
+                    fontWeight = FontWeight.Bold,
+                )
+            }
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                Text(product.name, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                Text(
+                    product.tagline,
+                    color = FancyCream.copy(alpha = .6f),
+                    fontSize = 11.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    when {
+                        downloading -> "获取中…"
+                        installed -> "已安装"
+                        else -> "+"
+                    },
+                    color = if (downloading) FancyCream.copy(alpha = .6f) else FancyGold,
+                    fontSize = 13.sp,
+                )
+            }
+        }
     }
 }
 

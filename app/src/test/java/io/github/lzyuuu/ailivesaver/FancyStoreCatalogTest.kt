@@ -26,17 +26,21 @@ class FancyStoreCatalogTest {
         val products = FancyStoreCatalogParser.parse(loadShippedCatalog())
         assertEquals(17, products.size)
 
+        // 目录扩回参考 V4.51 的规模：15 可用（参考 14 + 我们多保留的 aura-swap），
+        // 仅参考没有的两个差异化包保持 upcoming。
         val buckets = StoreCatalogBuckets.from(products)
-        assertEquals(6, buckets.available.size)
-        assertEquals(2, buckets.comingSoon.size)
-        assertEquals(9, buckets.upcoming.size)
+        assertEquals(15, buckets.available.size)
+        assertEquals(0, buckets.comingSoon.size)
+        assertEquals(2, buckets.upcoming.size)
 
         assertEquals(
-            setOf("y", "ustagram", "rebbit", "binder", "storage", "aura-swap"),
+            setOf(
+                "y", "ustagram", "rebbit", "binder", "games", "phone", "groups",
+                "root-creator", "aura", "aura-swap", "hd-upscalers", "benchmark",
+                "storage", "lorebook", "root-producer",
+            ),
             buckets.available.map { it.id }.toSet(),
         )
-        assertEquals(setOf("games", "phone"), buckets.comingSoon.map { it.id }.toSet())
-        assertTrue(buckets.upcoming.any { it.id == "hd-upscalers" && it.kind == "package" })
         assertTrue(buckets.upcoming.any { it.id == "face-enhance" && it.kind == "package" })
         assertTrue(buckets.upcoming.any { it.id == "memory-pack" && it.kind == "package" })
     }
@@ -48,13 +52,19 @@ class FancyStoreCatalogTest {
         assertEquals(561837652L, auraSwap.requiredDownloadBytes)
         assertTrue(auraSwap.requirements.any { it.contains("6 GB") })
 
+        // 参考原则（仓库既定）：入口开放、无 Pro 墙——游戏可获取；详情保留参考的
+        // "Fancy AI Pro" 描述文案，但不再构成获取门槛。
         val games = products.first { it.id == "games" }
-        assertEquals(StoreAvailability.COMING_SOON, games.availability)
-        assertTrue(games.requirements.contains("Fancy AI Pro"))
+        assertEquals(StoreAvailability.AVAILABLE, games.availability)
 
         val producer = products.first { it.id == "root-producer" }
         assertTrue(producer.featured)
-        assertEquals(StoreAvailability.UPCOMING, producer.availability)
+        assertEquals(StoreAvailability.AVAILABLE, producer.availability)
+
+        // Packages 同样尊重显式 availability：放大包可获取，另两个保持即将推出。
+        assertEquals(StoreAvailability.AVAILABLE, products.first { it.id == "hd-upscalers" }.availability)
+        assertEquals(StoreAvailability.UPCOMING, products.first { it.id == "face-enhance" }.availability)
+        assertEquals(StoreAvailability.UPCOMING, products.first { it.id == "memory-pack" }.availability)
     }
 
     @Test
