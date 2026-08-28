@@ -74,6 +74,7 @@ Java_io_github_lzyuuu_ailivesaver_LlamaNative_nativeStreamCompletion(
         jint maxTokens, jfloatArray jSampling, jobject callback) {
     auto *session = reinterpret_cast<LlamaSession *>(handle);
     if (!session || !session->model || !session->ctx) return -1;
+    LOGI("nativeStreamCompletion entry: max=%d", maxTokens);
     const char *raw = env->GetStringUTFChars(jPrompt, nullptr);
     const std::string prompt = wrapGemmaPrompt(raw);
     env->ReleaseStringUTFChars(jPrompt, raw);
@@ -128,12 +129,15 @@ Java_io_github_lzyuuu_ailivesaver_LlamaNative_nativeStreamCompletion(
     std::string full;
     for (int i = 0; i < maxTokens; ++i) {
         llama_batch batch = llama_batch_get_one(tokens.data(), static_cast<int32_t>(tokens.size()));
+        if (i % 10 == 0) LOGI("decode start: step=%d", i);
         if (llama_decode(session->ctx, batch) != 0) {
             LOGE("decode failed at %d", i);
             llama_sampler_free(smpl);
             return -1;
         }
+        if (i % 10 == 0) LOGI("decode done: step=%d", i);
         const llama_token next = llama_sampler_sample(smpl, session->ctx, -1);
+        if (i % 10 == 0) LOGI("decode progress: step=%d token=%d", i, next);
         if (llama_vocab_is_eog(vocab, next)) break;
         char piece[64];
         const int n = llama_token_to_piece(vocab, next, piece, sizeof(piece), 0, true);

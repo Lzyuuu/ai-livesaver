@@ -5,6 +5,8 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import java.io.File
 import org.junit.Assert.assertTrue
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import org.junit.Test
 import org.junit.runner.RunWith
 
@@ -16,6 +18,38 @@ import org.junit.runner.RunWith
  */
 @RunWith(AndroidJUnit4::class)
 class LlamaSmokeTest {
+    @Test
+    fun streamsWithSamplingChainWithinTimeout() {
+        assertTrue("libllama_jni.so 未编入", LlamaNative.isAvailable)
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val modelFile = java.io.File(context.filesDir, "gemma.gguf")
+        if (!modelFile.isFile) {
+            Log.w("LlamaSmokeTest", "模型未就位，跳过")
+            return
+        }
+        // 完整采样链路径（encodeSampling，与聊天路线一致）+ 420s 超时保护；
+        // 8G AVD 纯 CPU 实测：首次预填充 ~73s + 每 token 1-3s（模拟器无 GPU）。
+        val executor = Executors.newSingleThreadExecutor()
+        val future = executor.submit<String> {
+            val handle = LlamaNative.nativeLoadModel(modelFile.absolutePath, 2048, 4)
+            Log.d("LlamaSmokeTest", "sampling-chain: loaded handle=$handle")
+            assertTrue("模型加载失败", handle != 0L)
+            val reply = StringBuilder()
+            val n = LlamaNative.nativeStreamCompletion(
+                handle,
+                "用一句话介绍你自己。",
+                64,
+                LlamaChat.encodeSampling(GenerationSettings()),
+            ) { token -> reply.append(token) }
+            LlamaNative.nativeFree(handle)
+            Log.d("LlamaSmokeTest", "sampling-chain reply($n): $reply")
+            reply.toString()
+        }
+        val result = future.get(420, TimeUnit.SECONDS)
+        executor.shutdownNow()
+        assertTrue("空回复", result.isNotBlank())
+    }
+
     @Test
     fun loadsGemmaAndStreamsReply() {
         assertTrue("libllama_jni.so 未编入", LlamaNative.isAvailable)
