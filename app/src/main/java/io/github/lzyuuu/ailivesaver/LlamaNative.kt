@@ -33,6 +33,9 @@ internal object LlamaNative {
 
     external fun nativeFree(handle: Long)
 
+    /** Benchmark（SO-10）：加载→热身→计时 [steps] token，返回 tok/s；失败 -1。 */
+    external fun nativeBenchmark(path: String, steps: Int, nThreads: Int): Float
+
     fun interface TokenCallback {
         fun onToken(token: String)
     }

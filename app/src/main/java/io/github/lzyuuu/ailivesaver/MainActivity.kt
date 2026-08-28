@@ -886,6 +886,11 @@ private fun AiLivesaverApp(
                     contentPadding = padding,
                     onBack = { goDesktopHome() },
                 ) { TextButton(onClick = { showStorage = true }) { Text("打开存储详情", color = FancyGold) } }
+                DesktopApp.Benchmark -> BenchmarkAppScreen(
+                    contentPadding = padding,
+                    onOpenModelsEngine = { showModelsEngine = true },
+                    onBack = { goDesktopHome() },
+                )
                 DesktopApp.Binder -> BinderScreen(
                     contentPadding = padding,
                     store = worldStore,

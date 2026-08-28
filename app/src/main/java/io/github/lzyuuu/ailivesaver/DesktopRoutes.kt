@@ -25,6 +25,7 @@ enum class DesktopApp(
     Games("games", "Games"),
     AuraSwap("aura_swap", "Aura Swap"),
     Storage("storage", "Storage"),
+    Benchmark("benchmark", "Benchmark"),
     Store("store", "商店"),
     ;
 

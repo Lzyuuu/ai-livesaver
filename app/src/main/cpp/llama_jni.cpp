@@ -1,6 +1,7 @@
 #include <jni.h>
 #include <string>
 #include <vector>
+#include <chrono>
 #include <android/log.h>
 
 #include "llama.h"
@@ -154,4 +155,63 @@ Java_io_github_lzyuuu_ailivesaver_LlamaNative_nativeStreamCompletion(
     }
     llama_sampler_free(smpl);
     return static_cast<jint>(full.size());
+}
+
+/**
+ * Benchmark（SO-10）：加载→固定提示词热身 8 token→计时 [steps] 个目标 token→
+ * 返回 tok/s（贪心采样）。失败返回 -1。
+ */
+extern "C" JNIEXPORT jfloat JNICALL
+Java_io_github_lzyuuu_ailivesaver_LlamaNative_nativeBenchmark(
+        JNIEnv *env, jobject, jstring jPath, jint steps, jint nThreads) {
+    const char *path = env->GetStringUTFChars(jPath, nullptr);
+    auto mparams = llama_model_default_params();
+    mparams.n_gpu_layers = 0;
+    llama_model *model = llama_model_load_from_file(path, mparams);
+    if (!model) { LOGE("bench: model load failed"); return -1; }
+    auto cparams = llama_context_default_params();
+    cparams.n_ctx = 512;
+    cparams.n_threads = nThreads;
+    cparams.n_threads_batch = nThreads;
+    llama_context *ctx = llama_init_from_model(model, cparams);
+    if (!ctx) { llama_model_free(model); LOGE("bench: ctx init failed"); return -1; }
+    const llama_vocab *vocab = llama_model_get_vocab(model);
+    const char *prompt = "你好，请重复介绍你自己。";
+    std::vector<llama_token> tokens(256);
+    const int nPrompt = llama_tokenize(vocab, prompt, static_cast<int32_t>(strlen(prompt)),
+                                       tokens.data(), 256, true, true);
+    if (nPrompt <= 0) { llama_free(ctx); llama_model_free(model); LOGE("bench: tokenize failed"); return -1; }
+    tokens.resize(nPrompt);
+    llama_sampler *smpl = llama_sampler_chain_init(llama_sampler_chain_default_params());
+    llama_sampler_chain_add(smpl, llama_sampler_init_greedy());
+    // 热身 8 token（含首次预填充的冷启动成本，模拟真实对话）。
+    for (int i = 0; i < 8; ++i) {
+        llama_batch batch = llama_batch_get_one(tokens.data(), static_cast<int32_t>(tokens.size()));
+        if (llama_decode(ctx, batch) != 0) {
+            llama_sampler_free(smpl); llama_free(ctx); llama_model_free(model);
+            LOGE("bench: warmup decode failed"); return -1;
+        }
+        const llama_token next = llama_sampler_sample(smpl, ctx, -1);
+        if (llama_vocab_is_eog(vocab, next)) break;
+        tokens.clear(); tokens.push_back(next);
+    }
+    // 计时段。
+    const auto start = std::chrono::steady_clock::now();
+    int generated = 0;
+    for (int i = 0; i < steps; ++i) {
+        llama_batch batch = llama_batch_get_one(tokens.data(), static_cast<int32_t>(tokens.size()));
+        if (llama_decode(ctx, batch) != 0) { llama_sampler_free(smpl); llama_free(ctx); llama_model_free(model); return -1; }
+        const llama_token next = llama_sampler_sample(smpl, ctx, -1);
+        if (llama_vocab_is_eog(vocab, next)) break;
+        generated++;
+        tokens.clear(); tokens.push_back(next);
+    }
+    const auto elapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::steady_clock::now() - start).count();
+    llama_sampler_free(smpl);
+    llama_free(ctx);
+    llama_model_free(model);
+    const float tokPerSec = elapsedMs > 0 ? generated * 1000.0f / elapsedMs : 0.0f;
+    LOGI("bench result: %d tokens in %lld ms => %.2f tok/s", generated, (long long)elapsedMs, tokPerSec);
+    return tokPerSec;
 }

@@ -880,6 +880,7 @@ private fun iconFor(app: DesktopApp): ImageVector = when (app) {
     DesktopApp.Games -> Icons.Default.Star
     DesktopApp.AuraSwap -> Icons.Default.Favorite
     DesktopApp.Storage -> Icons.Default.Info
+    DesktopApp.Benchmark -> Icons.Default.Info
     DesktopApp.Store -> Icons.Default.Star
 }
 
