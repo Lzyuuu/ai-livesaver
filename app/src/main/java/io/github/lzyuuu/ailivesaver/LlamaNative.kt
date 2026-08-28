@@ -16,8 +16,20 @@ internal object LlamaNative {
     /** 加载模型，返回会话句柄；失败返回 0。 */
     external fun nativeLoadModel(path: String, nCtx: Int, nThreads: Int): Long
 
-    /** 流式补全：逐 token 回调 [TokenCallback.onToken]，返回完整文本长度。 */
-    external fun nativeStreamCompletion(handle: Long, prompt: String, maxTokens: Int, callback: TokenCallback): Int
+    /**
+     * 流式补全：逐 token 回调 [TokenCallback.onToken]，返回完整文本长度。
+     * [sampling] 编码专家采样参数（见 cpp/llama_jni.cpp）：10 floats =
+     * temperature, topP, minP, repetitionPenalty, penaltyWindow,
+     * xtcProbability, xtcThreshold, dryMultiplier, dryBase, dryAllowedLength。
+     * 传 null 走贪心。
+     */
+    external fun nativeStreamCompletion(
+        handle: Long,
+        prompt: String,
+        maxTokens: Int,
+        sampling: FloatArray?,
+        callback: TokenCallback,
+    ): Int
 
     external fun nativeFree(handle: Long)
 

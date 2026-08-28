@@ -71,7 +71,7 @@ Java_io_github_lzyuuu_ailivesaver_LlamaNative_nativeFree(JNIEnv *, jobject, jlon
 extern "C" JNIEXPORT jint JNICALL
 Java_io_github_lzyuuu_ailivesaver_LlamaNative_nativeStreamCompletion(
         JNIEnv *env, jobject, jlong handle, jstring jPrompt,
-        jint maxTokens, jobject callback) {
+        jint maxTokens, jfloatArray jSampling, jobject callback) {
     auto *session = reinterpret_cast<LlamaSession *>(handle);
     if (!session || !session->model || !session->ctx) return -1;
     const char *raw = env->GetStringUTFChars(jPrompt, nullptr);
@@ -96,9 +96,34 @@ Java_io_github_lzyuuu_ailivesaver_LlamaNative_nativeStreamCompletion(
     jclass callbackClass = env->GetObjectClass(callback);
     jmethodID onToken = env->GetMethodID(callbackClass, "onToken", "(Ljava/lang/String;)V");
 
+    // 采样链：专家采样参数（GenerationSettings.expertSampling）由 Kotlin 侧编码为
+    // sampling[10] = {temperature, topP, minP, repPenalty, penaltyWindow,
+    //                 xtcProbability, xtcThreshold, dryMultiplier, dryBase, dryAllowedLength}
     auto sparams = llama_sampler_chain_default_params();
     llama_sampler *smpl = llama_sampler_chain_init(sparams);
-    llama_sampler_chain_add(smpl, llama_sampler_init_greedy());
+    jfloat *s = jSampling ? env->GetFloatArrayElements(jSampling, nullptr) : nullptr;
+    if (s) {
+        const int32_t nVocab = llama_vocab_n_tokens(vocab);
+        if (s[3] > 1.0f || s[4] > 0) {
+            llama_sampler_chain_add(smpl, llama_sampler_init_penalties(
+                    nVocab, static_cast<int32_t>(s[4]), s[3], 0.0f, 0.0f));
+        }
+        if (s[7] > 0.0f) {
+            const char *seqBreakers[] = {"\n"};
+            llama_sampler_chain_add(smpl, llama_sampler_init_dry(
+                    vocab, s[7], s[8], static_cast<int32_t>(s[9]), 512, seqBreakers, 1));
+        }
+        if (s[5] > 0.0f) {
+            llama_sampler_chain_add(smpl, llama_sampler_init_xtc(s[5], s[6], 16, 0));
+        }
+        if (s[1] < 1.0f) llama_sampler_chain_add(smpl, llama_sampler_init_top_p(s[1], 16));
+        if (s[2] < 1.0f) llama_sampler_chain_add(smpl, llama_sampler_init_min_p(s[2], 16));
+        llama_sampler_chain_add(smpl, llama_sampler_init_temp(s[0]));
+        llama_sampler_chain_add(smpl, llama_sampler_init_dist(0));
+    } else {
+        llama_sampler_chain_add(smpl, llama_sampler_init_greedy());
+    }
+    if (s) env->ReleaseFloatArrayElements(jSampling, s, JNI_ABORT);
 
     std::string full;
     for (int i = 0; i < maxTokens; ++i) {

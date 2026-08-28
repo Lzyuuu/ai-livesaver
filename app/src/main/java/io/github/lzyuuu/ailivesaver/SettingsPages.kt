@@ -69,7 +69,7 @@ internal fun readHistoryWindowMessages(context: android.content.Context): Int =
 val TEXT_SIZE_SCALES = linkedMapOf("small" to 0.85f, "default" to 1.0f, "large" to 1.15f, "xlarge" to 1.3f)
 
 @Composable
-private fun SettingsPageScaffold(
+internal fun SettingsPageScaffold(
     titleRes: Int,
     testTag: String,
     contentPadding: PaddingValues,
@@ -101,7 +101,7 @@ private fun SettingsPageScaffold(
 }
 
 @Composable
-private fun PageCard(content: @Composable () -> Unit) {
+internal fun PageCard(content: @Composable () -> Unit) {
     Card(Modifier.fillMaxWidth()) {
         Column(
             Modifier.padding(16.dp),
@@ -615,27 +615,6 @@ private fun CleanupRowCard(
     }
 }
 
-@Composable
-internal fun ModelEngineSettingsScreen(
-    contentPadding: PaddingValues,
-    onBack: () -> Unit,
-) {
-    SettingsPageScaffold(R.string.settings_models_engine_title, "models-engine-screen", contentPadding, onBack) {
-        item {
-            PageCard {
-                Text(
-                    stringResource(R.string.settings_models_engine_summary),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                )
-                Text(
-                    stringResource(R.string.models_engine_stub_note),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-    }
-}
 
 @Composable
 internal fun DeveloperSettingsScreen(

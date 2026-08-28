@@ -1369,6 +1369,121 @@ private fun ConversationScreen(
             } else {
                 emptyList()
             }
+            // 本地 Gemma 引擎（阶段② #73）：激活且模型就绪时走 llama.cpp，失败回退云端。
+            if (LocalModels.isChatEngineReady(context.applicationContext)) {
+                val defaults = provider.loadDefaultGeneration()
+                val recentTurns = store.messages(character.id)
+                    .filter { it.active && it.status == "complete" }
+                    .dropLast(1)
+                    .takeLast(12)
+                    .map { (if (it.sender == "user") "user" else "model") to it.body }
+                val latestUser = store.messages(character.id)
+                    .lastOrNull { it.sender == "user" && it.active && it.status == "complete" }
+                    ?.body.orEmpty()
+                val localConfig = config.copy(model = "gemma-4-E4B-local", baseUrl = "local://llama.cpp")
+                LlamaChat.stream(
+                    context = context.applicationContext,
+                    characterName = character.name,
+                    persona = character.persona,
+                    systemInstruction = store.chatControls(character.id).let { _ ->
+                        defaults.selectedInstructionBody()
+                    },
+                    recent = recentTurns,
+                    latestUser = latestUser,
+                    generation = defaults,
+                    onDelta = { body ->
+                        streamingText = body
+                        val now = System.currentTimeMillis()
+                        if (now - lastPersistedAt >= 500) {
+                            runCatching {
+                                WorldStore(context.applicationContext).use {
+                                    it.updateAssistantDraft(reply.id, body)
+                                }
+                            }
+                            lastPersistedAt = now
+                        }
+                    },
+                ) { result ->
+                    result.fold(
+                        onSuccess = { text ->
+                            runCatching {
+                                WorldStore(context.applicationContext).use {
+                                    it.completeAssistantReply(
+                                        reply.id,
+                                        text,
+                                        "本地 · Gemma",
+                                        localConfig.model,
+                                    )
+                                }
+                                WorldStore(context.applicationContext).use { intentStore ->
+                                    queueChatReplyImageIntent(
+                                        chatControls,
+                                        context.applicationContext,
+                                        intentStore,
+                                        character,
+                                        text,
+                                    )
+                                }
+                                runCatching {
+                                    autoExtractMemories(context.applicationContext, character.id)
+                                }
+                            }
+                            onChanged()
+                        },
+                        onFailure = {
+                            // 本地失败：清空草稿，回退云端（同一条 reply 走完）。
+                            runCatching {
+                                WorldStore(context.applicationContext).use {
+                                    it.updateAssistantDraft(reply.id, "")
+                                }
+                            }
+                            ProviderChatClient.stream(
+                                config = config,
+                                character = character,
+                                messages = store.messages(character.id),
+                                memories = store.memories(character.id),
+                                recap = store.conversationRecap(character.id),
+                                worldFacts = store.worldFacts(),
+                                cognition = store.characterCognition(character.id),
+                                userContext = store.memberWorldContext("user"),
+                                characterContext = store.memberWorldContext("character:${character.id}"),
+                                relationship = relationship,
+                                onDelta = { body ->
+                                    streamingText = body
+                                },
+                                defaults = provider.loadDefaultGeneration(),
+                                callback = { cloudResult ->
+                                    cloudResult.fold(
+                                        onSuccess = { response ->
+                                            runCatching {
+                                                WorldStore(context.applicationContext).use {
+                                                    it.completeAssistantReply(
+                                                        reply.id,
+                                                        response.text,
+                                                        response.config.preset.displayName,
+                                                        response.config.model,
+                                                    )
+                                                }
+                                            }
+                                            onChanged()
+                                        },
+                                        onFailure = { failure ->
+                                            runCatching {
+                                                WorldStore(context.applicationContext).use {
+                                                    it.failAssistantReply(reply.id, failure.message.orEmpty())
+                                                }
+                                            }
+                                            error = failure.message.orEmpty()
+                                            onChanged()
+                                        },
+                                    )
+                                },
+                            )
+                        },
+                    )
+                }
+                return@Thread
+            }
             ProviderChatClient.stream(
                 config = config,
                 character = character,

@@ -537,6 +537,16 @@
     <string name="developer_diagnostics_section">诊断</string>
     <string name="developer_runtime_entry">运行状态与诊断</string>
     <string name="models_engine_stub_note">本机模型下载、导入与引擎切换将在后续版本接入；当前请使用「云 LLM 与图像」的云端推理。</string>
+    <string name="models_engine_ram_line">本机内存：%1$d MB</string>
+    <string name="models_engine_local_hint">下载 Gemma 本地大脑后，聊天可在无网络时继续，由 llama.cpp 引擎在手机上流式推理。</string>
+    <string name="models_engine_min_ram">建议内存 %1$d MB</string>
+    <string name="models_engine_ram_warning">本机内存低于该模型的建议值，加载可能失败。</string>
+    <string name="models_engine_download">下载</string>
+    <string name="models_engine_set_active">设为主脑</string>
+    <string name="models_engine_active">当前主脑</string>
+    <string name="models_engine_cloud_title">云端</string>
+    <string name="models_engine_cloud_note">关闭本地主脑即回到云端 Chat brain 路线（需网络与已配置的 Provider）。</string>
+    <string name="models_engine_cloud_active">云端</string>
     <string name="provider_settings">推理配置</string>
     <string name="provider_settings_summary">DeepSeek、OpenAI、OpenRouter 与自定义 Provider</string>
     <string name="voice_calls_settings">语音与通话</string>

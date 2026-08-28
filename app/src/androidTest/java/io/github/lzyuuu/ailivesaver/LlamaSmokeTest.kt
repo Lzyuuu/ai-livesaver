@@ -35,6 +35,7 @@ class LlamaSmokeTest {
             handle,
             "用一句话介绍你自己。",
             48,
+            null,
         ) { token -> reply.append(token) }
         LlamaNative.nativeFree(handle)
         val elapsed = System.currentTimeMillis() - genStart
