@@ -142,7 +142,8 @@ class YFeedFlowSmokeTest {
                 .isEmpty(),
         )
 
-        composeRule.onNodeWithTag("y-generate").performClick()
+        // 生成入口已改为固定 y-generate-pill。
+        composeRule.onNodeWithTag("y-generate-pill").performClick()
         composeRule.waitUntil(timeoutMillis = 15_000) {
             composeRule.onAllNodesWithTag("y-status", useUnmergedTree = true)
                 .fetchSemanticsNodes(atLeastOneRootRequired = false)

@@ -58,14 +58,18 @@ class FancyStoreFlowTest {
         openStoreFromDock()
         composeRule.onNodeWithTag("store-seg-lib").assertIsDisplayed()
         composeRule.onNodeWithTag("store-search").assertIsDisplayed()
-        // 三区呈现：可获取 / 即将开放 / 即将推出
-        composeRule.onNodeWithTag("store-row-y").assertIsDisplayed()
-        composeRule.onNodeWithTag("store-list").performScrollToNode(hasTestTag("store-row-games"))
-        composeRule.onNodeWithTag("store-row-games-disabled", useUnmergedTree = true).assertIsDisplayed()
-        composeRule.onNodeWithTag("store-row-phone-disabled", useUnmergedTree = true).assertExists()
-        // 即将推出的包
-        composeRule.onNodeWithTag("store-list").performScrollToNode(hasTestTag("store-row-hd-upscalers"))
-        composeRule.onNodeWithTag("store-row-hd-upscalers-disabled", useUnmergedTree = true).assertIsDisplayed()
+        // V4.51：精选位 + 发现网格（store-tile-*）；games 已可用。
+        composeRule.onNodeWithTag("store-featured").assertIsDisplayed()
+        composeRule.onNodeWithTag("store-list").performScrollToNode(hasTestTag("store-tile-y"))
+        composeRule.onNodeWithTag("store-tile-y").assertIsDisplayed()
+        composeRule.onNodeWithTag("store-list").performScrollToNode(hasTestTag("store-tile-games"))
+        composeRule.onNodeWithTag("store-tile-games").assertIsDisplayed()
+        assertTrue(
+            composeRule.onAllNodesWithTag("store-tile-games", useUnmergedTree = true)
+                .fetchSemanticsNodes().isNotEmpty(),
+        )
+        composeRule.onNodeWithTag("store-list").performScrollToNode(hasTestTag("store-tile-face-enhance"))
+        composeRule.onNodeWithTag("store-tile-face-enhance").assertIsDisplayed()
     }
 
     @Test
@@ -73,9 +77,10 @@ class FancyStoreFlowTest {
         openStoreFromDock()
         composeRule.onNodeWithTag("store-search").performTextInput("Rebbit")
         composeRule.waitForIdle()
-        composeRule.onNodeWithTag("store-row-rebbit").assertIsDisplayed()
+        composeRule.onNodeWithTag("store-list").performScrollToNode(hasTestTag("store-tile-rebbit"))
+        composeRule.onNodeWithTag("store-tile-rebbit").assertIsDisplayed()
         assertTrue(
-            composeRule.onAllNodesWithTag("store-row-y", useUnmergedTree = true)
+            composeRule.onAllNodesWithTag("store-tile-y", useUnmergedTree = true)
                 .fetchSemanticsNodes().isEmpty(),
         )
     }
@@ -99,17 +104,18 @@ class FancyStoreFlowTest {
     fun installOpenAddHomeAndUninstallFlow() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         openStoreFromDock()
-        // 获取 → 模拟下载 → 已安装
-        composeRule.onNodeWithTag("store-row-ustagram-get").performClick()
-        composeRule.waitUntil(10_000) {
-            composeRule.onAllNodesWithTag("store-row-ustagram-open", useUnmergedTree = true)
-                .fetchSemanticsNodes().isNotEmpty()
-        }
-        composeRule.onNodeWithTag("store-row-ustagram-open").assertIsDisplayed()
-        // 详情弹层 + 添加首页
-        composeRule.onNodeWithTag("store-row-ustagram").performClick()
+        // 网格进入详情：获取 → 已安装（纯应用无下载资产，即时安装）
+        composeRule.onNodeWithTag("store-list").performScrollToNode(hasTestTag("store-tile-ustagram"))
+        composeRule.onNodeWithTag("store-tile-ustagram").performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("store-detail-sheet").assertIsDisplayed()
+        composeRule.onNodeWithTag("store-detail-get").performClick()
+        composeRule.waitUntil(10_000) {
+            composeRule.onAllNodesWithTag("store-detail-open", useUnmergedTree = true)
+                .fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onNodeWithTag("store-detail-open").assertIsDisplayed()
+        // 添加首页
         composeRule.onNodeWithTag("store-detail-add-home").performClick()
         composeRule.waitForIdle()
         // 持久化断言：数据库里是 INSTALLED + on_home
@@ -127,14 +133,15 @@ class FancyStoreFlowTest {
     }
 
     @Test
-    fun comingSoonCannotInstall() {
+    fun upcomingPackageCannotInstall() {
         openStoreFromDock()
-        composeRule.onNodeWithTag("store-list").performScrollToNode(hasTestTag("store-row-games"))
-        composeRule.onNodeWithTag("store-row-games-disabled", useUnmergedTree = true).assertIsDisplayed()
-        composeRule.onNodeWithTag("store-row-games").performClick()
+        // V4.51：games 已可用；gating 语义由 upcoming 包（face-enhance）承担。
+        composeRule.onNodeWithTag("store-list").performScrollToNode(hasTestTag("store-tile-face-enhance"))
+        composeRule.onNodeWithTag("store-tile-face-enhance").performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("store-detail-sheet").assertIsDisplayed()
-        // 详情内没有获取按钮，只有"即将开放"文案
+        // 详情内没有获取按钮，只有"即将推出"文案
+        composeRule.onNodeWithTag("store-detail-upcoming", useUnmergedTree = true).assertIsDisplayed()
         assertTrue(
             composeRule.onAllNodesWithTag("store-detail-get", useUnmergedTree = true)
                 .fetchSemanticsNodes().isEmpty(),

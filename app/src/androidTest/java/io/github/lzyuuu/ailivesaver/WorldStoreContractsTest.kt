@@ -51,7 +51,7 @@ class WorldStoreContractsTest {
             assertTrue(characterId > 0)
         }
         WorldStore(context, databaseName).use { store ->
-            assertEquals(25, store.writableDatabase.version)
+            assertEquals(WORLD_DATABASE_VERSION, store.writableDatabase.version)
             assertEquals("Legacy", store.writableDatabase.query("characters", arrayOf("name"), "id=?", arrayOf("1"), null, null, null).use { cursor ->
                 assertTrue(cursor.moveToFirst())
                 cursor.getString(0)
@@ -68,7 +68,7 @@ class WorldStoreContractsTest {
             assertTrue(characterId > 0)
         }
         WorldStore(context, databaseName).use { store ->
-            assertEquals(25, store.writableDatabase.version)
+            assertEquals(WORLD_DATABASE_VERSION, store.writableDatabase.version)
             assertEquals("LegacyStore", store.writableDatabase.query("characters", arrayOf("name"), "id=?", arrayOf("1"), null, null, null).use { cursor ->
                 assertTrue(cursor.moveToFirst())
                 cursor.getString(0)

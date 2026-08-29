@@ -7,6 +7,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.mrj.fancyai.sd.MnnUpscaler
 import java.io.File
 import org.junit.Assert.assertEquals
+import org.junit.Assume
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -24,7 +25,8 @@ class UpscalerSmokeTest {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         assertTrue("upscale lib 未编入或 ABI 不符", MnnUpscaler.available)
         val entry = UpscalerModelStore.catalog[0]
-        assertTrue("模型未就位（先推入 files/upscalers/）", UpscalerModelStore.isReady(context, entry))
+        // 缺前置时记为 IGNORED（与 Whisper/Llama 的门控一致）；模型就位即真实 4× 推理。
+        Assume.assumeTrue("模型未就位（先推入 files/upscalers/）", UpscalerModelStore.isReady(context, entry))
 
         val source = Bitmap.createBitmap(512, 512, Bitmap.Config.ARGB_8888)
         for (y in 0 until 512 step 32) {

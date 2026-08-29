@@ -45,8 +45,11 @@ class LorebookSmokeTest {
         composeRule.onNodeWithTag("desktop-grid-lorebook").performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("lorebook").assertIsDisplayed()
-        composeRule.onNodeWithText("Lorebook", useUnmergedTree = true).assertIsDisplayed()
-        composeRule.onNodeWithText("世界知识", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithText("世界书", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithText("知识", useUnmergedTree = true).assertIsDisplayed()
+        // 条目结构（v27）：总开关 + 关键词输入。
+        composeRule.onNodeWithTag("lorebook-master-toggle").assertIsDisplayed()
+        composeRule.onNodeWithTag("lorebook-keywords").assertIsDisplayed()
         composeRule.onNodeWithTag("lorebook-entry").assertIsDisplayed()
         composeRule.onNodeWithTag("lorebook-save").assertIsDisplayed()
         composeRule.onNodeWithTag("lorebook-empty").assertIsDisplayed()

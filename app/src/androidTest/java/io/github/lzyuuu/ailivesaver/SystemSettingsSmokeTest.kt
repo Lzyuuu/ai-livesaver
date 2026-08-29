@@ -35,26 +35,29 @@ class SystemSettingsSmokeTest {
     fun settingsExposeNineRootsAndKeyEntries() {
         composeRule.onNodeWithTag("desktop-dock-settings").performClick()
         composeRule.onNodeWithTag("me-settings-list").assertIsDisplayed()
-        val roots = listOf("chat_brain", "voice_calls", "image_generation", "you_personas", "app", "developer_about", "system_settings", "help_guide", "update")
+        // V4.51 索引重构：主列表 10 行（settingsPrimaryOrder）。
+        val roots = listOf("general", "models_engine", "cloud_llm_image", "voice", "instruction", "generation", "memory", "backups", "cleanup", "developer")
         roots.forEach { root ->
             composeRule.onNodeWithTag("me-settings-list")
-                .performScrollToNode(hasTestTag("settings-root-$root"))
-            composeRule.onNodeWithTag("settings-root-$root").assertIsDisplayed()
+                .performScrollToNode(hasTestTag("me-setting-$root"))
+            composeRule.onNodeWithTag("me-setting-$root").assertIsDisplayed()
         }
 
         composeRule.onNodeWithTag("me-settings-list")
             .performScrollToNode(hasTestTag("me-setting-voice"))
         composeRule.onNodeWithTag("me-setting-voice").assertIsDisplayed().performClick()
         composeRule.waitUntil(5_000) {
-            composeRule.onAllNodesWithText("Voice & Calls", useUnmergedTree = true)
+            composeRule.onAllNodesWithTag("voice-calls-settings", useUnmergedTree = true)
                 .fetchSemanticsNodes().isNotEmpty()
         }
-        composeRule.onNodeWithText("Voice & Calls", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("voice-calls-settings", useUnmergedTree = true).assertIsDisplayed()
 
         // The settings screen is a lazy list; verify the actual storage entry is reachable
         // through the same user-visible settings surface rather than assuming fixed layout.
         composeRule.onNodeWithText("返回", useUnmergedTree = true).performClick()
-        composeRule.onNodeWithTag("settings-search").performTextInput("storage")
+        // V4.51 索引无搜索框；storage 在扩展分组，直接滚动进入。
+        composeRule.onNodeWithTag("me-settings-list")
+            .performScrollToNode(hasTestTag("me-setting-storage"))
         composeRule.onNodeWithTag("me-setting-storage").assertIsDisplayed().performClick()
         composeRule.waitUntil(5_000) {
             composeRule.onAllNodesWithTag("storage-settings-screen", useUnmergedTree = true)
@@ -62,23 +65,21 @@ class SystemSettingsSmokeTest {
         }
         composeRule.onNodeWithTag("storage-settings-screen", useUnmergedTree = true).assertIsDisplayed()
 
+        // V4.51 索引不再含 identity/local_dream/imaging 行；扩展分组直达外观页。
         composeRule.onNodeWithText("返回", useUnmergedTree = true).performClick()
         composeRule.onNodeWithTag("me-settings-list")
-            .performScrollToNode(hasTestTag("me-setting-identity"))
-        composeRule.onNodeWithTag("me-setting-identity").performClick()
-        composeRule.onNodeWithTag("identity-screen", useUnmergedTree = true).assertIsDisplayed()
+            .performScrollToNode(hasTestTag("me-setting-appearance"))
+        composeRule.onNodeWithTag("me-setting-appearance").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("settings-appearance-screen", useUnmergedTree = true).assertIsDisplayed()
 
         composeRule.onNodeWithText("返回", useUnmergedTree = true).performClick()
         composeRule.onNodeWithTag("me-settings-list")
-            .performScrollToNode(hasTestTag("me-setting-local_dream"))
-        composeRule.onNodeWithTag("me-setting-local_dream").performClick()
-        composeRule.onNodeWithTag("local-dream-settings-screen", useUnmergedTree = true).assertIsDisplayed()
-
-        composeRule.onNodeWithText("返回", useUnmergedTree = true).performClick()
+            .performScrollToNode(hasTestTag("me-setting-privacy"))
+        composeRule.onNodeWithTag("me-setting-privacy").assertIsDisplayed()
         composeRule.onNodeWithTag("me-settings-list")
-            .performScrollToNode(hasTestTag("me-setting-imaging"))
-        composeRule.onNodeWithTag("me-setting-imaging").performClick()
-        composeRule.onNodeWithTag("imaging-studio", useUnmergedTree = true).assertIsDisplayed()
+            .performScrollToNode(hasTestTag("me-setting-update"))
+        composeRule.onNodeWithTag("me-setting-update").assertIsDisplayed()
     }
 
 }

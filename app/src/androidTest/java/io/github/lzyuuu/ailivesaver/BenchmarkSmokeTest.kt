@@ -67,8 +67,8 @@ class BenchmarkSmokeTest {
         composeRule.onNodeWithText("模型与引擎", useUnmergedTree = true)
             .assertIsDisplayed()
 
-        // 返回桌面。
-        composeRule.onNodeWithText("返回", useUnmergedTree = true).performClick()
+        // 返回桌面（标题行返回键为 IconButton，仅 contentDescription 无文本）。
+        composeRule.onNodeWithTag("benchmark-back").performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("system-desktop").assertIsDisplayed()
     }

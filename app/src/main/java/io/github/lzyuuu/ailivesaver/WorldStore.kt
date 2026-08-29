@@ -554,12 +554,13 @@ internal class WorldStore(
         if (oldVersion < 24) createSettingsDomainTables(database)
         if (oldVersion < 25) createStoreTables(database)
         if (oldVersion < 26) {
-            database.execSQL("ALTER TABLE profile ADD COLUMN username TEXT NOT NULL DEFAULT ''")
+            addColumnIfMissing(database, "profile", "username", "TEXT NOT NULL DEFAULT ''")
         }
         if (oldVersion < 27) {
             // 世界书条目结构（对齐参考）：关键词触发 + 条目启用开关。
-            database.execSQL("ALTER TABLE world_facts ADD COLUMN keywords TEXT NOT NULL DEFAULT ''")
-            database.execSQL("ALTER TABLE world_facts ADD COLUMN enabled INTEGER NOT NULL DEFAULT 1")
+            // 迁移幂等：测试会用 PRAGMA user_version 压回旧版重放升级，列已存在时跳过。
+            addColumnIfMissing(database, "world_facts", "keywords", "TEXT NOT NULL DEFAULT ''")
+            addColumnIfMissing(database, "world_facts", "enabled", "INTEGER NOT NULL DEFAULT 1")
         }
     }
 

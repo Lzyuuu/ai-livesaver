@@ -63,6 +63,7 @@ class MainActivitySmokeTest {
                     .isEmpty(),
             )
         }
+        // 桌面 Dock 保持英文入口名（Messenger），Root 卡常驻。
         composeRule.onNodeWithText("Messenger", useUnmergedTree = true).assertIsDisplayed()
         composeRule.onNodeWithText("Root", useUnmergedTree = true).assertIsDisplayed()
     }
@@ -164,8 +165,10 @@ class MainActivitySmokeTest {
             when (spec.playMode) {
                 GamePlayMode.FIXED -> {
                     assertTrue("${game.id} 选项映射不一致", expected in spec.outcomes)
+                    // 深化后的结果卡把结局文案与回合叙事拼接在同一 Text 内，用子串匹配。
                     composeRule.onNodeWithText(
                         context.getString(expected.detailRes),
+                        substring = true,
                         useUnmergedTree = true,
                     ).performScrollTo().assertIsDisplayed()
                 }
@@ -198,8 +201,8 @@ class MainActivitySmokeTest {
     fun presetsRootInPhone() {
         composeRule.onNodeWithTag("desktop-grid-phone").performClick()
         composeRule.waitForIdle()
-        composeRule.onNodeWithTag("desktop-back-bar").assertIsDisplayed()
-        composeRule.onNodeWithText("Phone", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("phone-back").assertIsDisplayed()
+        composeRule.onNodeWithText("通话", useUnmergedTree = true).assertIsDisplayed()
         composeRule.onNodeWithText("Root", useUnmergedTree = true).assertIsDisplayed()
     }
 
@@ -207,7 +210,7 @@ class MainActivitySmokeTest {
     fun opensMessengerFromDockAndReturns() {
         composeRule.onNodeWithTag("desktop-dock-messenger").performClick()
         composeRule.waitForIdle()
-        composeRule.onNodeWithText("Messenger", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithText("聊天", useUnmergedTree = true).assertIsDisplayed()
         // Messenger exposes the desktop action as an accessibility description on its icon.
         // Assert the user-visible external contract instead of requiring an implementation label.
         composeRule.onNodeWithContentDescription("返回桌面", useUnmergedTree = true).performClick()
@@ -219,10 +222,10 @@ class MainActivitySmokeTest {
         composeRule.onNodeWithTag("desktop-dock-imaging").performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("imaging-studio").assertIsDisplayed()
-        composeRule.onNodeWithText("Imaging Studio", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithText("图像工作室", useUnmergedTree = true).assertIsDisplayed()
         composeRule.onNodeWithTag("imaging-backend-on_device").assertIsDisplayed()
         composeRule.onNodeWithTag("imaging-on-device-card").assertIsDisplayed()
-        composeRule.onNodeWithText("None selected", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithText("尚未安装图像模型", substring = true, useUnmergedTree = true).assertIsDisplayed()
 
         composeRule.onNodeWithTag("imaging-backend-forge").performClick()
         composeRule.waitForIdle()

@@ -53,7 +53,8 @@ class StoreGatingAndDockTest {
         composeRule.waitForIdle()
         // 商店屏出现而非 Ustagram 屏
         composeRule.onNodeWithTag("store-seg-store").assertIsDisplayed()
-        composeRule.onNodeWithTag("store-row-ustagram").assertIsDisplayed()
+        composeRule.onNodeWithTag("store-list").performScrollToNode(hasTestTag("store-tile-ustagram"))
+        composeRule.onNodeWithTag("store-tile-ustagram").assertIsDisplayed()
         assertTrue(
             composeRule.onAllNodesWithTag("ustagram-screen", useUnmergedTree = true)
                 .fetchSemanticsNodes().isEmpty(),
@@ -124,8 +125,9 @@ class StoreGatingAndDockTest {
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("system-desktop").assertIsDisplayed()
         composeRule.onNodeWithTag("desktop-dock-store").assertIsDisplayed()
-        composeRule.onNodeWithTag("desktop-dock-ustagram").assertIsDisplayed()
-        composeRule.onNodeWithTag("desktop-dock-ustagram").performClick()
+        // V4.51 Dock 固定五入口；on_home 应用落在首页网格而非 Dock。
+        composeRule.onNodeWithTag("desktop-grid-ustagram").assertIsDisplayed()
+        composeRule.onNodeWithTag("desktop-grid-ustagram").performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("ustagram-screen", useUnmergedTree = true).assertIsDisplayed()
         composeRule.onNodeWithTag("ustagram-back", useUnmergedTree = true).performClick()
@@ -146,7 +148,7 @@ class StoreGatingAndDockTest {
     }
 
     @Test
-    fun comingSoonGamesIsGatedEvenWhenNotInstalled() {
+    fun upcomingPackageIsGatedEvenWhenNotInstalled() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         WorldStore(context).use { store ->
             store.writableDatabase.delete("app_install", null, null)
@@ -155,12 +157,13 @@ class StoreGatingAndDockTest {
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("desktop-dock-store").performClick()
         composeRule.waitForIdle()
-        composeRule.onNodeWithTag("store-list").performScrollToNode(hasTestTag("store-row-games"))
-        composeRule.onNodeWithTag("store-row-games").performClick()
+        // V4.51 目录：upcoming 包 face-enhance 不可安装，详情只有"即将推出"。
+        composeRule.onNodeWithTag("store-list").performScrollToNode(hasTestTag("store-tile-face-enhance"))
+        composeRule.onNodeWithTag("store-tile-face-enhance").performClick()
         composeRule.waitForIdle()
-        composeRule.onNodeWithTag("store-detail-coming-soon").assertIsDisplayed()
+        composeRule.onNodeWithTag("store-detail-upcoming", useUnmergedTree = true).assertIsDisplayed()
         assertTrue(
-            composeRule.onAllNodesWithTag("games-hub", useUnmergedTree = true)
+            composeRule.onAllNodesWithTag("store-detail-get", useUnmergedTree = true)
                 .fetchSemanticsNodes().isEmpty(),
         )
     }

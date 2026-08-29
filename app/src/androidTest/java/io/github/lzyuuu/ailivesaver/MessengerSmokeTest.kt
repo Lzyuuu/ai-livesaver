@@ -34,11 +34,11 @@ class MessengerSmokeTest {
     fun opensMessengerFromDockAndReturns() {
         composeRule.onNodeWithTag("desktop-dock-messenger").performClick()
         composeRule.waitForIdle()
-        composeRule.onNodeWithText("Messenger", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithText("聊天", useUnmergedTree = true).assertIsDisplayed()
         composeRule.onNodeWithTag("messenger-list").assertIsDisplayed()
         composeRule.onNodeWithTag("messenger-search").assertIsDisplayed()
         composeRule.onNodeWithTag("messenger-new").assertIsDisplayed()
-        composeRule.onNodeWithText("Recent Chats", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithText("最近聊天", useUnmergedTree = true).assertIsDisplayed()
         composeRule.onNodeWithText("Groups", useUnmergedTree = true).assertIsDisplayed()
         composeRule.onNodeWithText("+ New Character", useUnmergedTree = true).assertIsDisplayed()
         composeRule.onNodeWithTag("messenger-list-settings").assertIsDisplayed()
