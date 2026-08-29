@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
@@ -29,6 +30,7 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
@@ -41,6 +43,8 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
@@ -79,6 +83,7 @@ import androidx.core.view.WindowCompat
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlin.random.Random
 
 @Composable
 internal fun SystemDesktopScreen(
@@ -639,43 +644,95 @@ internal fun PhoneContactsScreen(
     onBack: () -> Unit,
     onCall: (Long) -> Unit,
 ) {
-    var query by rememberSaveable { mutableStateOf("") }
-    val visibleCharacters = characters.filter { query.isBlank() || it.name.contains(query, true) || it.persona.contains(query, true) }
-    PlaceholderAppScreen(
-        title = "Phone",
-        summary = "联系人列表。拨号会进入对应角色的 Messenger 对话。",
-        contentPadding = contentPadding,
-        onBack = onBack,
+    // 对齐参考 ref-75：eyebrow「电话」+「通话」大标题、金色「联系人」节、
+    // 头像 + 名字 + 在线绿点的联系人行（整行点击拨号）。
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(ReferencePalette.PageBg)
+            .padding(
+                top = contentPadding.calculateTopPadding(),
+                bottom = contentPadding.calculateBottomPadding(),
+            )
+            .testTag("phone-screen"),
     ) {
-        androidx.compose.material3.OutlinedTextField(value=query, onValueChange={query=it}, label={Text("搜索联系人")}, modifier=Modifier.fillMaxWidth().padding(horizontal=16.dp).testTag("phone-search"))
+        Box(Modifier.fillMaxWidth()) {
+            IconButton(
+                onClick = onBack,
+                modifier = Modifier
+                    .align(Alignment.CenterStart)
+                    .padding(start = 4.dp)
+                    .testTag("phone-back"),
+            ) {
+                Icon(
+                    Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = stringResource(R.string.desktop_back_to_home),
+                    tint = Color.White,
+                )
+            }
+            Column(
+                modifier = Modifier.align(Alignment.Center),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text(
+                    "电话",
+                    color = FancyCream.copy(alpha = 0.55f),
+                    fontSize = 12.sp,
+                    letterSpacing = 2.sp,
+                )
+                Text(
+                    "通话",
+                    color = Color.White,
+                    fontSize = 26.sp,
+                    fontWeight = FontWeight.Bold,
+                )
+            }
+        }
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(1.dp)
+                .background(ReferencePalette.Hairline),
+        )
+        Text(
+            "联系人",
+            color = FancyGold,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 14.dp),
+        )
         LazyColumn(
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+            contentPadding = PaddingValues(horizontal = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            items(visibleCharacters, key = { it.id }) { character ->
+            items(characters, key = { it.id }) { character ->
+                val avatarPath = remember(character.id, character.cardJson) {
+                    CharacterCardV2.profileFields(character).avatarPath
+                }
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(16.dp))
+                        .clip(RoundedCornerShape(18.dp))
                         .clickable { onCall(character.id) }
-                        .background(FancyNavyMid)
-                        .padding(14.dp)
+                        .padding(vertical = 10.dp, horizontal = 2.dp)
                         .testTag("phone-contact-${character.id}"),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(character.name, color = FancyCream, fontWeight = FontWeight.SemiBold)
-                        Text(
-                            character.persona,
-                            color = FancyCream.copy(alpha = 0.65f),
-                            fontSize = 12.sp,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                    IconButton(onClick = { onCall(character.id) }) {
-                        Icon(Icons.Default.Call, contentDescription = "拨号", tint = Color(0xFF5CC8A8))
-                    }
+                    Avatar(character.name.take(1).uppercase(), 56.dp, avatarPath)
+                    Spacer(Modifier.width(18.dp))
+                    Text(
+                        character.name,
+                        color = Color.White,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Box(
+                        Modifier
+                            .size(12.dp)
+                            .clip(androidx.compose.foundation.shape.CircleShape)
+                            .background(Color(0xFF22A55B)),
+                    )
                 }
             }
         }
@@ -866,6 +923,467 @@ internal fun GamePlaceholderScreen(
     }
 }
 
+/**
+ * 统一的可玩游戏会话屏：专属标题 + 规则卡片 + 开始按钮 + 核心操作控件 + 结果状态。
+ * 六个 Games Hub 入口共用本屏；玩法逻辑由 [GamesEngine] 纯函数驱动，便于单测。
+ */
+@Composable
+internal fun GameSessionScreen(
+    entry: GamesHubEntry,
+    contentPadding: PaddingValues,
+    onBack: () -> Unit,
+) {
+    FancyDarkSystemBars()
+
+    val spec = GamesEngine.specFor(entry.id)
+    if (spec == null) {
+        // 未来新增但尚未接入玩法的游戏保持原占位路径，不阻断入口。
+        GamePlaceholderScreen(entry = entry, contentPadding = contentPadding, onBack = onBack)
+        return
+    }
+
+    val sessionBg = Color(0xFF0D141C)
+    val cardSurface = Color(0xFF35343A)
+    val optionSurface = Color(0xFF2E2D33)
+    val titleColor = Color(0xFFF2F2F2)
+    val descColor = Color(0xFFA8ADB6)
+
+    var started by rememberSaveable(entry.id) { mutableStateOf(false) }
+    var outcome by remember(entry.id) { mutableStateOf<GameSessionOutcome?>(null) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(sessionBg)
+            .padding(
+                top = contentPadding.calculateTopPadding(),
+                bottom = contentPadding.calculateBottomPadding(),
+            )
+            .testTag("game-session-${entry.id}"),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 2.dp, end = 8.dp, bottom = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            IconButton(onClick = onBack) {
+                Icon(
+                    Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = stringResource(R.string.desktop_back_to_home),
+                    tint = Color.White,
+                )
+            }
+            Image(
+                painter = painterResource(entry.iconRes),
+                contentDescription = stringResource(entry.titleRes),
+                modifier = Modifier
+                    .size(34.dp)
+                    .clip(RoundedCornerShape(10.dp)),
+                contentScale = ContentScale.Fit,
+            )
+            Spacer(modifier = Modifier.width(10.dp))
+            Text(
+                stringResource(entry.titleRes),
+                color = titleColor,
+                fontFamily = FontFamily.Serif,
+                fontSize = 22.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(start = 15.dp, end = 15.dp, top = 6.dp, bottom = 18.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(18.dp))
+                    .background(cardSurface)
+                    .padding(horizontal = 14.dp, vertical = 13.dp)
+                    .testTag("game-session-rules-${entry.id}"),
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                    Text(
+                        stringResource(R.string.game_session_rules_label),
+                        color = FancyGold,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        letterSpacing = 1.sp,
+                    )
+                    Text(
+                        stringResource(spec.rulesRes),
+                        color = descColor,
+                        fontSize = 13.5.sp,
+                        lineHeight = 19.sp,
+                    )
+                }
+            }
+
+            if (!started) {
+                Button(
+                    onClick = { started = true },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(50.dp)
+                        .testTag("game-session-start-${entry.id}"),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = FancyGold,
+                        contentColor = Color(0xFF201A08),
+                    ),
+                    shape = RoundedCornerShape(16.dp),
+                ) {
+                    Text(
+                        stringResource(R.string.game_session_start),
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 15.sp,
+                    )
+                }
+            } else {
+                DeepGameBoard(entry = entry, spec = spec)
+            }
+        }
+    }
+}
+
+/** 六游戏深化玩法面板：按入口分发到各自规则状态机（每回合都有结果卡，结束给胜负终局）。 */
+@Composable
+private fun DeepGameBoard(entry: GamesHubEntry, spec: GameSessionSpec) {
+    when (entry.id) {
+        "dice_duel_rpg" -> BattleBoard(spec, dice = true)
+        "tactical_command" -> BattleBoard(spec, dice = false)
+        "world_adventure" -> JourneyBoard(spec)
+        "truth_or_dare" -> PromptBoard(spec)
+        "two_truths_lie" -> TwoTruthsBoard(spec)
+        "the_oracle" -> OracleBoard(spec)
+        else -> Unit
+    }
+}
+
+@Composable
+private fun GameOptionRow(tag: String, label: String, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
+            .background(Color(0xFF2E2D33))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 15.dp, vertical = 15.dp)
+            .testTag(tag),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            label,
+            color = Color(0xFFF2F2F2),
+            fontSize = 15.sp,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.weight(1f),
+        )
+        Icon(
+            Icons.AutoMirrored.Filled.ArrowForward,
+            contentDescription = null,
+            tint = FancyGold,
+            modifier = Modifier.size(16.dp),
+        )
+    }
+}
+
+@Composable
+private fun GameResultCard(tag: String, kind: GameResultKind, title: String, detail: String) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
+            .border(
+                1.dp,
+                when (kind) {
+                    GameResultKind.WIN -> FancyGold.copy(alpha = 0.8f)
+                    GameResultKind.LOSE -> Color(0xFFE06050).copy(alpha = 0.7f)
+                    GameResultKind.NEUTRAL -> Color.White.copy(alpha = 0.14f)
+                },
+                RoundedCornerShape(18.dp),
+            )
+            .background(Color(0xFF222127))
+            .padding(horizontal = 15.dp, vertical = 14.dp)
+            .testTag(tag),
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+            when (kind) {
+                GameResultKind.WIN -> Text(
+                    stringResource(R.string.game_outcome_win),
+                    color = FancyGold,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.2.sp,
+                )
+                GameResultKind.LOSE -> Text(
+                    stringResource(R.string.game_outcome_lose),
+                    color = Color(0xFFE06050),
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.2.sp,
+                )
+                GameResultKind.NEUTRAL -> Unit
+            }
+            Text(
+                title,
+                color = Color(0xFFF2F2F2),
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(
+                detail,
+                color = Color(0xFFA8ADB6),
+                fontSize = 13.5.sp,
+                lineHeight = 19.sp,
+            )
+        }
+    }
+}
+
+@Composable
+private fun GamePlayAgain(tag: String, onReset: () -> Unit) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        TextButton(
+            onClick = onReset,
+            modifier = Modifier.testTag(tag),
+        ) {
+            Text(stringResource(R.string.game_session_play_again), color = FancyGold)
+        }
+    }
+}
+
+/** 骰子对决 / 战术指挥：多回合 HP 战斗，每回合给叙事结果，终局给胜负。 */
+@Composable
+private fun BattleBoard(spec: GameSessionSpec, dice: Boolean) {
+    var battle by remember(spec.entryId) { mutableStateOf(GameBattleState()) }
+    var lastRolls by remember(spec.entryId) { mutableStateOf<Pair<Int, Int>?>(null) }
+    var lastTurn by remember(spec.entryId) { mutableStateOf<BattleTurn?>(null) }
+    var flavorIndex by remember(spec.entryId) { mutableStateOf(-1) }
+
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text(
+            stringResource(R.string.game_battle_hp, battle.playerHp, battle.enemyHp),
+            color = FancyGold,
+            fontWeight = FontWeight.Bold,
+        )
+        spec.options.forEachIndexed { index, option ->
+            GameOptionRow("game-option-${spec.entryId}-${option.id}", stringResource(option.labelRes)) {
+                if (battle.finished) return@GameOptionRow
+                if (dice) {
+                    val turn = GamesRules.diceDuelRound(battle, Random.Default)
+                    battle = turn.state
+                    lastRolls = Pair(turn.args[0], turn.args[1])
+                } else {
+                    val turn = GamesRules.tacticalRound(battle, index, Random.Default)
+                    battle = turn.state
+                    lastTurn = turn
+                    flavorIndex = index
+                }
+            }
+        }
+        // 每回合叙事（组合期解析字符串）。
+        val roundNarrative = if (dice) {
+            lastRolls?.let { (mine, theirs) ->
+                stringResource(R.string.game_dice_round_detail, mine, theirs)
+            }
+        } else {
+            lastTurn?.let { turn ->
+                if (flavorIndex in spec.outcomes.indices) {
+                    stringResource(spec.outcomes[flavorIndex].detailRes) + "\n" +
+                        stringResource(turn.detailRes, *turn.args.toTypedArray())
+                } else {
+                    null
+                }
+            }
+        }
+        roundNarrative?.let { narrative ->
+            val kind = when {
+                !battle.finished -> GameResultKind.NEUTRAL
+                battle.won -> GameResultKind.WIN
+                else -> GameResultKind.LOSE
+            }
+            val (title, detail) = when (kind) {
+                GameResultKind.WIN -> if (dice) {
+                    stringResource(R.string.game_dice_duel_rpg_outcome_hit_title) to
+                        stringResource(R.string.game_dice_duel_rpg_outcome_hit_detail)
+                } else {
+                    stringResource(R.string.game_tactical_victory_title) to
+                        stringResource(R.string.game_tactical_victory_detail)
+                }
+                GameResultKind.LOSE -> if (dice) {
+                    stringResource(R.string.game_dice_duel_rpg_outcome_miss_title) to
+                        stringResource(R.string.game_dice_duel_rpg_outcome_miss_detail)
+                } else {
+                    stringResource(R.string.game_tactical_defeat_title) to
+                        stringResource(R.string.game_tactical_defeat_detail)
+                }
+                GameResultKind.NEUTRAL -> "" to narrative
+            }
+            GameResultCard(
+                tag = "game-session-result-${spec.entryId}",
+                kind = kind,
+                title = title,
+                detail = if (kind == GameResultKind.NEUTRAL) narrative else "$detail\n$narrative",
+            )
+            GamePlayAgain("game-play-again-${spec.entryId}") {
+                battle = GameBattleState()
+                lastRolls = null
+                lastTurn = null
+                flavorIndex = -1
+            }
+        }
+    }
+}
+
+/** 世界冒险：5 站行程 + 8 回合限制；每回合的剧情文本来自选项固定结局。 */
+@Composable
+private fun JourneyBoard(spec: GameSessionSpec) {
+    var journey by remember(spec.entryId) { mutableStateOf(GameJourneyState()) }
+    var lastChoice by remember(spec.entryId) { mutableStateOf(-1) }
+
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text(
+            stringResource(R.string.game_journey_progress, journey.step, journey.total, journey.rounds),
+            color = FancyGold,
+            fontWeight = FontWeight.Bold,
+        )
+        spec.options.forEachIndexed { index, option ->
+            GameOptionRow("game-option-${spec.entryId}-${option.id}", stringResource(option.labelRes)) {
+                if (journey.finished) return@GameOptionRow
+                journey = GamesRules.worldAdventureStep(journey, Random.Default)
+                lastChoice = index
+            }
+        }
+        if (lastChoice in spec.outcomes.indices) {
+            val narrative = stringResource(spec.outcomes[lastChoice].detailRes)
+            val kind = when {
+                !journey.finished -> GameResultKind.NEUTRAL
+                journey.won -> GameResultKind.WIN
+                else -> GameResultKind.LOSE
+            }
+            val (title, detail) = when (kind) {
+                GameResultKind.WIN ->
+                    stringResource(R.string.game_world_victory_title) to stringResource(R.string.game_world_victory_detail)
+                GameResultKind.LOSE ->
+                    stringResource(R.string.game_world_defeat_title) to stringResource(R.string.game_world_defeat_detail)
+                GameResultKind.NEUTRAL -> "" to narrative
+            }
+            GameResultCard(
+                tag = "game-session-result-${spec.entryId}",
+                kind = kind,
+                title = title,
+                detail = if (kind == GameResultKind.NEUTRAL) narrative else "$detail\n$narrative",
+            )
+            GamePlayAgain("game-play-again-${spec.entryId}") {
+                journey = GameJourneyState()
+                lastChoice = -1
+            }
+        }
+    }
+}
+
+/** 真话/大冒险：选择后从题库抽任务；剧情结局文本保留在结果卡中。 */
+@Composable
+private fun PromptBoard(spec: GameSessionSpec) {
+    var promptRes by remember(spec.entryId) { mutableStateOf(0) }
+    var choiceIndex by remember(spec.entryId) { mutableStateOf(-1) }
+
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        spec.options.forEachIndexed { index, option ->
+            GameOptionRow("game-option-${spec.entryId}-${option.id}", stringResource(option.labelRes)) {
+                promptRes = GamesRules.truthOrDarePrompt(index, Random.Default)
+                choiceIndex = index
+            }
+        }
+        if (promptRes != 0 && choiceIndex in spec.outcomes.indices) {
+            GameResultCard(
+                tag = "game-session-result-${spec.entryId}",
+                kind = GameResultKind.NEUTRAL,
+                title = stringResource(spec.outcomes[choiceIndex].titleRes),
+                detail = stringResource(spec.outcomes[choiceIndex].detailRes) + "\n" +
+                    stringResource(R.string.game_tot_result_title) + "：" + stringResource(promptRes),
+            )
+            GamePlayAgain("game-play-again-${spec.entryId}") {
+                promptRes = 0
+                choiceIndex = -1
+            }
+        }
+    }
+}
+
+/** 两真一假：每轮三条陈述，猜中谎言才算胜；赢法随轮次变化。 */
+@Composable
+private fun TwoTruthsBoard(spec: GameSessionSpec) {
+    var round by remember(spec.entryId) { mutableStateOf(GamesRules.twoTruthsRound(Random.Default)) }
+    var guessed by remember(spec.entryId) { mutableStateOf(-1) }
+
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text(
+            stringResource(R.string.game_ttl_question),
+            color = Color(0xFFA8ADB6),
+            fontSize = 14.sp,
+            fontWeight = FontWeight.SemiBold,
+        )
+        round.statements.forEachIndexed { index, res ->
+            GameOptionRow("game-option-${spec.entryId}-${spec.options[index].id}", stringResource(res)) {
+                guessed = index
+            }
+        }
+        if (guessed >= 0) {
+            val correct = GamesRules.twoTruthsGuess(round, guessed)
+            GameResultCard(
+                tag = "game-session-result-${spec.entryId}",
+                kind = if (correct) GameResultKind.WIN else GameResultKind.LOSE,
+                title = stringResource(
+                    if (correct) R.string.game_ttl_correct_title else R.string.game_ttl_wrong_title,
+                ),
+                detail = stringResource(
+                    if (correct) R.string.game_ttl_correct_detail else R.string.game_ttl_wrong_detail,
+                ) + "\n" + stringResource(
+                    spec.outcomes.getOrElse(guessed) { spec.outcomes.first() }.detailRes,
+                ),
+            )
+            GamePlayAgain("game-play-again-${spec.entryId}") {
+                round = GamesRules.twoTruthsRound(Random.Default)
+                guessed = -1
+            }
+        }
+    }
+}
+
+/** 神谕：单次抽牌 + 逆位。 */
+@Composable
+private fun OracleBoard(spec: GameSessionSpec) {
+    var draw by remember(spec.entryId) { mutableStateOf<OracleDraw?>(null) }
+
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        spec.options.forEach { option ->
+            GameOptionRow("game-option-${spec.entryId}-${option.id}", stringResource(option.labelRes)) {
+                draw = GamesRules.oracleDraw(Random.Default)
+            }
+        }
+        draw?.let { current ->
+            GameResultCard(
+                tag = "game-session-result-${spec.entryId}",
+                kind = GameResultKind.NEUTRAL,
+                title = stringResource(current.card.titleRes) +
+                    if (current.reversed) stringResource(R.string.game_oracle_reversed_suffix) else "",
+                detail = stringResource(current.card.detailRes),
+            )
+            GamePlayAgain("game-play-again-${spec.entryId}") { draw = null }
+        }
+    }
+}
+
 private fun iconFor(app: DesktopApp): ImageVector = when (app) {
     DesktopApp.Messenger -> Icons.Default.Home
     DesktopApp.Imaging -> Icons.Default.Star
@@ -877,6 +1395,10 @@ private fun iconFor(app: DesktopApp): ImageVector = when (app) {
     DesktopApp.Rebbit -> Icons.Default.Home
     DesktopApp.Y -> Icons.Default.Info
     DesktopApp.Phone -> Icons.Default.Call
+    DesktopApp.Groups -> Icons.Default.Star
+    DesktopApp.RootProducer -> Icons.Default.Star
+    DesktopApp.Lorebook -> Icons.Default.Info
+    DesktopApp.RootCreator -> Icons.Default.Person
     DesktopApp.Games -> Icons.Default.Star
     DesktopApp.AuraSwap -> Icons.Default.Favorite
     DesktopApp.Storage -> Icons.Default.Info

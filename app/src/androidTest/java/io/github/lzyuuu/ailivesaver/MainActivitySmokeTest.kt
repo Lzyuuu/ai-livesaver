@@ -13,6 +13,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import kotlin.random.Random
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
@@ -91,13 +92,35 @@ class MainActivitySmokeTest {
         assertNoPaywall()
         composeRule.onNodeWithTag("games-entry-world_adventure").performClick()
         composeRule.waitForIdle()
-        composeRule.onNodeWithTag("game-placeholder-world_adventure").assertIsDisplayed()
+        // 进入可玩会话：专属标题 + 规则 + 开始按钮
+        composeRule.onNodeWithTag("game-session-world_adventure").assertIsDisplayed()
         composeRule.onNodeWithText("World Adventure", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("game-session-rules-world_adventure").assertIsDisplayed()
+        composeRule.onNodeWithTag("game-session-start-world_adventure").performClick()
+        composeRule.waitForIdle()
+        // 核心动作：选择选项 → 展示结果状态
+        composeRule.onNodeWithTag("game-option-world_adventure-forest")
+            .performScrollTo().performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("game-session-result-world_adventure")
+            .performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText(
-            context.getString(R.string.game_placeholder_status),
+            context.getString(R.string.game_world_adventure_outcome_forest_detail),
             useUnmergedTree = true,
-        ).assertIsDisplayed()
-        composeRule.onNodeWithTag("desktop-back-bar", useUnmergedTree = true).performClick()
+        ).performScrollTo().assertIsDisplayed()
+        // 再来一次：结果清空、核心控件保留
+        composeRule.onNodeWithTag("game-play-again-world_adventure").performScrollTo().performClick()
+        composeRule.waitForIdle()
+        assertTrue(
+            composeRule.onAllNodesWithTag("game-session-result-world_adventure", useUnmergedTree = true)
+                .fetchSemanticsNodes().isEmpty(),
+        )
+        composeRule.onNodeWithTag("game-option-world_adventure-forest").performScrollTo().assertIsDisplayed()
+        // 返回 Hub 与桌面
+        composeRule.onNodeWithContentDescription(
+            context.getString(R.string.desktop_back_to_home),
+            useUnmergedTree = true,
+        ).performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("games-hub").assertIsDisplayed()
         composeRule.onNodeWithContentDescription(
@@ -109,27 +132,50 @@ class MainActivitySmokeTest {
     }
 
     @Test
-    fun opensAllSixGamePlaceholdersWithoutPaywall() {
+    fun opensAllSixGameSessionsAndCompletesCoreAction() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         composeRule.onNodeWithTag("desktop-grid-games").performClick()
-        composeRule.waitForIdle()
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("games-hub").assertIsDisplayed()
         assertNoPaywall()
         GamesHubEntries.forEach { game ->
             composeRule.onNodeWithTag("games-entry-${game.id}").performClick()
             composeRule.waitForIdle()
-            composeRule.onNodeWithTag("game-placeholder-${game.id}").assertIsDisplayed()
+            // 进入：专属标题 + 规则 + 开始按钮
+            composeRule.onNodeWithTag("game-session-${game.id}").assertIsDisplayed()
             composeRule.onNodeWithText(
                 context.getString(game.titleRes),
                 useUnmergedTree = true,
             ).assertIsDisplayed()
-            composeRule.onNodeWithText(
-                context.getString(R.string.game_placeholder_status),
-                useUnmergedTree = true,
-            ).assertIsDisplayed()
+            composeRule.onNodeWithTag("game-session-rules-${game.id}").assertIsDisplayed()
+            composeRule.onNodeWithTag("game-session-start-${game.id}").performClick()
+            composeRule.waitForIdle()
+            // 核心动作：操作第一个核心控件 → 结果状态出现
+            val spec = GamesEngine.specFor(game.id)!!
+            composeRule.onNodeWithTag("game-option-${game.id}-${spec.options.first().id}")
+                .performScrollTo().performClick()
+            composeRule.waitForIdle()
+            composeRule.onNodeWithTag("game-session-result-${game.id}")
+                .performScrollTo().assertIsDisplayed()
+            // 结果与纯逻辑引擎一致（RANDOM 游戏断言命中结果池）
+            val expected = GamesEngine.play(game.id, 0, Random(1))
+            assertTrue("${game.id} 引擎未产出结果", expected != null)
+            checkNotNull(expected)
+            when (spec.playMode) {
+                GamePlayMode.FIXED -> {
+                    assertTrue("${game.id} 选项映射不一致", expected in spec.outcomes)
+                    composeRule.onNodeWithText(
+                        context.getString(expected.detailRes),
+                        useUnmergedTree = true,
+                    ).performScrollTo().assertIsDisplayed()
+                }
+                GamePlayMode.RANDOM -> assertTrue("${game.id} 结果不在池内", expected in spec.outcomePool)
+            }
             assertNoPaywall()
-            composeRule.onNodeWithTag("desktop-back-bar", useUnmergedTree = true).performClick()
+            composeRule.onNodeWithContentDescription(
+                context.getString(R.string.desktop_back_to_home),
+                useUnmergedTree = true,
+            ).performClick()
             composeRule.waitForIdle()
             composeRule.onNodeWithTag("games-hub").assertIsDisplayed()
         }

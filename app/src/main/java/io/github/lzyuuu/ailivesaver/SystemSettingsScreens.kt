@@ -86,6 +86,7 @@ internal fun VoiceCallsSettingsScreen(
                 }
             }
         }
+        voiceModelsSection()
     }
 }
 

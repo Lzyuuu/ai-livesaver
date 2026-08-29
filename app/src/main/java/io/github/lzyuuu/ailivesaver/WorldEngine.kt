@@ -471,7 +471,7 @@ internal object WorldEngine {
                     append("\nCurrent relationship with the user: ${it.label}. ${it.summary}")
                     append("\nRelationship behavior: ${relationshipBehaviorGuidance(it)}")
                 }
-                store.worldFacts().take(20).forEach { append("\nShared world fact: ${it.body}") }
+                selectLorebookFacts(store.worldFacts(), "").forEach { append("\nShared world fact: ${it.body}") }
                 store.characterCognition(actor.id).take(20).forEach {
                     append("\nPrivate character knowledge or belief: ${it.body}")
                 }

@@ -38,7 +38,7 @@ class AuraSwapSmokeTest {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         writeWelcomeGuideCompleted(context, true)
         WorldStore(context).use { DesktopSeed.ensureDesktopWorld(it, "焰宇", "issue-30") }
-        seedInstallOnHomeForSmoke(context, listOf("aura-swap"))
+        seedInstallOnHomeForSmoke(context, listOf("aura_swap"))
         composeRule.activityRule.scenario.recreate()
         composeRule.waitForIdle()
     }

@@ -1016,6 +1016,8 @@ internal object ProviderChatClient {
                     characterContext,
                     relationship,
                     webResults,
+                    conversationText = messages.takeLast(12)
+                        .joinToString("\n") { it.body },
                 ) + systemPromptAppendix.trim().takeIf { it.isNotBlank() }?.let { "\n\nGroup scene/system instructions:\n$it" }.orEmpty()
                 val requestMessages = JSONArray().put(
                     JSONObject().put("role", "system").put("content", system),
@@ -1151,6 +1153,7 @@ internal fun buildChatSystemPrompt(
     characterContext: MemberWorldContext? = null,
     relationship: RelationshipState? = null,
     webResults: List<WebSearchResult> = emptyList(),
+    conversationText: String = "",
 ): String = buildString {
     append("You are ${character.name}. ")
     append(character.persona)
@@ -1162,9 +1165,10 @@ internal fun buildChatSystemPrompt(
     recap?.let {
         append("\nConversation recap through message #${it.throughMessageId}:\n${it.body}")
     }
-    if (worldFacts.isNotEmpty()) {
+    val activeFacts = selectLorebookFacts(worldFacts, conversationText)
+    if (activeFacts.isNotEmpty()) {
         append("\nShared world facts (pinned facts take priority):\n")
-        worldFacts.take(20).forEach { append("- ${it.body}\n") }
+        activeFacts.forEach { append("- ${it.body}\n") }
     }
     if (cognition.isNotEmpty()) {
         append("\nWhat this character knows or believes; it may differ from shared facts:\n")

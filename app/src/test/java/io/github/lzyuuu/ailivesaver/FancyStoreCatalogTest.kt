@@ -36,8 +36,8 @@ class FancyStoreCatalogTest {
         assertEquals(
             setOf(
                 "y", "ustagram", "rebbit", "binder", "games", "phone", "groups",
-                "root-creator", "aura", "aura-swap", "hd-upscalers", "benchmark",
-                "storage", "lorebook", "root-producer",
+                "root_creator", "aura", "aura_swap", "hd-upscalers", "benchmark",
+                "storage", "lorebook", "root_producer",
             ),
             buckets.available.map { it.id }.toSet(),
         )
@@ -48,7 +48,7 @@ class FancyStoreCatalogTest {
     @Test
     fun shippedCatalogCarriesReferenceFacts() {
         val products = FancyStoreCatalogParser.parse(loadShippedCatalog())
-        val auraSwap = products.first { it.id == "aura-swap" }
+        val auraSwap = products.first { it.id == "aura_swap" }
         assertEquals(561837652L, auraSwap.requiredDownloadBytes)
         assertTrue(auraSwap.requirements.any { it.contains("6 GB") })
 
@@ -57,7 +57,7 @@ class FancyStoreCatalogTest {
         val games = products.first { it.id == "games" }
         assertEquals(StoreAvailability.AVAILABLE, games.availability)
 
-        val producer = products.first { it.id == "root-producer" }
+        val producer = products.first { it.id == "root_producer" }
         assertTrue(producer.featured)
         assertEquals(StoreAvailability.AVAILABLE, producer.availability)
 

@@ -301,6 +301,8 @@ internal data class WorldFact(
     val body: String,
     val pinned: Boolean,
     val createdAt: Long,
+    val keywords: String = "",
+    val enabled: Boolean = true,
 )
 
 internal data class CharacterCognition(
@@ -333,7 +335,7 @@ internal data class MemberWorldContext(
     val timeZone: String,
 )
 
-internal const val WORLD_DATABASE_VERSION = 26
+internal const val WORLD_DATABASE_VERSION = 27
 
 internal class WorldStore(
     context: Context,
@@ -553,6 +555,11 @@ internal class WorldStore(
         if (oldVersion < 25) createStoreTables(database)
         if (oldVersion < 26) {
             database.execSQL("ALTER TABLE profile ADD COLUMN username TEXT NOT NULL DEFAULT ''")
+        }
+        if (oldVersion < 27) {
+            // 世界书条目结构（对齐参考）：关键词触发 + 条目启用开关。
+            database.execSQL("ALTER TABLE world_facts ADD COLUMN keywords TEXT NOT NULL DEFAULT ''")
+            database.execSQL("ALTER TABLE world_facts ADD COLUMN enabled INTEGER NOT NULL DEFAULT 1")
         }
     }
 
@@ -821,6 +828,8 @@ internal class WorldStore(
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 body TEXT NOT NULL,
                 pinned INTEGER NOT NULL DEFAULT 0,
+                keywords TEXT NOT NULL DEFAULT '',
+                enabled INTEGER NOT NULL DEFAULT 1,
                 created_at INTEGER NOT NULL
             )
             """.trimIndent(),
@@ -3281,25 +3290,49 @@ internal class WorldStore(
     }
 
     fun worldFacts(): List<WorldFact> = readableDatabase.rawQuery(
-        "SELECT id, body, pinned, created_at FROM world_facts ORDER BY pinned DESC, created_at DESC",
+        "SELECT id, body, pinned, keywords, enabled, created_at FROM world_facts ORDER BY pinned DESC, created_at DESC",
         null,
     ).use { cursor ->
         buildList {
             while (cursor.moveToNext()) {
-                add(WorldFact(cursor.getLong(0), cursor.getString(1), cursor.getInt(2) == 1, cursor.getLong(3)))
+                add(
+                    WorldFact(
+                        cursor.getLong(0),
+                        cursor.getString(1),
+                        cursor.getInt(2) == 1,
+                        cursor.getLong(5),
+                        keywords = cursor.getString(3).orEmpty(),
+                        enabled = cursor.getInt(4) == 1,
+                    ),
+                )
             }
         }
     }
 
-    fun addWorldFact(body: String, pinned: Boolean = false) {
-        writableDatabase.insertOrThrow(
+    fun addWorldFact(body: String, pinned: Boolean = false, keywords: String = "") {
+        writableDatabase.insert(
             "world_facts",
             null,
-            ContentValues().apply {
-                put("body", body.trim())
-                put("pinned", if (pinned) 1 else 0)
+            android.content.ContentValues().apply {
+                put("body", body)
+                put("pinned", pinned)
+                put("keywords", keywords)
+                put("enabled", true)
                 put("created_at", System.currentTimeMillis())
             },
+        )
+    }
+
+    fun setWorldFactEnabled(id: Long, enabled: Boolean) {
+        writableDatabase.execSQL(
+            "UPDATE world_facts SET enabled = ${if (enabled) 1 else 0} WHERE id = $id",
+        )
+    }
+
+    fun setWorldFactKeywords(id: Long, keywords: String) {
+        writableDatabase.execSQL(
+            "UPDATE world_facts SET keywords = ? WHERE id = $id",
+            arrayOf(keywords),
         )
     }
 

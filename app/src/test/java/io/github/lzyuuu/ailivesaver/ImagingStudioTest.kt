@@ -33,4 +33,14 @@ class ImagingStudioTest {
         assertEquals(512, settings.height)
         assertTrue(settings.forgeUrl.startsWith("http://"))
     }
+
+    @Test
+    fun mnnSdPipelineConstantsMatchReference() {
+        // 参考 V4.51 反编译实证：i35.LCM ordinal=12、u45.KARRAS=1、js3.LOW_MEMORY=0；
+        // nativeLoad 仅接受 512×512（ks3.d 的尺寸门控），native 进度回调为 0-100 百分比。
+        assertEquals(12, MnnSd.SAMPLER_LCM)
+        assertEquals(1, MnnSd.SCHEDULE_KARRAS)
+        assertEquals(0, MnnSd.MEMORY_LOW)
+        assertEquals(512, MnnSd.REQUIRED_SIZE)
+    }
 }

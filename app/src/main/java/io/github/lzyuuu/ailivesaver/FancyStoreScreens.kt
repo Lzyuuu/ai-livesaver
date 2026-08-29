@@ -33,6 +33,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -82,6 +83,8 @@ internal fun FancyStoreScreen(
     var detailId by remember { mutableStateOf<String?>(null) }
     var installs by remember { mutableStateOf(catalog.loadInstallStatus(products)) }
     val downloading = remember { mutableStateListOf<String>() }
+    val downloadProgress = remember { mutableStateMapOf<String, Int>() }
+    var downloadError by remember { mutableStateOf<String?>(null) }
     var firstVisit by remember { mutableStateOf(catalog.isFirstVisit()) }
     val scope = rememberCoroutineScope()
 
@@ -90,25 +93,49 @@ internal fun FancyStoreScreen(
     }
 
     fun beginDownload(id: String) {
+        val product = products.firstOrNull { it.id == id } ?: return
         if (downloading.contains(id)) return
         downloading.add(id)
+        downloadError = null
         store.saveAppInstall(
-            PersistedAppInstall(id, InstallStatus.INSTALLING, null, false, 0, "1.0", System.currentTimeMillis()),
+            PersistedAppInstall(id, InstallStatus.INSTALLING, null, false, 0, product.version.ifBlank { "1.0" }, System.currentTimeMillis()),
         )
         onChanged()
-        scope.launch {
-            var progress = 0
-            while (progress < 100) {
-                delay(300)
-                progress += 20
+        // 真实下载：带官方 SHA-256 的资产逐项 HTTP 下载并校验（StoreDownloads）；
+        // 纯应用（无下载资产）直接完成安装。失败回退 NOT_INSTALLED，绝不假装成功。
+        Thread {
+            var failure: Throwable? = null
+            try {
+                val items = storeDownloadItems(id)
+                if (items.isNotEmpty()) {
+                    StoreDownloads.downloadAll(context, items) { done, total ->
+                        downloadProgress[id] = done * 100 / total
+                    }
+                }
+            } catch (t: Throwable) {
+                failure = t
             }
-            downloading.remove(id)
+            val status = if (failure == null) InstallStatus.INSTALLED else InstallStatus.NOT_INSTALLED
             store.saveAppInstall(
-                PersistedAppInstall(id, InstallStatus.INSTALLED, System.currentTimeMillis(), false, 0, "1.0", System.currentTimeMillis()),
+                PersistedAppInstall(
+                    id,
+                    status,
+                    if (failure == null) System.currentTimeMillis() else null,
+                    false,
+                    0,
+                    product.version.ifBlank { "1.0" },
+                    System.currentTimeMillis(),
+                ),
             )
-            onChanged()
-            refreshInstalls()
-        }
+            val message = failure?.message?.let { "安装失败：$it" }
+            android.os.Handler(android.os.Looper.getMainLooper()).post {
+                downloading.remove(id)
+                downloadProgress.remove(id)
+                downloadError = message
+                onChanged()
+                refreshInstalls()
+            }
+        }.start()
     }
 
     Column(
@@ -381,7 +408,7 @@ internal fun FancyStoreScreen(
                                     strokeWidth = 2.5.dp,
                                 )
                                 Spacer(Modifier.width(8.dp))
-                                Text("下载中…", color = FancyGold, fontSize = 13.sp)
+                                Text("下载中 ${downloadProgress[id] ?: 0}%", color = FancyGold, fontSize = 13.sp)
                             }
                         }
                         status == InstallStatus.INSTALLED -> {

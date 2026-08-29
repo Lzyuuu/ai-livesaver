@@ -1970,12 +1970,13 @@ private fun ConversationScreen(
                         .size(40.dp)
                         .testTag("messenger-attach-image"),
                 ) {
-                    Icon(
-                        Icons.Default.Add,
-                        contentDescription = stringResource(R.string.messenger_attach_image),
-                        tint = FancyGold,
-                    )
-                }
+                Icon(
+                    Icons.Default.Add,
+                    contentDescription = stringResource(R.string.messenger_attach_image),
+                    tint = FancyGold,
+                )
+            }
+                VoiceInputButton { transcribed -> input = if (input.isBlank()) transcribed else "$input $transcribed" }
                 OutlinedTextField(
                     value = input,
                     onValueChange = { input = it },
@@ -2179,6 +2180,9 @@ private fun MessageBubble(
                                 modifier = Modifier.align(Alignment.End),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
+                                if (!isUser && message.status != "streaming" && visibleBody.isNotBlank()) {
+                                    SpeakMessageButton(visibleBody)
+                                }
                                 Text(
                                     timeText,
                                     style = MaterialTheme.typography.labelSmall,

@@ -134,7 +134,7 @@
       "availability": "available"
     },
     {
-      "id": "root-creator",
+      "id": "root_creator",
       "name": "Root 造卡",
       "symbol": "◇",
       "tagline": "描述，Root 写卡",
@@ -174,7 +174,7 @@
       "availability": "available"
     },
     {
-      "id": "aura-swap",
+      "id": "aura_swap",
       "name": "形象交换",
       "symbol": "◐",
       "tagline": "把一张脸放进新时刻",
@@ -202,7 +202,7 @@
       "tagline": "照片与画稿放大",
       "description": "安装 Aura 的 Enhance HD 工具所用的两个设备端 Real-ESRGAN 放大模型。安装前不会下载任何东西。",
       "category": "Packages",
-      "launchTarget": "aura",
+      "launchTarget": "imaging",
       "kind": "package",
       "version": "1.0",
       "features": [
@@ -221,7 +221,7 @@
       "tagline": "面向 Aura 的人脸修正",
       "description": "安装 Aura 用来在生成后定位并重绘人脸的人脸解析器。永远不会静默下载。",
       "category": "Packages",
-      "launchTarget": "aura",
+      "launchTarget": "imaging",
       "kind": "package",
       "version": "1.0",
       "features": [
@@ -240,7 +240,7 @@
       "tagline": "设备端改写感知回忆",
       "description": "安装小巧的设备端 MiniLM 嵌入模型用于语义记忆召回。记忆写入始终用你选择的 LLM，本包不会加载第二个对话模型。",
       "category": "Packages",
-      "launchTarget": "memory",
+      "launchTarget": "settings",
       "kind": "package",
       "version": "1.0",
       "features": [
@@ -309,7 +309,7 @@
       "availability": "available"
     },
     {
-      "id": "root-producer",
+      "id": "root_producer",
       "name": "Root 制作人",
       "symbol": "♫",
       "tagline": "你的想法，Root 的录音棚",

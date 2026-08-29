@@ -109,6 +109,20 @@ internal fun WorldStore.loadPersistedMessengerGroup(id: Long): PersistedMessenge
     }
 }
 
+internal fun WorldStore.persistedMessengerGroups(): List<PersistedMessengerGroup> {
+    val groups = writableDatabase.query("messenger_groups", arrayOf("id", "name", "prompt"), null, null, null, null, "id DESC").use { cursor ->
+        buildList {
+            while (cursor.moveToNext()) add(Triple(cursor.getLong(0), cursor.getString(1), cursor.getString(2)))
+        }
+    }
+    return groups.map { (id, name, prompt) ->
+        val members = writableDatabase.query("messenger_group_members", arrayOf("character_id"), "group_id=?", arrayOf(id.toString()), null, null, "character_id").use { memberCursor ->
+            buildList { while (memberCursor.moveToNext()) add(memberCursor.getLong(0)) }
+        }
+        PersistedMessengerGroup(id, name, prompt, members)
+    }
+}
+
 internal fun WorldStore.putBinderDraft(draft: BinderDraft) {
     writableDatabase.insertWithOnConflict("binder_drafts", null, ContentValues().apply {
         put("id", draft.id); put("step", draft.step); put("payload", draft.payload); put("updated_at", draft.updatedAt)

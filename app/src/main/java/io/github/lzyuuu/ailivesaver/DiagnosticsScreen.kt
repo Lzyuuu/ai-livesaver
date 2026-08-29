@@ -344,7 +344,7 @@ internal fun DiagnosticsScreen(
                         onClick = {
                             probing = true
                             localDreamState = null
-                            LocalDreamClient.probe { result ->
+                            LocalDreamClient.probe(context) { result ->
                                 probing = false
                                 localDreamState = result.fold(
                                     onSuccess = { value ->

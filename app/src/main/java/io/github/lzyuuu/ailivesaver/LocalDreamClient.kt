@@ -289,13 +289,127 @@ internal fun persistImportedImage(context: Context, cachedPath: String): String 
     return target.path
 }
 
-internal object LocalDreamClient {
-    private const val BASE_URL = "http://127.0.0.1:8081"
+/**
+ * Local Dream 服务地址：默认本机 8081；可配置为局域网内另一台运行
+ * Local Dream（受控模式）的设备地址（如 192.168.31.75:8081）。
+ * 校验仅接受 http/https 且 host 非空——Local Dream 协议本身无 TLS，
+ * 明文白名单只限本机回环与局域网直连场景，与 Forge/Provider 的既有先例一致。
+ */
+internal object LocalDreamEndpoint {
+    internal const val DEFAULT_BASE_URL = "http://127.0.0.1:8081"
+    private const val PREFS = "local_dream_endpoint"
+    private const val KEY_BASE_URL = "base_url"
 
-    fun probe(callback: (Result<Int>) -> Unit) {
+    /** 归一化：允许省略 scheme 的 host[:port] 简写；显式非 http/https scheme 或非法输入返回 null。 */
+    internal fun normalize(raw: String): String? {
+        val trimmed = raw.trim()
+        if (trimmed.isEmpty()) return null
+        val withScheme = when {
+            trimmed.startsWith("http://") || trimmed.startsWith("https://") -> trimmed
+            trimmed.contains("://") -> return null
+            else -> "http://$trimmed"
+        }
+        return runCatching {
+            val url = URL(withScheme)
+            val host = url.host
+            if ((url.protocol == "http" || url.protocol == "https") && host.isNotEmpty()) {
+                if (url.port == -1) "${url.protocol}://$host" else "${url.protocol}://$host:${url.port}"
+            } else {
+                null
+            }
+        }.getOrNull()
+    }
+
+    fun base(context: Context): String =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getString(KEY_BASE_URL, null)
+            ?.let { normalize(it) }
+            ?: DEFAULT_BASE_URL
+
+    fun save(context: Context, raw: String): String? {
+        val normalized = normalize(raw) ?: return null
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .putString(KEY_BASE_URL, normalized)
+            .apply()
+        return normalized
+    }
+
+    fun reset(context: Context) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .remove(KEY_BASE_URL)
+            .apply()
+    }
+}
+
+internal object LocalDreamClient {
+
+    /**
+     * Local Dream 遥控协议客户端（受控端 8808 控制端口）：
+     * GET /info（app/protocol/version/device）与 GET /models（模型清单）。
+     * 生成仍走同一主机的 8081 生成端口（[LocalDreamClient.generate]）。
+     * 仅 http/https，URL 校验见 [LocalDreamEndpoint.normalize]。
+     */
+    internal data class RemoteInfo(val app: String, val protocol: Int, val version: String, val device: String)
+
+    internal data class RemoteModel(val id: String, val name: String, val runOnCpu: Boolean, val isSdxl: Boolean)
+
+    /** 控制端口派生：生成端口 8081 → 控制端口 8808（同 host）。 */
+    internal fun controlBaseUrl(generateBaseUrl: String): String? {
+        val normalized = LocalDreamEndpoint.normalize(generateBaseUrl) ?: return null
+        return if (normalized.endsWith(":8081")) normalized.removeSuffix(":8081") + ":8808" else normalized
+    }
+
+    internal fun fetchInfo(controlBaseUrl: String): RemoteInfo {
+        val body = httpGet("$controlBaseUrl/info")
+        val o = JSONObject(body)
+        return RemoteInfo(
+            app = o.optString("app"),
+            protocol = o.optInt("protocol", 0),
+            version = o.optString("version"),
+            device = o.optString("device"),
+        )
+    }
+
+    internal fun fetchModels(controlBaseUrl: String): List<RemoteModel> {
+        val body = httpGet("$controlBaseUrl/models")
+        val array = JSONObject(body).optJSONArray("models") ?: return emptyList()
+        return buildList {
+            for (i in 0 until array.length()) {
+                val o = array.optJSONObject(i) ?: continue
+                val id = o.optString("id")
+                if (id.isEmpty()) continue
+                add(
+                    RemoteModel(
+                        id = id,
+                        name = o.optString("name").ifEmpty { id },
+                        runOnCpu = o.optBoolean("run_on_cpu", false),
+                        isSdxl = o.optBoolean("is_sdxl", false),
+                    ),
+                )
+            }
+        }
+    }
+
+    private fun httpGet(url: String): String {
+        val connection = (URL(url).openConnection() as HttpURLConnection).apply {
+            requestMethod = "GET"
+            connectTimeout = 3_000
+            readTimeout = 10_000
+        }
+        return try {
+            if (connection.responseCode !in 200..299) {
+                throw localDreamHttpFailure(connection)
+            }
+            connection.inputStream.bufferedReader().use { it.readText() }
+        } finally {
+            connection.disconnect()
+        }
+    }
+
+    fun probe(context: Context, callback: (Result<Int>) -> Unit) {
         Thread {
             val result = runCatching {
-                val body = post("/tokenize", JSONObject().put("prompt", "test"))
+                val body = post(LocalDreamEndpoint.base(context), "/tokenize", JSONObject().put("prompt", "test"))
                 JSONObject(body).getInt("max_length")
             }
             Handler(Looper.getMainLooper()).post { callback(result) }
@@ -311,7 +425,7 @@ internal object LocalDreamClient {
         Thread {
             val result = runCatching {
                 val startedAt = SystemClock.elapsedRealtime()
-                val connection = connection("/generate")
+                val connection = connection(LocalDreamEndpoint.base(context), "/generate")
                 val request = JSONObject()
                     .put("prompt", job.prompt)
                     .put("negative_prompt", job.negativePrompt)
@@ -367,8 +481,8 @@ internal object LocalDreamClient {
         }.start()
     }
 
-    private fun post(path: String, body: JSONObject): String {
-        val connection = connection(path)
+    private fun post(baseUrl: String, path: String, body: JSONObject): String {
+        val connection = connection(baseUrl, path)
         return try {
             connection.outputStream.use { it.write(body.toString().toByteArray()) }
             if (connection.responseCode !in 200..299) {
@@ -380,8 +494,8 @@ internal object LocalDreamClient {
         }
     }
 
-    private fun connection(path: String) =
-        (URL("$BASE_URL$path").openConnection() as HttpURLConnection).apply {
+    private fun connection(baseUrl: String, path: String) =
+        (URL("$baseUrl$path").openConnection() as HttpURLConnection).apply {
             requestMethod = "POST"
             connectTimeout = 3_000
             readTimeout = 10 * 60_000

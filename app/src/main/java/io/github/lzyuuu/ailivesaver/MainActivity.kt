@@ -200,7 +200,7 @@ class MainActivity : ComponentActivity() {
             var themeModeName by rememberSaveable { mutableStateOf(readThemeMode(this).name) }
             var dynamicColor by rememberSaveable { mutableStateOf(readDynamicColor(this)) }
             val themeMode = runCatching { ThemeMode.valueOf(themeModeName) }
-                .getOrDefault(ThemeMode.System)
+                .getOrDefault(ThemeMode.Dark)
             val baseDensity = androidx.compose.ui.platform.LocalDensity.current
             val fontScaleKey = getSharedPreferences(UI_PREFS, MODE_PRIVATE)
                 .getString(PREF_FONT_SCALE, "default") ?: "default"
@@ -419,7 +419,7 @@ private fun AiLivesaverApp(
         activeGameId = null
     }
 
-    fun backFromGamePlaceholder() {
+    fun backFromGameSession() {
         activeGameId = null
     }
 
@@ -574,7 +574,7 @@ private fun AiLivesaverApp(
                 showModelsEngine = false
                 showDeveloperSettings = false
             }
-            activeGameId != null -> backFromGamePlaceholder()
+            activeGameId != null -> backFromGameSession()
             activeDesktopApp == DesktopApp.Games -> backFromGamesHub()
             activeDesktopApp != null -> goDesktopHome()
             activeHub != null -> activeHubRoute = null
@@ -849,13 +849,38 @@ private fun AiLivesaverApp(
                     onBack = { goDesktopHome() },
                     onCall = { characterId -> openMessenger(characterId) },
                 )
+                DesktopApp.Groups -> GroupsLobbyScreen(
+                    store = worldStore,
+                    revision = worldRevision,
+                    contentPadding = padding,
+                    onBack = { goDesktopHome() },
+                    onChanged = { worldRevision++ },
+                    onOpenGroup = { characterId -> openMessenger(characterId) },
+                )
+                DesktopApp.RootProducer -> RootProducerScreen(
+                    contentPadding = padding,
+                    onBack = { goDesktopHome() },
+                )
+                DesktopApp.Lorebook -> LorebookScreen(
+                    contentPadding = padding,
+                    store = worldStore,
+                    revision = worldRevision,
+                    onBack = { goDesktopHome() },
+                    onChanged = { worldRevision++ },
+                )
+                DesktopApp.RootCreator -> RootCreatorScreen(
+                    contentPadding = padding,
+                    store = worldStore,
+                    onBack = { goDesktopHome() },
+                    onChanged = { worldRevision++ },
+                )
                 DesktopApp.Games -> {
                     val selectedGame = GamesHubEntries.firstOrNull { it.id == activeGameId }
                     if (selectedGame != null) {
-                        GamePlaceholderScreen(
+                        GameSessionScreen(
                             entry = selectedGame,
                             contentPadding = padding,
-                            onBack = { backFromGamePlaceholder() },
+                            onBack = { backFromGameSession() },
                         )
                     } else {
                         GamesHubScreen(
@@ -2352,11 +2377,56 @@ private fun LocalDreamSettingsScreen(
             }
         }
         item {
+            // 远程主机配置：默认 127.0.0.1:8081，可指向局域网内 Local Dream 受控端。
+            val currentBase = remember(revision) { LocalDreamEndpoint.base(context) }
+            var hostInput by rememberSaveable(currentBase) { mutableStateOf(currentBase) }
+            Text(
+                stringResource(R.string.local_dream_host_title),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+            )
+            OutlinedTextField(
+                value = hostInput,
+                onValueChange = { hostInput = it },
+                singleLine = true,
+                placeholder = { Text(LocalDreamEndpoint.DEFAULT_BASE_URL) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("local-dream-host-input"),
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextButton(
+                    onClick = {
+                        val saved = LocalDreamEndpoint.save(context, hostInput)
+                        status = if (saved == null) {
+                            context.getString(R.string.local_dream_host_invalid)
+                        } else {
+                            hostInput = saved
+                            context.getString(R.string.local_dream_host_saved, saved)
+                        }
+                    },
+                    modifier = Modifier.testTag("local-dream-host-save"),
+                ) { Text(stringResource(R.string.local_dream_host_save)) }
+                TextButton(
+                    onClick = {
+                        LocalDreamEndpoint.reset(context)
+                        hostInput = LocalDreamEndpoint.DEFAULT_BASE_URL
+                        status = context.getString(R.string.local_dream_host_saved, LocalDreamEndpoint.DEFAULT_BASE_URL)
+                    },
+                    modifier = Modifier.testTag("local-dream-host-reset"),
+                ) { Text(stringResource(R.string.local_dream_host_reset)) }
+            }
+            Text(
+                stringResource(R.string.local_dream_host_hint),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        item {
             Button(
                 onClick = {
                     checking = true
                     status = null
-                    LocalDreamClient.probe { result ->
+                    LocalDreamClient.probe(context) { result ->
                         checking = false
                         status = result.fold(
                             onSuccess = {

@@ -322,8 +322,52 @@ internal fun ImagingStudioScreen(
         resultPath = null
         when (settings.backend) {
             ImagingBackend.OnDevice -> {
-                generating = false
-                status = "No on-device (Aura) model selected — pick one in Imaging or download a model."
+                // CyberRealistic-LCM 本地生图（阶段② #73）：模型就绪走 MNN，未装提示下载。
+                if (!ImagingModelStore.isReady(context)) {
+                    generating = false
+                    status = "尚未安装图像模型——下载后即可在手机上生成。"
+                } else {
+                    Thread {
+                        // LCM 蒸馏模型：低步数+低 guidance 最稳；进度为 native 百分比 0-100。
+                        val lcmSteps = settings.steps.coerceIn(4, 8)
+                        val lcmCfg = 1.0f
+                        progressTotal = 100
+                        val bitmap = MnnSd.generate(
+                            context = context,
+                            prompt = trimmed,
+                            negative = settings.negativePrompt,
+                            steps = lcmSteps,
+                            guidance = lcmCfg,
+                            seed = seed,
+                            width = MnnSd.REQUIRED_SIZE,
+                            height = MnnSd.REQUIRED_SIZE,
+                        ) { percent ->
+                            progressStep = percent.coerceIn(0, 100)
+                        }
+                        if (bitmap == null) {
+                            MnnSd.unload()
+                            status = "本机生图失败（内存不足或模型异常），请重试或降低分辨率。"
+                        } else {
+                            val saved = runCatching {
+                                val directory = java.io.File(context.filesDir, "media").apply { mkdirs() }
+                                val file = java.io.File(directory, "ondevice-${System.currentTimeMillis()}.png")
+                                file.outputStream().use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+                                file.absolutePath
+                            }
+                            saved.fold(
+                                onSuccess = {
+                                    resultPath = it
+                                    WorldStore(context).use { store ->
+                                        store.saveCreativeAsset(CreativeAsset(0, it, "image", settings.backend.route, trimmed, null, "", null, null, "ready", "", System.currentTimeMillis()))
+                                    }
+                                    status = "本机生成完成 · 种子 $seed"
+                                },
+                                onFailure = { status = it.message ?: "保存失败" },
+                            )
+                        }
+                        generating = false
+                    }.start()
+                }
             }
             ImagingBackend.Forge -> {
                 ForgeClient.generate(
@@ -440,10 +484,10 @@ internal fun ImagingStudioScreen(
                 }
             }
             ImagingBackend.LocalDream -> {
-                LocalDreamClient.probe { result ->
+                LocalDreamClient.probe(context) { result ->
                     probing = false
                     status = result.fold(
-                        onSuccess = { "Connected to Local Dream at http://127.0.0.1:8081 · CLIP $it tokens" },
+                        onSuccess = { "Connected to Local Dream at ${LocalDreamEndpoint.base(context)} · CLIP $it tokens" },
                         onFailure = { "Local Dream unavailable: ${it.message.orEmpty()}" },
                     )
                 }
@@ -496,7 +540,10 @@ internal fun ImagingStudioScreen(
             )
 
             when (settings.backend) {
-                ImagingBackend.OnDevice -> OnDeviceModelCard()
+                ImagingBackend.OnDevice -> {
+                    OnDeviceModelCard()
+                    UpscalerPackCard()
+                }
                 ImagingBackend.Forge, ImagingBackend.LocalDream -> {
                     Box(
                         modifier = Modifier
