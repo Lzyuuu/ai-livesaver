@@ -31,7 +31,7 @@ class LlamaSmokeTest {
         // 8G AVD 纯 CPU 实测：首次预填充 ~73s + 每 token 1-3s（模拟器无 GPU）。
         val executor = Executors.newSingleThreadExecutor()
         val future = executor.submit<String> {
-            val handle = LlamaNative.nativeLoadModel(modelFile.absolutePath, 2048, 4)
+            val handle = LlamaNative.nativeLoadModel(modelFile.absolutePath, 2048, 4, 4, 512)
             Log.d("LlamaSmokeTest", "sampling-chain: loaded handle=$handle")
             assertTrue("模型加载失败", handle != 0L)
             val reply = StringBuilder()
@@ -60,7 +60,7 @@ class LlamaSmokeTest {
             return
         }
         val started = System.currentTimeMillis()
-        val handle = LlamaNative.nativeLoadModel(modelFile.absolutePath, 2048, 4)
+        val handle = LlamaNative.nativeLoadModel(modelFile.absolutePath, 2048, 4, 4, 512)
         assertTrue("模型加载失败", handle != 0L)
         Log.d("LlamaSmokeTest", "load ${System.currentTimeMillis() - started} ms")
         val reply = StringBuilder()

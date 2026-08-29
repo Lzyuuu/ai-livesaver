@@ -1,6 +1,7 @@
 package io.github.lzyuuu.ailivesaver
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -21,6 +22,31 @@ class LocalModelsTest {
         ]}
     """.trimIndent()
 
+    // chatReadyEntry 纯判定夹具（与 manifestJson 同名条目，无需 Context）。
+    private val chatEntry = LocalModelEntry(
+        id = "gguf-gemma4-e4b",
+        name = "Gemma 4 E4B — llama.cpp",
+        type = "chat",
+        quant = "Q4_0",
+        description = "",
+        minRamMb = 6000,
+        url = "https://huggingface.co/unsloth/gemma-4-E4B-it-GGUF/resolve/main/gemma-4-E4B-it-Q4_0.gguf",
+        sizeBytes = 4836002944L,
+        sha256 = "4a403d2e4d80281063e4f517b1c061ded8476b4011a4fc2ba7dbff707075547e",
+    )
+
+    private val litertEntry = LocalModelEntry(
+        id = "litert-gemma4-e2b",
+        name = "Gemma 4 E2B — LiteRT GPU",
+        type = "litert",
+        quant = "int4",
+        description = "",
+        minRamMb = 6000,
+        url = "https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm/resolve/main/gemma-4-E2B-it.litertlm",
+        sizeBytes = 2588147712L,
+        sha256 = "181938105e0eefd105961417e8da75903eacda102c4fce9ce90f50b97139a63c",
+    )
+
     @Test
     fun parsesChatAndLitertComponentsOnly() {
         val entries = LocalModels.parseManifest(manifestJson)
@@ -29,6 +55,27 @@ class LocalModelsTest {
         assertEquals(4836002944L, entries[0].sizeBytes)
         assertEquals("Q4_0", entries[0].quant)
         assertEquals("gemma-4-E4B-it-Q4_0.gguf", entries[0].fileName)
+    }
+
+    @Test
+    fun litertActivationNeverCountsAsChatEngineReady() {
+        // 反例：#73 LiteRT 激活且已下载，也不得视为聊天引擎就绪（LiteRT 运行时未接，
+        // 误走 llama.cpp 会用 .litertlm 喂给 GGUF 加载器）。
+        assertNull(
+            LocalModels.chatReadyEntry("litert-gemma4-e2b", listOf(chatEntry, litertEntry)) { true },
+        )
+    }
+
+    @Test
+    fun chatActivationCountsAsChatEngineReadyWhenDownloadedAndTypeIsChat() {
+        assertEquals(
+            chatEntry.id,
+            LocalModels.chatReadyEntry("gguf-gemma4-e4b", listOf(chatEntry, litertEntry)) { true }?.id,
+        )
+        // 与是否下载无关的既有语义：未下载不算就绪。
+        assertNull(
+            LocalModels.chatReadyEntry("gguf-gemma4-e4b", listOf(chatEntry, litertEntry)) { false },
+        )
     }
 
     @Test

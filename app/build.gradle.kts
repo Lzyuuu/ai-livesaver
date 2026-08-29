@@ -53,6 +53,12 @@ android {
         buildConfig = true
     }
 
+    packaging {
+        // ggml 运行时按目录 dlopen CPU 后端变体（libggml-cpu-android_*.so），
+        // 必须解压安装 jniLibs（targetSdk 36 默认从 APK 内映射，路径不可用）。
+        jniLibs.useLegacyPackaging = true
+    }
+
     externalNativeBuild {
         cmake {
             path = file("src/main/cpp/CMakeLists.txt")
@@ -76,6 +82,10 @@ dependencies {
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20260719")
+
+    // LiteRT-LM 本地推理（官方 Google Maven：0.0.0-alpha05）。AAR minSdk 31，
+    // 主应用仍是 28，靠 manifest tools:overrideLibrary 合并。
+    implementation("com.google.ai.edge.litertlm:litertlm:0.0.0-alpha05")
 
     androidTestImplementation(platform("androidx.compose:compose-bom:2026.06.01"))
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")

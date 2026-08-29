@@ -34,7 +34,8 @@ jstring toJString(JNIEnv *env, const std::string &s) {
 
 extern "C" JNIEXPORT jlong JNICALL
 Java_io_github_lzyuuu_ailivesaver_LlamaNative_nativeLoadModel(
-        JNIEnv *env, jobject, jstring jPath, jint nCtx, jint nThreads) {
+        JNIEnv *env, jobject, jstring jPath, jint nCtx,
+        jint nDecodeThreads, jint nPrefillThreads, jint nBatch) {
     const char *path = env->GetStringUTFChars(jPath, nullptr);
     llama_backend_init();
     auto mparams = llama_model_default_params();
@@ -47,8 +48,9 @@ Java_io_github_lzyuuu_ailivesaver_LlamaNative_nativeLoadModel(
     }
     auto cparams = llama_context_default_params();
     cparams.n_ctx = static_cast<uint32_t>(nCtx);
-    cparams.n_threads = nThreads;
-    cparams.n_threads_batch = nThreads;
+    cparams.n_threads = nDecodeThreads;      // 解码线程
+    cparams.n_threads_batch = nPrefillThreads; // 预填充线程
+    cparams.n_batch = static_cast<uint32_t>(nBatch);
     llama_context *ctx = llama_init_from_model(model, cparams);
     if (!ctx) {
         LOGE("context init failed");
@@ -163,7 +165,8 @@ Java_io_github_lzyuuu_ailivesaver_LlamaNative_nativeStreamCompletion(
  */
 extern "C" JNIEXPORT jfloat JNICALL
 Java_io_github_lzyuuu_ailivesaver_LlamaNative_nativeBenchmark(
-        JNIEnv *env, jobject, jstring jPath, jint steps, jint nThreads) {
+        JNIEnv *env, jobject, jstring jPath, jint steps,
+        jint nDecodeThreads, jint nPrefillThreads, jint nBatch) {
     const char *path = env->GetStringUTFChars(jPath, nullptr);
     auto mparams = llama_model_default_params();
     mparams.n_gpu_layers = 0;
@@ -171,8 +174,9 @@ Java_io_github_lzyuuu_ailivesaver_LlamaNative_nativeBenchmark(
     if (!model) { LOGE("bench: model load failed"); return -1; }
     auto cparams = llama_context_default_params();
     cparams.n_ctx = 512;
-    cparams.n_threads = nThreads;
-    cparams.n_threads_batch = nThreads;
+    cparams.n_threads = nDecodeThreads;
+    cparams.n_threads_batch = nPrefillThreads;
+    cparams.n_batch = static_cast<uint32_t>(nBatch);
     llama_context *ctx = llama_init_from_model(model, cparams);
     if (!ctx) { llama_model_free(model); LOGE("bench: ctx init failed"); return -1; }
     const llama_vocab *vocab = llama_model_get_vocab(model);

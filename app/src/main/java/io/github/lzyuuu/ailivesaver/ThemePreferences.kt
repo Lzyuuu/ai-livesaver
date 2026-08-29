@@ -9,8 +9,12 @@ internal enum class ThemeMode {
 internal fun readThemeMode(context: android.content.Context): ThemeMode =
     parseThemeMode(
         context.getSharedPreferences(APP_PREFERENCES, android.content.Context.MODE_PRIVATE)
-            .getString(THEME_MODE_KEY, ThemeMode.System.name),
+            .getString(THEME_MODE_KEY, null),
     )
+
+internal fun parseThemeMode(raw: String?): ThemeMode =
+    runCatching { ThemeMode.valueOf(raw ?: "") }
+        .getOrDefault(ThemeMode.Dark)
 
 internal fun writeThemeMode(context: android.content.Context, mode: ThemeMode) {
     context.getSharedPreferences(APP_PREFERENCES, android.content.Context.MODE_PRIVATE)
@@ -18,10 +22,6 @@ internal fun writeThemeMode(context: android.content.Context, mode: ThemeMode) {
         .putString(THEME_MODE_KEY, mode.name)
         .apply()
 }
-
-internal fun parseThemeMode(raw: String?): ThemeMode =
-    runCatching { ThemeMode.valueOf(raw ?: ThemeMode.System.name) }
-        .getOrDefault(ThemeMode.System)
 
 internal fun readDynamicColor(context: android.content.Context): Boolean =
     context.getSharedPreferences(APP_PREFERENCES, android.content.Context.MODE_PRIVATE)

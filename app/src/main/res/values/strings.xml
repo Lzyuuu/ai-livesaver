@@ -542,6 +542,32 @@
     <string name="models_engine_min_ram">建议内存 %1$d MB</string>
     <string name="models_engine_ram_warning">本机内存低于该模型的建议值，加载可能失败。</string>
     <string name="models_engine_download">下载</string>
+    <string name="models_engine_import">导入模型（.gguf / .litertlm）</string>
+    <string name="models_engine_importing">正在导入…</string>
+    <string name="models_engine_import_failed">导入失败</string>
+    <string name="models_engine_runs_on">在以下位置运行模型</string>
+    <string name="models_engine_backend_note">下次加载模型时生效。如果手机无法使用所选后端，引擎会回退到 CPU，而不会直接加载失败。</string>
+    <string name="models_engine_context_title">上下文</string>
+    <string name="models_engine_context_length">对话长度</string>
+    <string name="models_engine_context_value">%1$d 个 token</string>
+    <string name="models_engine_context_hint">模型一次可以看到的对话量。更改它会在下次加载模型时生效。</string>
+    <string name="models_engine_internals_title">引擎内部</string>
+    <string name="models_engine_internals_subtitle">线程、批次及缓存构建方式。通常保持默认即可。</string>
+    <string name="models_engine_prefill_threads">预填充线程</string>
+    <string name="models_engine_prefill_hint">处理提示词时短时使用的算力。调高速度更快，但发热也更多。</string>
+    <string name="models_engine_decode_threads">解码线程</string>
+    <string name="models_engine_decode_hint">生成文字时持续使用的算力。调低可减少发热。</string>
+    <string name="models_engine_batch">批大小</string>
+    <string name="models_engine_batch_value">每批 %1$d 个 token</string>
+    <string name="models_engine_batch_hint">每批读取的 token 数。降低此值可节省内存并减少瞬时发热。</string>
+    <string name="models_engine_threads_auto">自动 — %1$d 核</string>
+    <string name="models_engine_threads_count">%1$d 核</string>
+    <string name="local_dream_host_title">Local Dream 服务地址</string>
+    <string name="local_dream_host_save">保存</string>
+    <string name="local_dream_host_reset">恢复默认</string>
+    <string name="local_dream_host_saved">已保存：%1$s</string>
+    <string name="local_dream_host_invalid">地址无效：仅接受 http/https 且主机名非空</string>
+    <string name="local_dream_host_hint">默认调用本机 8081 端口的 Local Dream；也可填写同一局域网内、开启受控模式的其他 Local Dream 设备地址（例如 192.168.31.75:8081）。</string>
     <string name="models_engine_set_active">设为主脑</string>
     <string name="models_engine_active">当前主脑</string>
     <string name="models_engine_cloud_title">云端</string>
@@ -554,6 +580,7 @@
     <string name="benchmark_context">上下文</string>
     <string name="benchmark_device">设备</string>
     <string name="benchmark_repeat">重复</string>
+    <string name="benchmark_times_once">一次</string>
     <string name="benchmark_times">%1$d×</string>
     <string name="benchmark_no_model">未找到模型。</string>
     <string name="benchmark_run">运行基准</string>
@@ -893,4 +920,121 @@
     <string name="game_the_oracle_title">The Oracle</string>
     <string name="game_the_oracle_description">Fortune reading and tarot.</string>
     <string name="game_the_oracle_status">神谕占卜玩法尚未接通。本页为明确占位，可安全返回 Games Hub。</string>
+
+    <!-- 统一 GameSessionScreen：会话文案 -->
+    <string name="game_session_rules_label">规则</string>
+    <string name="game_session_start">开始游戏</string>
+    <string name="game_session_play_again">再来一次</string>
+    <string name="game_outcome_win">胜利</string>
+    <string name="game_outcome_lose">失败</string>
+
+    <!-- World Adventure -->
+    <string name="game_world_adventure_rules">你身处雾影边境。每一次选择都会推进冒险，走向不同的结局。</string>
+    <string name="game_world_adventure_option_forest">追入幽暗森林</string>
+    <string name="game_world_adventure_option_river">沿河而行</string>
+    <string name="game_world_adventure_option_camp">返回营地</string>
+    <string name="game_world_adventure_outcome_forest_title">幽暗森林</string>
+    <string name="game_world_adventure_outcome_forest_detail">你发现一盏熄灭的提灯，灯身刻着你的名字。前路亮起微光……</string>
+    <string name="game_world_adventure_outcome_river_title">河流低语</string>
+    <string name="game_world_adventure_outcome_river_detail">河面漂来一叶纸船，载着一枚金色钥匙。新的入口已经打开。</string>
+    <string name="game_world_adventure_outcome_camp_title">安然返营</string>
+    <string name="game_world_adventure_outcome_camp_detail">你回到营地，篝火旁多了一封没有署名的信。今夜安好。</string>
+
+    <!-- Dice Duel RPG -->
+    <string name="game_dice_duel_rpg_rules">与黑暗骑士正面交锋。掷出骰子决定攻击：点数 ≥ 4 命中要害，否则落空。</string>
+    <string name="game_dice_duel_rpg_option_roll">掷骰攻击</string>
+    <string name="game_dice_duel_rpg_outcome_hit_title">命中要害！</string>
+    <string name="game_dice_duel_rpg_outcome_hit_detail">你重创了黑暗骑士，战局开始向你的方向倾斜。</string>
+    <string name="game_dice_duel_rpg_outcome_miss_title">攻击落空</string>
+    <string name="game_dice_duel_rpg_outcome_miss_detail">黑暗骑士侧身闪开了攻击。再试一次！</string>
+
+    <!-- Tactical Command -->
+    <string name="game_tactical_command_rules">指挥你的小队应对敌方合围。选择一个战术，观察战局变化。</string>
+    <string name="game_tactical_command_option_advance">推进战线</string>
+    <string name="game_tactical_command_option_hold">固守阵地</string>
+    <string name="game_tactical_command_option_flank">侧翼包抄</string>
+    <string name="game_tactical_command_outcome_advance_title">战线推进</string>
+    <string name="game_tactical_command_outcome_advance_detail">先锋突破缺口，敌方左翼开始动摇。</string>
+    <string name="game_tactical_command_outcome_hold_title">固守阵地</string>
+    <string name="game_tactical_command_outcome_hold_detail">敌方攻势在防线前瓦解，小队士气回升。</string>
+    <string name="game_tactical_command_outcome_flank_title">侧翼包抄</string>
+    <string name="game_tactical_command_outcome_flank_detail">侦察兵绕后得手，拿下了敌方补给点。</string>
+
+    <!-- Truth or Dare -->
+    <string name="game_truth_or_dare_rules">在同伴面前二选一，并按规则向在场的大家公布结果。</string>
+    <string name="game_truth_or_dare_option_truth">真心话</string>
+    <string name="game_truth_or_dare_option_dare">大冒险</string>
+    <string name="game_truth_or_dare_outcome_truth_title">真心话时间</string>
+    <string name="game_truth_or_dare_outcome_truth_detail">问题：最近一次让你真正开心的、微小而具体的事是什么？</string>
+    <string name="game_truth_or_dare_outcome_dare_title">大冒险时间</string>
+    <string name="game_truth_or_dare_outcome_dare_detail">挑战：用你最标志性的口吻，现场完成一段 10 秒自我介绍。</string>
+
+    <!-- Two Truths &amp; A Lie -->
+    <string name="game_two_truths_lie_rules">三条陈述中有两条为真、一条为假。选出说谎的那一条。\nA. 我养过一只叫「芝麻」的猫。\nB. 我曾独自穿越撒哈拉沙漠。\nC. 我能用左手写出自己的名字。</string>
+    <string name="game_two_truths_lie_option_a">选 A</string>
+    <string name="game_two_truths_lie_option_b">选 B</string>
+    <string name="game_two_truths_lie_option_c">选 C</string>
+    <string name="game_two_truths_lie_outcome_a_title">选错了</string>
+    <string name="game_two_truths_lie_outcome_a_detail">A 是真的：我的确养过一只叫「芝麻」的猫，它最爱趴在窗台上。</string>
+    <string name="game_two_truths_lie_outcome_b_title">你识破了谎言！</string>
+    <string name="game_two_truths_lie_outcome_b_detail">B 是假的：我从未穿越撒哈拉，那是隔壁桌的故事。</string>
+    <string name="game_two_truths_lie_outcome_c_title">选错了</string>
+    <string name="game_two_truths_lie_outcome_c_detail">C 是真的：我的确能用左手签名，只是慢一些。</string>
+
+    <!-- The Oracle -->
+    <string name="game_the_oracle_rules">命运之轮转动。抽一张牌，聆听神谕的启示。</string>
+    <string name="game_the_oracle_option_draw">抽一张牌</string>
+    <string name="game_the_oracle_outcome_sun_title">正位 · 太阳</string>
+    <string name="game_the_oracle_outcome_sun_detail">你的前路将被照亮，重要的消息正在路上。</string>
+    <string name="game_the_oracle_outcome_moon_title">正位 · 月亮</string>
+    <string name="game_the_oracle_outcome_moon_detail">迷雾将散。信任你的直觉，答案近在眼前。</string>
+    <string name="game_the_oracle_outcome_tower_title">逆位 · 塔</string>
+    <string name="game_the_oracle_outcome_tower_detail">旧的结构正在松动，这正是重建的开始。</string>
+    <string name="game_the_oracle_outcome_star_title">正位 · 星星</string>
+    <string name="game_the_oracle_outcome_star_detail">愿望会以你意想不到的方式实现。</string>
+    <string name="game_the_oracle_outcome_judgement_title">逆位 · 审判</string>
+    <string name="game_the_oracle_outcome_judgement_detail">放下遗憾，你会获得第二次机会。</string>
+    <string name="game_battle_round">第 %1$d 回合</string>
+    <string name="game_battle_hp">你 %1$d ❤ · 对手 %2$d ❤</string>
+    <string name="game_dice_round_detail">你掷出 %1$d 点，对手 %2$d 点。</string>
+    <string name="game_tactical_round_win">判断正确，敌方 -3。我方 %1$d ❤ · 敌方 %2$d ❤</string>
+    <string name="game_tactical_round_lose">被对方看穿，我方 -3。我方 %1$d ❤ · 敌方 %2$d ❤</string>
+    <string name="game_tactical_round_tie">僵持不下，双方 -1。我方 %1$d ❤ · 敌方 %2$d ❤</string>
+    <string name="game_tactical_victory_title">大获全胜</string>
+    <string name="game_tactical_victory_detail">敌方阵地被拿下，部队按计划撤离。</string>
+    <string name="game_tactical_defeat_title">全军撤退</string>
+    <string name="game_tactical_defeat_detail">部队被打散，只能撤退休整。</string>
+    <string name="game_world_victory_title">抵达营地</string>
+    <string name="game_world_victory_detail">旅程圆满结束，篝火已经点起。</string>
+    <string name="game_world_defeat_title">止步途中</string>
+    <string name="game_world_defeat_detail">夜幕降临，旅程被迫中止。</string>
+    <string name="game_journey_progress">行程 %1$d/%2$d 站 · 第 %3$d 回合</string>
+    <string name="game_tot_result_title">你的任务</string>
+    <string name="game_tot_truth_1">你最近一次为目标熬夜，是为了什么？</string>
+    <string name="game_tot_truth_2">说一个你从没告诉过别人的小习惯。</string>
+    <string name="game_tot_truth_3">如果明天可以消失一天，你会去哪里？</string>
+    <string name="game_tot_truth_4">你最想改掉自己的哪个毛病？</string>
+    <string name="game_tot_truth_5">上一次撒谎是因为什么？</string>
+    <string name="game_tot_truth_6">你手机里最舍不得删的一张照片是什么？</string>
+    <string name="game_tot_dare_1">用夸张的语气念出你最后发的一条消息。</string>
+    <string name="game_tot_dare_2">接下来一分钟里不能说"不"字。</string>
+    <string name="game_tot_dare_3">模仿你最近看的一部剧里的角色说话。</string>
+    <string name="game_tot_dare_4">公布你屏幕使用时间最长的 APP。</string>
+    <string name="game_tot_dare_5">讲一个冷笑话，冷场就算成功。</string>
+    <string name="game_tot_dare_6">给你身边的人起一个外号并解释来历。</string>
+    <string name="game_ttl_a1">我能背出圆周率小数点后 30 位。</string>
+    <string name="game_ttl_a2">我在雨里追过末班公交。</string>
+    <string name="game_ttl_a3">我会拉小提琴。</string>
+    <string name="game_ttl_b1">我养过一只叫"馒头"的猫。</string>
+    <string name="game_ttl_b2">我跳过两次伞。</string>
+    <string name="game_ttl_b3">我能一秒内说出今天是星期几。</string>
+    <string name="game_ttl_c1">我潜水时近距离见过海龟。</string>
+    <string name="game_ttl_c2">我能把泡面煮出三种完全不同的口味。</string>
+    <string name="game_ttl_c3">我在山顶看过一整场流星雨。</string>
+    <string name="game_ttl_correct_title">识破谎言</string>
+    <string name="game_ttl_correct_detail">猜对了，那句确实是你编的。</string>
+    <string name="game_ttl_wrong_title">被瞒过去了</string>
+    <string name="game_ttl_wrong_detail">猜错了，那句居然是真话。</string>
+    <string name="game_ttl_question">哪一句是谎言？</string>
+    <string name="game_oracle_reversed_suffix">（逆位）</string>
 </resources>
