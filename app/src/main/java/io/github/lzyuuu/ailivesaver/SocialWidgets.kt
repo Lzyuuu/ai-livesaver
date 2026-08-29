@@ -386,3 +386,50 @@ internal fun DayDividerLabel(label: String, modifier: Modifier = Modifier) {
         }
     }
 }
+
+private const val MAX_RENDERED_IMAGE_DIMENSION = 2048
+
+internal fun renderedImageSampleSize(
+    width: Int,
+    height: Int,
+    maxDimension: Int = MAX_RENDERED_IMAGE_DIMENSION,
+): Int {
+    if (width <= 0 || height <= 0 || maxDimension <= 0) return 1
+    var sample = 1
+    while (maxOf(width, height) / sample > maxDimension) sample *= 2
+    return sample
+}
+
+internal fun composeVisualPrompt(
+    character: ResidentCharacter?,
+    scene: String,
+    globalStyle: String = "",
+): String =
+    listOf(
+        character?.appearance,
+        character?.clothing,
+        globalStyle,
+        scene,
+    ).map { it.orEmpty().trim() }.filter(String::isNotBlank).joinToString(", ")
+
+internal fun mediaPromptForEditing(mediaPrompt: String?, mediaDescription: String): String =
+    mediaPrompt.orEmpty().ifBlank { mediaDescription }
+
+internal fun socialComposerVisible(hasCharacter: Boolean, expanded: Boolean): Boolean =
+    hasCharacter && expanded
+
+internal fun threadedComments(
+    comments: List<SocialComment>,
+): List<Pair<SocialComment, Int>> {
+    val children = comments.groupBy { it.parentId }
+    val result = mutableListOf<Pair<SocialComment, Int>>()
+    val visited = mutableSetOf<Long>()
+    fun add(comment: SocialComment, depth: Int) {
+        if (!visited.add(comment.id)) return
+        result += comment to depth
+        children[comment.id].orEmpty().forEach { add(it, depth + 1) }
+    }
+    children[null].orEmpty().forEach { add(it, 0) }
+    comments.filterNot { it.id in visited }.forEach { add(it, 0) }
+    return result
+}
