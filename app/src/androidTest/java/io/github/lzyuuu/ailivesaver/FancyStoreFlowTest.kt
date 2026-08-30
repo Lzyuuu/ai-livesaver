@@ -108,7 +108,16 @@ class FancyStoreFlowTest {
         composeRule.onNodeWithTag("store-list").performScrollToNode(hasTestTag("store-tile-ustagram"))
         composeRule.onNodeWithTag("store-tile-ustagram").performClick()
         composeRule.waitForIdle()
-        composeRule.onNodeWithTag("store-detail-sheet").assertIsDisplayed()
+        // 整页详情：store-detail-page 替换商店列表，不再是叠加的底部弹层
+        composeRule.onNodeWithTag("store-detail-page").assertIsDisplayed()
+        assertTrue(
+            composeRule.onAllNodesWithTag("store-detail-sheet", useUnmergedTree = true)
+                .fetchSemanticsNodes().isEmpty(),
+        )
+        assertTrue(
+            composeRule.onAllNodesWithTag("store-list", useUnmergedTree = true)
+                .fetchSemanticsNodes().isEmpty(),
+        )
         composeRule.onNodeWithTag("store-detail-get").performClick()
         composeRule.waitUntil(10_000) {
             composeRule.onAllNodesWithTag("store-detail-open", useUnmergedTree = true)
@@ -124,12 +133,49 @@ class FancyStoreFlowTest {
             assertTrue(install.status == InstallStatus.INSTALLED)
             assertTrue(install.onHome)
         }
-        // 卸载
+        // 上主页后操作区切换为「打开 + 从主页移除」（对齐参考 ref-62/ref-64）
+        composeRule.onNodeWithTag("store-detail-remove-home").assertIsDisplayed()
+        // 卸载：详情页停留，状态机回落为「获取」
         composeRule.onNodeWithTag("store-detail-uninstall").performClick()
         composeRule.waitForIdle()
         WorldStore(context).use { store ->
             assertTrue(store.loadAppInstall("ustagram") == null)
         }
+        composeRule.onNodeWithTag("store-detail-get").assertIsDisplayed()
+        // 详情返回键只回商店列表
+        composeRule.onNodeWithTag("store-detail-back").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("store-list").assertIsDisplayed()
+        assertTrue(
+            composeRule.onAllNodesWithTag("store-detail-page", useUnmergedTree = true)
+                .fetchSemanticsNodes().isEmpty(),
+        )
+    }
+
+    @Test
+    fun detailSystemBackReturnsToStoreListThenDesktop() {
+        openStoreFromDock()
+        composeRule.onNodeWithTag("store-list").performScrollToNode(hasTestTag("store-tile-ustagram"))
+        composeRule.onNodeWithTag("store-tile-ustagram").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("store-detail-page").assertIsDisplayed()
+        // 系统返回键：详情 → 商店列表（不退出商店）
+        composeRule.activityRule.scenario.onActivity { activity ->
+            activity.onBackPressedDispatcher.onBackPressed()
+        }
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("store-list").assertIsDisplayed()
+        composeRule.onNodeWithTag("store-seg-store").assertIsDisplayed()
+        assertTrue(
+            composeRule.onAllNodesWithTag("store-detail-page", useUnmergedTree = true)
+                .fetchSemanticsNodes().isEmpty(),
+        )
+        // 再按一次系统返回键：商店 → 桌面（宿主返回栈不受影响）
+        composeRule.activityRule.scenario.onActivity { activity ->
+            activity.onBackPressedDispatcher.onBackPressed()
+        }
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("system-desktop").assertIsDisplayed()
     }
 
     @Test
@@ -139,7 +185,16 @@ class FancyStoreFlowTest {
         composeRule.onNodeWithTag("store-list").performScrollToNode(hasTestTag("store-tile-face-enhance"))
         composeRule.onNodeWithTag("store-tile-face-enhance").performClick()
         composeRule.waitForIdle()
-        composeRule.onNodeWithTag("store-detail-sheet").assertIsDisplayed()
+        // 整页详情：列表退出组合，详情页独占屏幕
+        composeRule.onNodeWithTag("store-detail-page").assertIsDisplayed()
+        assertTrue(
+            composeRule.onAllNodesWithTag("store-detail-sheet", useUnmergedTree = true)
+                .fetchSemanticsNodes().isEmpty(),
+        )
+        assertTrue(
+            composeRule.onAllNodesWithTag("store-list", useUnmergedTree = true)
+                .fetchSemanticsNodes().isEmpty(),
+        )
         // 详情内没有获取按钮，只有"即将推出"文案
         composeRule.onNodeWithTag("store-detail-upcoming", useUnmergedTree = true).assertIsDisplayed()
         assertTrue(

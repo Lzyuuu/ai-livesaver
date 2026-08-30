@@ -55,6 +55,7 @@ class DesktopAppLongPressTest {
 
     @Test
     fun charactersAndDockDoNotExposeUninstallMenu() {
+        swipeDesktopToAppsPage(composeRule)
         composeRule.onNodeWithTag("desktop-grid-characters")
             .performTouchInput { longClick() }
         composeRule.waitForIdle()
@@ -80,6 +81,7 @@ class DesktopAppLongPressTest {
             composeRule.onAllNodesWithTag("system-desktop").fetchSemanticsNodes().isNotEmpty()
         }
 
+        swipeDesktopToAppsPage(composeRule)
         composeRule.onNodeWithTag("desktop-grid-rebbit")
             .performTouchInput { longClick() }
         composeRule.waitForIdle()
@@ -98,6 +100,7 @@ class DesktopAppLongPressTest {
             composeRule.onAllNodesWithTag("system-desktop").fetchSemanticsNodes().isNotEmpty()
         }
 
+        swipeDesktopToAppsPage(composeRule)
         composeRule.onNodeWithTag("desktop-grid-y")
             .performTouchInput { longClick() }
         composeRule.waitForIdle()
@@ -123,6 +126,18 @@ class DesktopAppLongPressTest {
         composeRule.onNodeWithTag("store-row-y-open").assertIsDisplayed()
         composeRule.onNodeWithTag("store-row-y").performClick()
         composeRule.waitForIdle()
+        // 整页详情：store-detail-page 替换商店列表，不再是叠加的底部弹层
+        composeRule.onNodeWithTag("store-detail-page").assertIsDisplayed()
+        assertTrue(
+            composeRule.onAllNodesWithTag("store-detail-sheet", useUnmergedTree = true)
+                .fetchSemanticsNodes()
+                .isEmpty(),
+        )
+        assertTrue(
+            composeRule.onAllNodesWithTag("store-list", useUnmergedTree = true)
+                .fetchSemanticsNodes()
+                .isEmpty(),
+        )
         composeRule.onNodeWithTag("store-detail-add-home").performClick()
         composeRule.waitForIdle()
 
@@ -131,8 +146,13 @@ class DesktopAppLongPressTest {
             assertNotNull(install)
             assertTrue(install!!.onHome)
         }
+        // 详情返回键只回商店列表，再经商店返回栏回桌面
+        composeRule.onNodeWithTag("store-detail-back").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("store-seg-store").assertIsDisplayed()
         composeRule.onNodeWithTag("desktop-back-bar").performClick()
         composeRule.waitForIdle()
+        swipeDesktopToAppsPage(composeRule)
         composeRule.onNodeWithTag("desktop-grid-y").assertIsDisplayed()
     }
 
@@ -143,6 +163,7 @@ class DesktopAppLongPressTest {
         composeRule.activityRule.scenario.recreate()
         composeRule.waitForIdle()
 
+        swipeDesktopToAppsPage(composeRule)
         composeRule.onNodeWithTag("desktop-grid-ustagram")
             .performTouchInput { longClick() }
         composeRule.waitForIdle()
@@ -168,6 +189,13 @@ class DesktopAppLongPressTest {
         composeRule.onNodeWithTag("store-list").performScrollToNode(hasTestTag("store-tile-ustagram"))
         composeRule.onNodeWithTag("store-tile-ustagram").performClick()
         composeRule.waitForIdle()
+        // 卸载后详情为整页：store-detail-page 内重新出现「获取」，无底部弹层
+        composeRule.onNodeWithTag("store-detail-page").assertIsDisplayed()
+        assertTrue(
+            composeRule.onAllNodesWithTag("store-detail-sheet", useUnmergedTree = true)
+                .fetchSemanticsNodes()
+                .isEmpty(),
+        )
         composeRule.onNodeWithTag("store-detail-get", useUnmergedTree = true).assertIsDisplayed()
     }
 }

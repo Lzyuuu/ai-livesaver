@@ -1,10 +1,13 @@
 package io.github.lzyuuu.ailivesaver
 
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasScrollAction
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -83,6 +86,9 @@ class MessengerSmokeTest {
         val rootId = WorldStore(InstrumentationRegistry.getInstrumentation().targetContext).use { store ->
             store.characters().first { it.name == "Root" }.id
         }
+        // 隔离：残留角色会让 Root 行被挤出 LazyColumn 视口（未组合则不在语义树），先滚动到该行。
+        composeRule.onNode(hasScrollAction(), useUnmergedTree = true)
+            .performScrollToNode(hasTestTag("chat-character-$rootId"))
         composeRule.onNodeWithTag("chat-character-$rootId", useUnmergedTree = true).performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("messenger-open-context").assertIsDisplayed()

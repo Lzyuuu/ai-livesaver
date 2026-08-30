@@ -43,6 +43,7 @@ class BenchmarkSmokeTest {
 
     @Test
     fun pageStructureAndControlsWithoutActiveModel() {
+        swipeDesktopToAppsPage(composeRule)
         composeRule.onNodeWithTag("desktop-grid-benchmark").performClick()
         composeRule.waitForIdle()
 

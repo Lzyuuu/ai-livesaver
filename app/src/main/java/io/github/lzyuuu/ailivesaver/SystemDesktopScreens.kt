@@ -24,10 +24,11 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -59,6 +60,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -84,6 +86,11 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import kotlin.random.Random
+import kotlinx.coroutines.launch
+
+private const val DESKTOP_PAGE_HOME = 0
+private const val DESKTOP_PAGE_APPS = 1
+private const val DESKTOP_PAGE_COUNT = 2
 
 @Composable
 internal fun SystemDesktopScreen(
@@ -99,6 +106,7 @@ internal fun SystemDesktopScreen(
     onUninstallHomeApp: (String) -> Unit = {},
     homeApps: List<DesktopApp> = emptyList(),
     homeGridApps: List<DesktopHomeGridEntry> = emptyList(),
+    allGridApps: List<DesktopHomeGridEntry> = emptyList(),
 ) {
     val now = remember { Date() }
     val time = remember(now) {
@@ -109,6 +117,13 @@ internal fun SystemDesktopScreen(
     }
 
     val dockBottomPadding = 88.dp + contentPadding.calculateBottomPadding()
+    // DT-02：pager 页状态只用 remember（刻意不用 rememberSaveable）——每次返回桌面都是
+    // 新的 SystemDesktopScreen 组合，恒定落回第一页主页，不会停留在第二页应用网格。
+    val pagerState = rememberPagerState(initialPage = DESKTOP_PAGE_HOME) { DESKTOP_PAGE_COUNT }
+    val pagerScope = rememberCoroutineScope()
+    val homeRoutes = remember(homeGridApps) {
+        homeGridApps.mapTo(HashSet()) { it.app.route }
+    }
 
     Box(
         modifier = Modifier
@@ -121,22 +136,27 @@ internal fun SystemDesktopScreen(
             .padding(contentPadding)
             .testTag("system-desktop"),
     ) {
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(4),
+        // DT-02：真正的两页 HorizontalPager——第一页主页（时钟/日期/Root 卡），
+        // 第二页完整应用网格；Dock 与页码指示器固定在 pager 之外，两页均可见。
+        HorizontalPager(
+            state = pagerState,
             modifier = Modifier
                 .fillMaxSize()
-                .testTag("desktop-app-grid"),
-            contentPadding = PaddingValues(
-                start = 14.dp,
-                end = 14.dp,
-                top = 44.dp,
-                bottom = dockBottomPadding,
-            ),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            item(span = { GridItemSpan(4) }) {
-                Column(modifier = Modifier.fillMaxWidth()) {
+                .testTag("desktop-pager"),
+        ) { page ->
+            when (page) {
+                DESKTOP_PAGE_HOME -> Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                        .padding(
+                            start = 14.dp,
+                            end = 14.dp,
+                            top = 44.dp,
+                            bottom = dockBottomPadding + 30.dp,
+                        )
+                        .testTag("desktop-page-home"),
+                ) {
                     Text(
                         time,
                         color = FancyCream,
@@ -172,92 +192,148 @@ internal fun SystemDesktopScreen(
                         )
                     }
                     Spacer(modifier = Modifier.height(48.dp))
-                }
-            }
-
-            item(span = { GridItemSpan(4) }) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(18.dp))
-                        .border(1.dp, FancyGold.copy(alpha = 0.55f), RoundedCornerShape(18.dp))
-                        .background(
-                            Brush.horizontalGradient(
-                                listOf(Color(0xFF20201B), Color(0xFF151715)),
-                            ),
-                        )
-                        .clickable(onClick = onOpenRoot)
-                        .padding(horizontal = 14.dp, vertical = 16.dp)
-                        .testTag("desktop-root-card"),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    RootPortrait(
-                        appearance = rootAppearance,
+                    Row(
                         modifier = Modifier
-                            .size(52.dp)
-                            .clip(CircleShape)
-                            .border(1.dp, Color(0xFF2D7C78), CircleShape),
-                    )
-                    Spacer(modifier = Modifier.width(14.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            rootName,
-                            color = FancyCream,
-                            fontFamily = FontFamily.Serif,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 21.sp,
-                        )
-                        Text(
-                            rootStatus,
-                            color = Color(0xFFBEC2CB),
-                            fontSize = 12.sp,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        Spacer(modifier = Modifier.height(3.dp))
-                        Text(rootActionLabel, color = FancyGold, fontWeight = FontWeight.SemiBold)
-                    }
-                    Box(
-                        modifier = Modifier
-                            .size(width = 28.dp, height = 22.dp)
-                            .clip(RoundedCornerShape(11.dp))
-                            .background(Color(0xFF2B2A20)),
-                        contentAlignment = Alignment.Center,
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(18.dp))
+                            .border(1.dp, FancyGold.copy(alpha = 0.55f), RoundedCornerShape(18.dp))
+                            .background(
+                                Brush.horizontalGradient(
+                                    listOf(Color(0xFF20201B), Color(0xFF151715)),
+                                ),
+                            )
+                            .clickable(onClick = onOpenRoot)
+                            .padding(horizontal = 14.dp, vertical = 16.dp)
+                            .testTag("desktop-root-card"),
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.ArrowForward,
-                            contentDescription = null,
-                            tint = FancyGold,
-                            modifier = Modifier.size(15.dp),
+                        RootPortrait(
+                            appearance = rootAppearance,
+                            modifier = Modifier
+                                .size(52.dp)
+                                .clip(CircleShape)
+                                .border(1.dp, Color(0xFF2D7C78), CircleShape),
                         )
+                        Spacer(modifier = Modifier.width(14.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                rootName,
+                                color = FancyCream,
+                                fontFamily = FontFamily.Serif,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 21.sp,
+                            )
+                            Text(
+                                rootStatus,
+                                color = Color(0xFFBEC2CB),
+                                fontSize = 12.sp,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            Spacer(modifier = Modifier.height(3.dp))
+                            Text(rootActionLabel, color = FancyGold, fontWeight = FontWeight.SemiBold)
+                        }
+                        Box(
+                            modifier = Modifier
+                                .size(width = 28.dp, height = 22.dp)
+                                .clip(RoundedCornerShape(11.dp))
+                                .background(Color(0xFF2B2A20)),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.ArrowForward,
+                                contentDescription = null,
+                                tint = FancyGold,
+                                modifier = Modifier.size(15.dp),
+                            )
+                        }
                     }
                 }
-            }
-
-            items(homeGridApps, key = { it.app.route }) { entry ->
-                DesktopGridTile(
-                    entry = entry,
-                    onClick = { onOpenApp(entry.app) },
-                    onRemoveFromHome = onRemoveFromHome,
-                    onUninstallHomeApp = onUninstallHomeApp,
-                )
+                else -> Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .testTag("desktop-page-apps"),
+                ) {
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(4),
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .testTag("desktop-app-grid"),
+                        contentPadding = PaddingValues(
+                            start = 14.dp,
+                            end = 14.dp,
+                            top = 44.dp,
+                            bottom = dockBottomPadding + 30.dp,
+                        ),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                    ) {
+                        items(allGridApps, key = { it.app.route }) { entry ->
+                            DesktopGridTile(
+                                entry = entry,
+                                // 首页网格项保留 desktop-grid-* 标签（点击/长按/门控语义不变）；
+                                // 其余可达应用用 desktop-apps-* 标签，避免与首页网格混淆。
+                                testTag = if (entry.app.route in homeRoutes) {
+                                    entry.testTag
+                                } else {
+                                    "desktop-apps-${entry.app.route}"
+                                },
+                                onClick = { onOpenApp(entry.app) },
+                                onRemoveFromHome = onRemoveFromHome,
+                                onUninstallHomeApp = onUninstallHomeApp,
+                            )
+                        }
+                    }
+                }
             }
         }
 
-        Row(
+        Column(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .padding(horizontal = 14.dp, vertical = 10.dp)
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(26.dp))
-                .border(1.dp, Color.White.copy(alpha = .14f), RoundedCornerShape(26.dp))
-                .background(Color(0xFF202326).copy(alpha = 0.94f))
-                .padding(horizontal = 8.dp, vertical = 12.dp)
-                .testTag("desktop-dock"),
-            horizontalArrangement = Arrangement.SpaceEvenly,
+                .fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            DesktopNavigator.composeDock().forEach { app ->
-                DockIcon(app = app, onClick = { onOpenApp(app) })
+            Row(
+                modifier = Modifier.testTag("desktop-page-indicator"),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                repeat(pagerState.pageCount) { index ->
+                    val selected = pagerState.currentPage == index
+                    Box(
+                        modifier = Modifier
+                            .testTag("desktop-page-dot-$index")
+                            .clickable {
+                                pagerScope.launch { pagerState.animateScrollToPage(index) }
+                            }
+                            .padding(6.dp)
+                            .size(6.dp)
+                            .clip(CircleShape)
+                            .background(
+                                if (selected) {
+                                    FancyGold
+                                } else {
+                                    Color(0xFFB9BFCA).copy(alpha = .35f)
+                                },
+                            ),
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(
+                modifier = Modifier
+                    .padding(horizontal = 14.dp, vertical = 10.dp)
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(26.dp))
+                    .border(1.dp, Color.White.copy(alpha = .14f), RoundedCornerShape(26.dp))
+                    .background(Color(0xFF202326).copy(alpha = 0.94f))
+                    .padding(horizontal = 8.dp, vertical = 12.dp)
+                    .testTag("desktop-dock"),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+            ) {
+                DesktopNavigator.composeDock().forEach { app ->
+                    DockIcon(app = app, onClick = { onOpenApp(app) })
+                }
             }
         }
     }
@@ -270,6 +346,7 @@ private fun DesktopGridTile(
     onClick: () -> Unit,
     onRemoveFromHome: (String) -> Unit,
     onUninstallHomeApp: (String) -> Unit,
+    testTag: String = entry.testTag,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
     var showUninstallConfirm by remember { mutableStateOf(false) }
@@ -288,7 +365,7 @@ private fun DesktopGridTile(
                     Modifier.clickable(onClick = onClick)
                 },
             )
-            .testTag(entry.testTag),
+            .testTag(testTag),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Box {
@@ -379,7 +456,7 @@ private fun DesktopGridIcon(entry: DesktopHomeGridEntry) {
     ) {
         if (entry.symbol.isNullOrBlank()) {
             Icon(
-                Icons.Default.Person,
+                iconFor(entry.app),
                 contentDescription = entry.label,
                 tint = FancyCream,
                 modifier = Modifier.size(26.dp),

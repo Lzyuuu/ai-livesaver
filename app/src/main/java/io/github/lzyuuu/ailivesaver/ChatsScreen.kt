@@ -90,6 +90,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import java.text.DateFormat
@@ -186,6 +187,22 @@ internal fun composeImageIntentPrompt(
 
 internal fun shouldQueueReplyImage(controls: ChatControls, replyBody: String): Boolean =
     controls.autoImageGeneration && replyBody.isNotBlank()
+
+/**
+ * MS-02 空态大头像卡（参考 ref-11-chat-detail）：仅当会话没有任何消息、
+ * 且没有进行中的发送/首条流式回复时展示；composer 始终保留可用。
+ */
+internal fun shouldShowMessengerEmptyCard(messageCount: Int, sending: Boolean): Boolean =
+    messageCount == 0 && !sending
+
+/** 空态卡人设摘要：展示前把角色卡宏展开成可读称呼（{{char}}→角色名，{{user}}→用户名）。 */
+internal fun displayPersonaSummary(
+    persona: String,
+    characterName: String,
+    userName: String,
+): String = persona
+    .replace("{{char}}", characterName)
+    .replace("{{user}}", userName.ifBlank { "你" })
 
 /**
  * 回复后自动配图（spec-v451 §1）：把回复内容转成「配图意图」并入世界事件同一条
@@ -876,6 +893,95 @@ private fun MessengerCharacterAvatar(
     Avatar(character.name.take(1).uppercase(), size, avatarPath)
 }
 
+/**
+ * MS-02 空会话大头像卡（参考 ref-11-chat-detail）：居中大圆头像（金色描边）+
+ * 角色名 + 人设摘要 + 开始聊天提示。仅在 [shouldShowMessengerEmptyCard] 为真时渲染。
+ */
+@Composable
+private fun MessengerEmptyConversationCard(
+    character: ResidentCharacter,
+    userName: String,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(horizontal = 32.dp)
+            .testTag("messenger-empty-card"),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        MessengerEmptyCardAvatar(character)
+        Spacer(Modifier.height(22.dp))
+        Text(
+            character.name,
+            color = FancyCream,
+            fontFamily = FontFamily.Serif,
+            fontWeight = FontWeight.Bold,
+            fontSize = 24.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        if (character.persona.isNotBlank()) {
+            Spacer(Modifier.height(8.dp))
+            Text(
+                displayPersonaSummary(character.persona, character.name, userName),
+                color = FancyCream.copy(alpha = 0.6f),
+                style = MaterialTheme.typography.bodyMedium,
+                textAlign = TextAlign.Center,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        Spacer(Modifier.height(18.dp))
+        Text(
+            stringResource(R.string.messenger_empty_card_hint),
+            color = FancyCream.copy(alpha = 0.45f),
+            style = MaterialTheme.typography.bodyMedium,
+        )
+    }
+}
+
+/** 与 [Avatar] 一致的头像样式，但首字母字号随尺寸放大，并带参考图的金色细环。 */
+@Composable
+private fun MessengerEmptyCardAvatar(character: ResidentCharacter) {
+    val avatarPath = remember(character.id, character.cardJson) {
+        CharacterCardV2.profileFields(character).avatarPath
+    }
+    val bitmap = remember(avatarPath) { avatarPath?.let(BitmapFactory::decodeFile)?.asImageBitmap() }
+    Surface(
+        modifier = Modifier.size(120.dp),
+        shape = CircleShape,
+        color = FancyGold.copy(alpha = 0.85f),
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Surface(
+                modifier = Modifier.size(112.dp),
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.secondaryContainer,
+            ) {
+                if (bitmap != null) {
+                    Image(
+                        bitmap = bitmap,
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop,
+                    )
+                } else {
+                    Box(contentAlignment = Alignment.Center) {
+                        Text(
+                            character.name.take(1).uppercase(),
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 42.sp,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
 @Composable
 private fun messengerSearchFieldColors() = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
     focusedTextColor = FancyCream,
@@ -1301,6 +1407,7 @@ private fun ConversationScreen(
     val recap = remember(revision) { store.conversationRecap(character.id) }
     val relationship = remember(revision) { store.relationship(character.id) }
     val relationshipEvents = remember(revision) { store.relationshipEvents(character.id) }
+    val userName = remember(revision) { store.userName() }
     val listState = rememberLazyListState()
     var input by rememberSaveable { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
@@ -1899,6 +2006,10 @@ private fun ConversationScreen(
                 },
             )
         }
+        if (shouldShowMessengerEmptyCard(messages.size, sending)) {
+            // MS-02：空会话展示大头像角色卡，composer 保持可用。
+            MessengerEmptyConversationCard(character, userName, modifier = Modifier.weight(1f))
+        } else {
         LazyColumn(
             modifier = Modifier.weight(1f),
             state = listState,
@@ -1953,6 +2064,7 @@ private fun ConversationScreen(
                     }
                 }
             }
+        }
         }
         Surface(color = FancyInk) {
             Row(

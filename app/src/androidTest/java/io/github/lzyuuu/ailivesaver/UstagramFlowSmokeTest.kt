@@ -84,6 +84,7 @@ class UstagramFlowSmokeTest {
                 .toSet()
         }
 
+        swipeDesktopToAppsPage(composeRule)
         composeRule.onNodeWithTag("desktop-grid-ustagram").performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("ustagram-screen", useUnmergedTree = true).assertIsDisplayed()

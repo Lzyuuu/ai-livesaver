@@ -83,6 +83,7 @@ class YFeedFlowSmokeTest {
 
     @Test
     fun opensYComposePostsNestedRepliesGenerateAndReturns() {
+        swipeDesktopToAppsPage(composeRule)
         composeRule.onNodeWithTag("desktop-grid-y").performClick()
         composeRule.waitForIdle()
 

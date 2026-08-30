@@ -19,6 +19,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
@@ -60,6 +62,28 @@ internal fun parseLorebookKeywords(raw: String): List<String> =
 
 /** 关键词序列 → 存库字符串（统一 "，" 分隔）。 */
 internal fun encodeLorebookKeywords(keywords: List<String>): String = keywords.joinToString("，")
+
+// —— 书册 / 分组（SO-12，对齐参考 ref-81「已分享 / Root Sudo」两本书册）——
+
+/** 书册名归一化：去首尾空白、压缩连续空白并截 24 字；空输入回退默认书册「已分享」。 */
+internal fun normalizeLorebookBookName(raw: String): String =
+    raw.trim().replace(Regex("\\s+"), " ").take(24).ifEmpty { LOREBOOK_SHARED_BOOK }
+
+/** 分组名归一化：去首尾空白并截 24 字；空输入表示未分组。 */
+internal fun normalizeLorebookGroupName(raw: String): String = raw.trim().take(24)
+
+/** 书册展示顺序：默认「已分享」居首、「Root Sudo」次之（即使尚无条目也始终展示），
+ *  其余按名称排序；去重。 */
+internal fun orderedLorebookBooks(books: Collection<String>): List<String> {
+    val ordered = mutableListOf<String>()
+    fun addOnce(name: String) {
+        if (name !in ordered) ordered += name
+    }
+    addOnce(LOREBOOK_SHARED_BOOK)
+    addOnce(LOREBOOK_ROOT_BOOK)
+    books.sortedWith(String.CASE_INSENSITIVE_ORDER).forEach { addOnce(it) }
+    return ordered
+}
 
 /** 对话文本是否命中任一关键词（大小写不敏感）；无关键词 = 永不触发。 */
 internal fun lorebookKeywordTriggered(keywords: List<String>, conversationText: String): Boolean {
@@ -172,8 +196,9 @@ internal fun rootCreatorBuildCard(draft: RootCreatorDraft): RootCreatorCard {
 // —— 页面 ——
 
 /**
- * Lorebook（对齐参考 ref-81「世界书」）：使用世界书知识总开关 + 条目
- * （名称即事实正文、关键词触发、启用开关），存 world_facts（v27：keywords/enabled）。
+ * Lorebook（对齐参考 ref-81「世界书」）：使用世界书知识总开关 + 书册分组与条目层级
+ * （默认「已分享」「Root Sudo」两本书册，书内可选分组；条目含关键词触发、启用开关），
+ * 存 world_facts（v28：keywords/enabled/book/group）。
  */
 @Composable
 internal fun LorebookScreen(
@@ -186,8 +211,16 @@ internal fun LorebookScreen(
     val context = LocalContext.current
     var entry by rememberSaveable { mutableStateOf("") }
     var keywords by rememberSaveable { mutableStateOf("") }
+    var groupName by rememberSaveable { mutableStateOf("") }
+    var selectedBook by rememberSaveable { mutableStateOf(LOREBOOK_SHARED_BOOK) }
+    var creatingBook by rememberSaveable { mutableStateOf(false) }
+    var newBookName by rememberSaveable { mutableStateOf("") }
+    var bookMenuOpen by remember { mutableStateOf(false) }
     var notice by remember { mutableStateOf<String?>(null) }
     val facts = remember(revision) { store.worldFacts() }
+    val books = remember(facts) {
+        orderedLorebookBooks(facts.map { it.book } + listOf(LOREBOOK_SHARED_BOOK, LOREBOOK_ROOT_BOOK))
+    }
     val lorebookPrefs = remember { context.getSharedPreferences(LOREBOOK_PREFS, android.content.Context.MODE_PRIVATE) }
     var lorebookEnabled by remember(revision) {
         mutableStateOf(readLorebookEnabled(lorebookPrefs))
@@ -315,6 +348,98 @@ internal fun LorebookScreen(
                 )
             }
             item {
+                // 书册选择（SO-12）：默认「已分享」「Root Sudo」，可新建书册。
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(ReferencePalette.Card.copy(alpha = 0.6f))
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                ) {
+                    Text(
+                        stringResource(R.string.lorebook_book_picker_label),
+                        color = FancyCream.copy(alpha = 0.5f),
+                        fontSize = 12.sp,
+                    )
+                    Box {
+                        TextButton(
+                            onClick = { bookMenuOpen = true },
+                            modifier = Modifier.testTag("lorebook-book-picker"),
+                        ) {
+                            Text(
+                                if (creatingBook) {
+                                    stringResource(R.string.lorebook_book_new_option)
+                                } else {
+                                    selectedBook
+                                },
+                                color = FancyGold,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = bookMenuOpen,
+                            onDismissRequest = { bookMenuOpen = false },
+                        ) {
+                            books.forEach { book ->
+                                DropdownMenuItem(
+                                    text = { Text(book) },
+                                    onClick = {
+                                        selectedBook = book
+                                        creatingBook = false
+                                        bookMenuOpen = false
+                                    },
+                                    modifier = Modifier.testTag("lorebook-book-option-$book"),
+                                )
+                            }
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.lorebook_book_new_option)) },
+                                onClick = {
+                                    creatingBook = true
+                                    bookMenuOpen = false
+                                },
+                                modifier = Modifier.testTag("lorebook-book-option-new"),
+                            )
+                        }
+                    }
+                    if (creatingBook) {
+                        OutlinedTextField(
+                            value = newBookName,
+                            onValueChange = { newBookName = it },
+                            label = { Text(stringResource(R.string.lorebook_book_new_hint), color = FancyCream.copy(alpha = 0.4f)) },
+                            singleLine = true,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("lorebook-book-new"),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = FancyCream,
+                                unfocusedTextColor = FancyCream,
+                                focusedBorderColor = FancyCream.copy(alpha = 0.35f),
+                                unfocusedBorderColor = FancyCream.copy(alpha = 0.28f),
+                                cursorColor = FancyGold,
+                            ),
+                        )
+                    }
+                }
+            }
+            item {
+                OutlinedTextField(
+                    value = groupName,
+                    onValueChange = { groupName = it },
+                    placeholder = { Text(stringResource(R.string.lorebook_group_hint), color = FancyCream.copy(alpha = 0.4f)) },
+                    singleLine = true,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("lorebook-group"),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = FancyCream,
+                        unfocusedTextColor = FancyCream,
+                        focusedBorderColor = FancyCream.copy(alpha = 0.35f),
+                        unfocusedBorderColor = FancyCream.copy(alpha = 0.28f),
+                        cursorColor = FancyGold,
+                    ),
+                )
+            }
+            item {
                 Button(
                     onClick = {
                         val body = normalizeWorldFactEntry(entry)
@@ -323,10 +448,28 @@ internal fun LorebookScreen(
                             return@Button
                         }
                         val parsed = parseLorebookKeywords(keywords)
-                        store.addWorldFact(body, keywords = encodeLorebookKeywords(parsed))
+                        val targetBook = if (creatingBook) {
+                            normalizeLorebookBookName(newBookName)
+                        } else {
+                            normalizeLorebookBookName(selectedBook)
+                        }
+                        store.addWorldFact(
+                            body,
+                            keywords = encodeLorebookKeywords(parsed),
+                            book = targetBook,
+                            group = normalizeLorebookGroupName(groupName),
+                        )
                         entry = ""
                         keywords = ""
-                        notice = if (parsed.isEmpty()) "已保存到世界知识（始终注入）。" else "已保存，关键词命中时注入。"
+                        groupName = ""
+                        newBookName = ""
+                        creatingBook = false
+                        selectedBook = targetBook
+                        notice = if (targetBook == LOREBOOK_SHARED_BOOK) {
+                            if (parsed.isEmpty()) "已保存到世界知识（始终注入）。" else "已保存，关键词命中时注入。"
+                        } else {
+                            context.getString(R.string.lorebook_saved_to_book, targetBook)
+                        }
                         onChanged()
                     },
                     enabled = entry.isNotBlank(),
@@ -361,60 +504,127 @@ internal fun LorebookScreen(
                     )
                 }
             }
-            items(facts) { fact ->
-                val factKeywords = parseLorebookKeywords(fact.keywords)
+            items(books, key = { it }) { book ->
+                val bookFacts = facts.filter { it.book == book }
+                val groups = bookFacts
+                    .map { it.group }
+                    .filter { it.isNotEmpty() }
+                    .distinct()
+                    .sorted()
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(16.dp))
                         .background(ReferencePalette.Card)
                         .padding(14.dp)
-                        .testTag("lorebook-fact"),
+                        .testTag("lorebook-book-$book"),
                 ) {
-                    Text(fact.body, color = Color.White, fontSize = 14.sp)
-                    if (factKeywords.isNotEmpty()) {
-                        Text(
-                            "关键词：${factKeywords.joinToString("、")}",
-                            color = FancyGold.copy(alpha = 0.85f),
-                            fontSize = 12.sp,
-                        )
-                    } else {
-                        Text(
-                            "始终注入",
-                            color = FancyCream.copy(alpha = 0.45f),
-                            fontSize = 12.sp,
-                        )
-                    }
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
+                        Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
+                        Text(book, color = FancyGold, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                         Text(
-                            if (fact.enabled) "启用" else "已停用",
+                            stringResource(R.string.lorebook_entries_count, bookFacts.size),
                             color = FancyCream.copy(alpha = 0.55f),
                             fontSize = 12.sp,
                         )
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Switch(
-                                checked = fact.enabled,
-                                onCheckedChange = { next ->
-                                    store.setWorldFactEnabled(fact.id, next)
-                                    onChanged()
-                                },
-                                modifier = Modifier.testTag("lorebook-enable-${fact.id}"),
+                    }
+                    if (bookFacts.isEmpty()) {
+                        Text(
+                            stringResource(R.string.lorebook_book_empty),
+                            color = FancyCream.copy(alpha = 0.45f),
+                            fontSize = 13.sp,
+                            modifier = Modifier.padding(top = 8.dp).testTag("lorebook-empty-$book"),
+                        )
+                    } else {
+                        Spacer(Modifier.height(8.dp))
+                        bookFacts
+                            .filter { it.group.isEmpty() }
+                            .forEach { fact -> LorebookFactCard(fact, store, onChanged) { notice = it } }
+                        groups.forEach { group ->
+                            Text(
+                                group,
+                                color = FancyCream,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier
+                                    .padding(top = 10.dp, bottom = 2.dp)
+                                    .testTag("lorebook-group-$book-$group"),
                             )
-                            TextButton(
-                                onClick = {
-                                    store.deleteWorldFact(fact.id)
-                                    notice = "已删除一条世界事实。"
-                                    onChanged()
-                                },
-                                modifier = Modifier.testTag("lorebook-delete-${fact.id}"),
-                            ) { Text("删除", color = FancyCream.copy(alpha = 0.6f), fontSize = 12.sp) }
+                            bookFacts
+                                .filter { it.group == group }
+                                .forEach { fact -> LorebookFactCard(fact, store, onChanged) { notice = it } }
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+/**
+ * 单条世界事实卡片（保留旧 testTag：lorebook-fact / lorebook-enable-{id} / lorebook-delete-{id}）。
+ */
+@Composable
+private fun LorebookFactCard(
+    fact: WorldFact,
+    store: WorldStore,
+    onChanged: () -> Unit,
+    onNotice: (String) -> Unit,
+) {
+    val factKeywords = parseLorebookKeywords(fact.keywords)
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 8.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .background(ReferencePalette.Card.copy(alpha = 0.7f))
+            .padding(12.dp)
+            .testTag("lorebook-fact"),
+    ) {
+        Text(fact.body, color = Color.White, fontSize = 14.sp)
+        if (factKeywords.isNotEmpty()) {
+            Text(
+                "关键词：${factKeywords.joinToString("、")}",
+                color = FancyGold.copy(alpha = 0.85f),
+                fontSize = 12.sp,
+            )
+        } else {
+            Text(
+                "始终注入",
+                color = FancyCream.copy(alpha = 0.45f),
+                fontSize = 12.sp,
+            )
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                if (fact.enabled) "启用" else "已停用",
+                color = FancyCream.copy(alpha = 0.55f),
+                fontSize = 12.sp,
+            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Switch(
+                    checked = fact.enabled,
+                    onCheckedChange = { next ->
+                        store.setWorldFactEnabled(fact.id, next)
+                        onChanged()
+                    },
+                    modifier = Modifier.testTag("lorebook-enable-${fact.id}"),
+                )
+                TextButton(
+                    onClick = {
+                        store.deleteWorldFact(fact.id)
+                        onNotice("已删除一条世界事实。")
+                        onChanged()
+                    },
+                    modifier = Modifier.testTag("lorebook-delete-${fact.id}"),
+                ) { Text("删除", color = FancyCream.copy(alpha = 0.6f), fontSize = 12.sp) }
             }
         }
     }

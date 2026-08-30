@@ -102,6 +102,7 @@
     <string name="messenger_clear">清理</string>
     <string name="messenger_stop_generation">停止生成</string>
     <string name="messenger_no_messages_yet">No messages yet</string>
+    <string name="messenger_empty_card_hint">说点什么来开始。</string>
     <string name="world_creation_path">这段关系将怎样开始</string>
     <string name="connect_inference">连接推理</string>
     <string name="connect_inference_summary">保存你选择的云端 Provider，让角色能够回应。</string>
@@ -605,6 +606,12 @@
     <string name="storage_media">生成媒体</string>
     <string name="storage_app_files">应用文件</string>
     <string name="storage_available">可用空间</string>
+    <string name="storage_browser_section">应用沙盒文件</string>
+    <string name="storage_browser_loading">正在读取目录…</string>
+    <string name="storage_browser_empty">此目录为空</string>
+    <string name="storage_browser_truncated">条目较多，仅显示前 %1$d 项</string>
+    <string name="storage_entry_items">%1$d 项</string>
+    <string name="storage_loading_placeholder">…</string>
     <string name="local_dream_settings">Local Dream</string>
     <string name="local_dream_settings_summary">连接状态、创作队列与生图联动</string>
     <string name="world_settings">世界设置</string>
@@ -630,6 +637,16 @@
     <string name="shared_world_facts_summary">所有成员可共享的地点、公共事件和规则；固定内容优先于生成冲突。</string>
     <string name="add_world_fact">添加世界设定</string>
     <string name="fact_or_rule">地点、事实或世界规则</string>
+    <!-- 世界书书册分组（SO-12，对齐参考 ref-81「已分享 / Root Sudo」两本书册） -->
+    <string name="lorebook_book_picker_label">书册</string>
+    <string name="lorebook_book_new_option">新建书册…</string>
+    <string name="lorebook_book_new_hint">新书册名称</string>
+    <string name="lorebook_group_hint">分组（可留空）</string>
+    <string name="lorebook_entries_count">%1$d 条条目</string>
+    <string name="lorebook_book_empty">还没有条目</string>
+    <string name="lorebook_saved_to_book">已保存到「%1$s」。</string>
+    <string name="lorebook_in_book">书册：%1$s</string>
+    <string name="lorebook_in_group">分组：%1$s</string>
     <string name="character_cognition_title">角色认知</string>
     <string name="character_cognition_summary">只属于当前角色的知识、秘密、偏见或误解。</string>
     <string name="add_cognition">添加角色认知</string>
@@ -898,6 +915,46 @@
     <string name="desktop_grid_menu_uninstall">卸载</string>
     <string name="desktop_grid_uninstall_title">卸载 %1$s？</string>
     <string name="desktop_grid_uninstall_message">%1$s 将从桌面移除，并可在应用商店重新获取。</string>
+
+    <!-- Binder 媒人问卷（SO-05 单页化） -->
+    <string name="binder_eyebrow">媒人</string>
+    <string name="binder_title">Binder</string>
+    <string name="binder_headline">你想认识什么样的人？</string>
+    <string name="binder_subhead">选择由 Binder 为你介绍的人。</string>
+    <string name="binder_section_relationship">关系与偏好</string>
+    <string name="binder_section_personality">人格与沟通</string>
+    <string name="binder_section_interests">兴趣</string>
+    <string name="binder_section_boundaries">边界与排除</string>
+    <string name="binder_field_relationship">期待的关系</string>
+    <string name="binder_field_preferences">相处偏好</string>
+    <string name="binder_field_personality">人格气质</string>
+    <string name="binder_field_communication">沟通方式</string>
+    <string name="binder_field_interests">兴趣与日常</string>
+    <string name="binder_field_boundaries">边界</string>
+    <string name="binder_field_exclusions">明确排除</string>
+    <string name="binder_generate">生成候选</string>
+    <string name="binder_generating">生成中…</string>
+    <string name="binder_results_title">选择匹配</string>
+    <string name="binder_confirm_chat">确认并聊天</string>
+    <string name="binder_error_provider">Provider 失败：%1$s</string>
+    <string name="binder_error_relationship_required">请填写关系偏好</string>
+
+    <string name="store_detail_back">返回商店</string>
+    <string name="store_detail_eyebrow">Fancy Store</string>
+    <string name="store_detail_meta">Fancy AI · %1$s · %2$s</string>
+    <string name="store_detail_meta_free">免费</string>
+    <string name="store_detail_about">关于</string>
+    <string name="store_detail_included">已包含</string>
+    <string name="store_detail_requirements">要求</string>
+    <string name="store_detail_open">打开</string>
+    <string name="store_detail_add_home">+ 添加到主页</string>
+    <string name="store_detail_remove_home">从主页移除</string>
+    <string name="store_detail_uninstall">卸载</string>
+    <string name="store_detail_get">获取</string>
+    <string name="store_detail_download_with_size">☁ 下载 · %1$d MiB</string>
+    <string name="store_detail_downloading">下载中 %1$d%%</string>
+    <string name="store_detail_coming_soon">即将开放</string>
+    <string name="store_detail_upcoming">即将推出</string>
 
     <string name="games_hub_title">Games Hub</string>
     <string name="games_hub_section">Interactive Experiences</string>

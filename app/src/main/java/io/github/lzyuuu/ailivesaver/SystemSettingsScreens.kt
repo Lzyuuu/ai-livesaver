@@ -14,9 +14,14 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
@@ -25,8 +30,10 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -39,6 +46,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import java.io.File
 import java.util.UUID
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 @Composable
 internal fun VoiceCallsSettingsScreen(
@@ -90,6 +99,12 @@ internal fun VoiceCallsSettingsScreen(
     }
 }
 
+/**
+ * SO-11 存储：文件式浏览界面（对齐参考 ref-80）。
+ * 顶部为返回 + 标题 + 面包屑路径；摘要卡保留数据库/媒体/应用文件/可用空间四行；
+ * 下方为应用沙盒内的只读目录浏览（storage-browser + storage-entry-* 结构标签）。
+ * 所有文件枚举经 [StorageBrowser] 受限快照并在 IO 调度器异步加载，主线程不做 walk。
+ */
 @Composable
 internal fun StorageScreen(
     contentPadding: PaddingValues,
@@ -98,10 +113,38 @@ internal fun StorageScreen(
     onBack: () -> Unit,
 ) {
     val context = LocalContext.current
-    val databaseBytes = File(context.getDatabasePath("world.db").path).length()
-    val mediaBytes = rememberStorageBytes(revision) { store.mediaStorageBytes() }
-    val appBytes = context.filesDir.walkTopDown().filter { it.isFile }.sumOf { it.length() }
-    val freeBytes = StatFs(context.filesDir.path).availableBytes
+    val sandboxRoot = remember { context.filesDir }
+    var currentPath by rememberSaveable { mutableStateOf("") }
+    val summary by produceState<StorageSummarySnapshot?>(initialValue = null, revision) {
+        value = withContext(Dispatchers.IO) {
+            val databaseBytes = File(context.getDatabasePath("world.db").path).length()
+            val appBytes = StorageBrowser.boundedSizeBytes(sandboxRoot)
+            StorageSummarySnapshot(
+                databaseBytes = databaseBytes,
+                mediaBytes = store.mediaStorageBytes(),
+                appFilesBytes = appBytes.totalBytes,
+                appFilesTruncated = appBytes.truncated,
+                freeBytes = StatFs(sandboxRoot.path).availableBytes,
+            )
+        }
+    }
+    val listing by produceState<StorageDirectoryListing?>(initialValue = null, currentPath, revision) {
+        value = withContext(Dispatchers.IO) {
+            StorageBrowser.listDirectory(sandboxRoot, currentPath)
+        }
+    }
+    // 越界/失效路径（例如目录被清理）自动回退到根。
+    LaunchedEffect(listing) {
+        val loaded = listing
+        if (loaded != null && currentPath.isNotEmpty() && loaded.relativePath != currentPath) {
+            currentPath = loaded.relativePath
+        }
+    }
+
+    fun navigateUp() {
+        if (currentPath.isEmpty()) onBack() else currentPath = StorageBrowser.parentPath(currentPath)
+    }
+
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
@@ -115,34 +158,170 @@ internal fun StorageScreen(
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         item {
-            ScreenBackButton(onBack)
+            ScreenBackButton(::navigateUp)
             Text(stringResource(R.string.storage_title), style = MaterialTheme.typography.headlineMedium)
+            Text(
+                "/" + currentPath,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.testTag("storage-path"),
+            )
             Text(stringResource(R.string.storage_summary), color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         item {
-            Card(Modifier.fillMaxWidth()) {
+            Card(Modifier.fillMaxWidth().testTag("storage-summary")) {
                 Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    StorageRow(stringResource(R.string.storage_world_database), databaseBytes, context)
-                    StorageRow(stringResource(R.string.storage_media), mediaBytes, context)
-                    StorageRow(stringResource(R.string.storage_app_files), appBytes, context)
-                    StorageRow(stringResource(R.string.storage_available), freeBytes, context)
+                    val snapshot = summary
+                    StorageRow(
+                        stringResource(R.string.storage_world_database),
+                        snapshot?.databaseBytes,
+                        context,
+                    )
+                    StorageRow(stringResource(R.string.storage_media), snapshot?.mediaBytes, context)
+                    StorageRow(
+                        stringResource(R.string.storage_app_files),
+                        snapshot?.appFilesBytes,
+                        context,
+                        truncated = snapshot?.appFilesTruncated == true,
+                    )
+                    StorageRow(stringResource(R.string.storage_available), snapshot?.freeBytes, context)
+                }
+            }
+        }
+        item {
+            Text(
+                stringResource(R.string.storage_browser_section),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+            )
+        }
+        val current = listing
+        if (current == null) {
+            item {
+                Text(
+                    stringResource(R.string.storage_browser_loading),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.testTag("storage-browser"),
+                )
+            }
+        } else if (current.entries.isEmpty()) {
+            item {
+                Text(
+                    stringResource(R.string.storage_browser_empty),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.testTag("storage-browser"),
+                )
+            }
+        } else {
+            item {
+                Card(Modifier.fillMaxWidth().testTag("storage-browser")) {
+                    Column {
+                        current.entries.forEachIndexed { index, entry ->
+                            StorageEntryRow(
+                                entry = entry,
+                                context = context,
+                                onOpen = if (entry.isDirectory) {
+                                    { currentPath = entry.relativePath }
+                                } else {
+                                    null
+                                },
+                            )
+                            if (index < current.entries.lastIndex) {
+                                HorizontalDivider(
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+            if (current.truncated) {
+                item {
+                    Text(
+                        stringResource(
+                            R.string.storage_browser_truncated,
+                            StorageBrowser.MAX_ENTRIES_PER_DIRECTORY,
+                        ),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.testTag("storage-browser-truncated"),
+                    )
                 }
             }
         }
     }
 }
 
+private data class StorageSummarySnapshot(
+    val databaseBytes: Long,
+    val mediaBytes: Long,
+    val appFilesBytes: Long,
+    val appFilesTruncated: Boolean,
+    val freeBytes: Long,
+)
+
 @Composable
-private fun StorageRow(label: String, bytes: Long, context: android.content.Context) {
-    Row(Modifier.fillMaxWidth()) {
-        Text(label, Modifier.weight(1f))
-        Text(Formatter.formatFileSize(context, bytes), fontWeight = FontWeight.Bold)
+private fun StorageEntryRow(
+    entry: StorageEntry,
+    context: android.content.Context,
+    onOpen: (() -> Unit)?,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("storage-entry-${entry.relativePath}")
+            .then(if (onOpen != null) Modifier.clickable(onClick = onOpen) else Modifier)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Icon(
+            imageVector = if (entry.isDirectory) Icons.Default.Folder else Icons.Default.Description,
+            contentDescription = null,
+            tint = if (entry.isDirectory) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            },
+        )
+        Column(Modifier.weight(1f)) {
+            Text(entry.name, fontWeight = FontWeight.Medium)
+            Text(
+                if (entry.isDirectory) {
+                    stringResource(R.string.storage_entry_items, entry.childCount) +
+                        if (entry.childrenTruncated) "+" else ""
+                } else {
+                    Formatter.formatFileSize(context, entry.sizeBytes)
+                },
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+        if (onOpen != null) {
+            Text("›", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
     }
 }
 
 @Composable
-private fun <T> rememberStorageBytes(key: Any?, calculation: () -> T): T =
-    androidx.compose.runtime.remember(key) { calculation() }
+private fun StorageRow(
+    label: String,
+    bytes: Long?,
+    context: android.content.Context,
+    truncated: Boolean = false,
+) {
+    Row(Modifier.fillMaxWidth()) {
+        Text(label, Modifier.weight(1f))
+        Text(
+            if (bytes == null) {
+                stringResource(R.string.storage_loading_placeholder)
+            } else {
+                Formatter.formatFileSize(context, bytes) + if (truncated) "+" else ""
+            },
+            fontWeight = FontWeight.Bold,
+        )
+    }
+}
 
 private val GENERATION_MAX_TOKEN_STEPS = listOf(128, 256, 512, 1024, 2048, 4096, 8192)
 private val GENERATION_PENALTY_WINDOW_STEPS = listOf(0, 32, 64, 128, 256, 512, 1024)

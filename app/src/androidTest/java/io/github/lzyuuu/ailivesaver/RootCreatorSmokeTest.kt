@@ -39,6 +39,7 @@ class RootCreatorSmokeTest {
 
     @Test
     fun pageStructureMatchesReference() {
+        swipeDesktopToAppsPage(composeRule)
         composeRule.onNodeWithTag("desktop-grid-root_creator").performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("root-creator").assertIsDisplayed()
@@ -52,6 +53,7 @@ class RootCreatorSmokeTest {
     @Test
     fun generateCardFromDescriptionThenSaveAsCharacter() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
+        swipeDesktopToAppsPage(composeRule)
         composeRule.onNodeWithTag("desktop-grid-root_creator").performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("root-creator").assertIsDisplayed()

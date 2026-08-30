@@ -71,6 +71,7 @@ class RebbitFlowSmokeTest {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val postBody = "Rebbit compose smoke ${System.nanoTime()}"
 
+        swipeDesktopToAppsPage(composeRule)
         composeRule.onNodeWithTag("desktop-grid-rebbit").performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("rebbit-screen").assertIsDisplayed()

@@ -224,6 +224,47 @@ object DesktopNavigator {
             ),
         ) + homeEntries
     }
+
+    /**
+     * DT-02 桌面第二页「全部应用」网格集合：当前全部可达桌面应用。
+     *
+     * 集合 = 首页网格项（[composeHomeGrid]，保留 desktop-grid-* 标签与长按/门控语义）在前，
+     * 其余可达应用按 [DesktopApp] 声明序随后：
+     *  - 常开壳层入口（[isOpenable] 不依赖安装态：Messenger/Imaging/Gallery/Settings/Store 等）；
+     *  - 已安装但未上首页的目录 App（安装态门控下当前可达）。
+     * 未安装的目录 App 不可达，不出现在集合中。补充项 productId 一律为 null
+     * （无长按菜单），由界面层以 desktop-apps-* 标签区分，避免与首页网格语义混淆。
+     */
+    internal fun composeFullAppGrid(
+        homeInstalls: List<PersistedAppInstall>,
+        products: List<StoreProduct>,
+        installStatus: Map<String, InstallStatus>,
+    ): List<DesktopHomeGridEntry> {
+        val homeEntries = composeHomeGrid(homeInstalls, products)
+        val homeRoutes = homeEntries.mapTo(mutableSetOf()) { it.app.route }
+        val extras = DesktopApp.entries
+            .filter { it.route !in homeRoutes }
+            .filter { app ->
+                val productId = products.firstOrNull { it.launchTarget == app.route }?.id
+                isOpenable(
+                    app,
+                    installed = productId != null &&
+                        installStatus[productId] == InstallStatus.INSTALLED,
+                )
+            }
+            .map { app ->
+                // 仅当目录产品与路由一一对应时沿用产品名/符号；扩展包类目录项
+                // （如 hd-upscalers → imaging）不抢占壳层入口的默认标签。
+                val product = products.firstOrNull { it.id == app.route }
+                DesktopHomeGridEntry(
+                    app = app,
+                    label = product?.name ?: app.label,
+                    symbol = product?.symbol,
+                    productId = null,
+                )
+            }
+        return homeEntries + extras
+    }
 }
 
 /** 系统桌面首页网格单元：内置 Characters 或已添加到首页的商店 App。 */

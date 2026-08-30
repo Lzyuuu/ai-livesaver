@@ -40,6 +40,7 @@ class GamesHubSmokeTest {
 
     @Test
     fun hubOpensFromGridWithAllSixEntries() {
+        swipeDesktopToAppsPage(composeRule)
         composeRule.onNodeWithTag("desktop-grid-games").performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("games-hub").assertIsDisplayed()
@@ -56,6 +57,7 @@ class GamesHubSmokeTest {
     @Test
     fun worldAdventureSessionCompletesCoreAction() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
+        swipeDesktopToAppsPage(composeRule)
         composeRule.onNodeWithTag("desktop-grid-games").performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("games-hub").assertIsDisplayed()

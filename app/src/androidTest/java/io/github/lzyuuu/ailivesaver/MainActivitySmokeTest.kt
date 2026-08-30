@@ -70,6 +70,7 @@ class MainActivitySmokeTest {
 
     @Test
     fun opensInstalledAppFromGridAndReturnsToDesktop() {
+        swipeDesktopToAppsPage(composeRule)
         composeRule.onNodeWithTag("desktop-grid-ustagram").performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithText("Ustagram", useUnmergedTree = true).assertIsDisplayed()
@@ -82,6 +83,7 @@ class MainActivitySmokeTest {
     @Test
     fun opensGamesHubWithoutPaywall() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
+        swipeDesktopToAppsPage(composeRule)
         composeRule.onNodeWithTag("desktop-grid-games").performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("games-hub").assertIsDisplayed()
@@ -135,6 +137,7 @@ class MainActivitySmokeTest {
     @Test
     fun opensAllSixGameSessionsAndCompletesCoreAction() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
+        swipeDesktopToAppsPage(composeRule)
         composeRule.onNodeWithTag("desktop-grid-games").performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("games-hub").assertIsDisplayed()
@@ -199,6 +202,7 @@ class MainActivitySmokeTest {
 
     @Test
     fun presetsRootInPhone() {
+        swipeDesktopToAppsPage(composeRule)
         composeRule.onNodeWithTag("desktop-grid-phone").performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("phone-back").assertIsDisplayed()

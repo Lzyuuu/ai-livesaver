@@ -51,6 +51,7 @@ class DesktopAppGridTest {
     @Test
     fun rendersCharactersFirstAndHidesQuickEntryHubs() {
         composeRule.onNodeWithTag("system-desktop").assertIsDisplayed()
+        swipeDesktopToAppsPage(composeRule)
         composeRule.onNodeWithTag("desktop-app-grid").assertIsDisplayed()
         composeRule.onNodeWithTag("desktop-grid-characters").assertIsDisplayed()
         composeRule.onNodeWithText("Characters", useUnmergedTree = true).assertIsDisplayed()
@@ -81,6 +82,7 @@ class DesktopAppGridTest {
         composeRule.activityRule.scenario.recreate()
         composeRule.waitForIdle()
 
+        swipeDesktopToAppsPage(composeRule)
         composeRule.onNodeWithTag("desktop-grid-characters").assertIsDisplayed()
         composeRule.onNodeWithTag("desktop-grid-rebbit").assertIsDisplayed()
         composeRule.onNodeWithTag("desktop-grid-ustagram").assertIsDisplayed()
@@ -97,6 +99,7 @@ class DesktopAppGridTest {
         }
         composeRule.activityRule.scenario.recreate()
         composeRule.waitForIdle()
+        swipeDesktopToAppsPage(composeRule)
         composeRule.onNodeWithTag("desktop-grid-y").assertIsDisplayed()
         composeRule.onNodeWithTag("desktop-grid-y").assertIsDisplayed()
 
@@ -116,6 +119,7 @@ class DesktopAppGridTest {
 
     @Test
     fun opensCharactersFromGrid() {
+        swipeDesktopToAppsPage(composeRule)
         composeRule.onNodeWithTag("desktop-grid-characters").performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("characters-app").assertIsDisplayed()

@@ -151,6 +151,79 @@ class WorldStoreContractsTest {
         }
     }
 
+    @Test
+    fun v27UpgradeMigratesExistingFactsIntoDefaultSharedBook() {
+        WorldStore(context, databaseName).use { store ->
+            // 把 world_facts 塑造成 v27 形态（无 book/group 列），并塞入既有条目。
+            store.writableDatabase.execSQL("ALTER TABLE world_facts RENAME TO world_facts_v28")
+            store.writableDatabase.execSQL(
+                """
+                CREATE TABLE world_facts (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    body TEXT NOT NULL,
+                    pinned INTEGER NOT NULL DEFAULT 0,
+                    keywords TEXT NOT NULL DEFAULT '',
+                    enabled INTEGER NOT NULL DEFAULT 1,
+                    created_at INTEGER NOT NULL
+                )
+                """.trimIndent(),
+            )
+            store.writableDatabase.execSQL(
+                "INSERT INTO world_facts (body, pinned, keywords, enabled, created_at) VALUES ('老车站通往废弃线路', 0, '老车站', 1, 1)",
+            )
+            store.writableDatabase.execSQL("PRAGMA user_version = 27")
+        }
+        WorldStore(context, databaseName).use { store ->
+            assertEquals(WORLD_DATABASE_VERSION, store.writableDatabase.version)
+            val fact = store.worldFacts().single()
+            assertEquals("老车站通往废弃线路", fact.body)
+            assertEquals("老车站", fact.keywords)
+            assertTrue(fact.enabled)
+            // 迁移默认分组：既有条目落入默认书册「已分享」、未分组。
+            assertEquals(LOREBOOK_SHARED_BOOK, fact.book)
+            assertEquals("", fact.group)
+            // 迁移幂等：压回 27 后重放升级仍安全。
+            store.writableDatabase.execSQL("PRAGMA user_version = 27")
+        }
+        WorldStore(context, databaseName).use { store ->
+            assertEquals(WORLD_DATABASE_VERSION, store.writableDatabase.version)
+            val fact = store.worldFacts().single()
+            assertEquals(LOREBOOK_SHARED_BOOK, fact.book)
+            assertEquals("", fact.group)
+            assertEquals(listOf(LOREBOOK_SHARED_BOOK), store.lorebookBooks())
+        }
+    }
+
+    @Test
+    fun lorebookBooksAndGroupsSupportCrudFlow() {
+        WorldStore(context, databaseName).use { store ->
+            store.addWorldFact("共享细雨", book = LOREBOOK_SHARED_BOOK)
+            store.addWorldFact("根知识一", book = LOREBOOK_ROOT_BOOK, group = "设定")
+            store.addWorldFact("根知识二", book = LOREBOOK_ROOT_BOOK)
+            store.addWorldFact("地点旧站", book = LOREBOOK_SHARED_BOOK, group = "地点")
+            // 读取：书册与书内分组均去重有序。
+            assertEquals(listOf(LOREBOOK_SHARED_BOOK, LOREBOOK_ROOT_BOOK), store.lorebookBooks())
+            assertEquals(listOf("设定"), store.lorebookGroups(LOREBOOK_ROOT_BOOK))
+            assertEquals(listOf("地点"), store.lorebookGroups(LOREBOOK_SHARED_BOOK))
+            // 更新：条目移动书册、重命名分组。
+            val rootOne = store.worldFacts().first { it.body == "根知识一" }
+            store.setWorldFactGroup(rootOne.id, "人物")
+            assertEquals(listOf("人物"), store.lorebookGroups(LOREBOOK_ROOT_BOOK))
+            store.setWorldFactBook(rootOne.id, LOREBOOK_SHARED_BOOK)
+            assertEquals(LOREBOOK_SHARED_BOOK, store.worldFacts().first { it.id == rootOne.id }.book)
+            // 重命名书册（合并条目）。
+            assertEquals(1, store.renameLorebookBook(LOREBOOK_ROOT_BOOK, "根之书"))
+            assertEquals(listOf(LOREBOOK_SHARED_BOOK, "根之书"), store.lorebookBooks())
+            // 删除书册：条目迁回默认书册，不丢数据。
+            assertEquals(1, store.deleteLorebookBook("根之书"))
+            assertEquals(listOf(LOREBOOK_SHARED_BOOK), store.lorebookBooks())
+            assertEquals(4, store.worldFacts().size)
+            assertTrue(store.worldFacts().all { it.book == LOREBOOK_SHARED_BOOK })
+            // 注入语义不因分组改变：同批条目全部参与选择。
+            assertEquals(4, selectLorebookFacts(store.worldFacts(), "对话").size)
+        }
+    }
+
     private fun createCharacter(store: WorldStore, name: String): Long = store.writableDatabase.insertOrThrow("characters", null, ContentValues().apply {
         put("name", name)
         put("persona", "persona")

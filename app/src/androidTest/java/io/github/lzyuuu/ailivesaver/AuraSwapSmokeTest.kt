@@ -45,6 +45,7 @@ class AuraSwapSmokeTest {
 
     @Test
     fun opensAuraSwapAndModelStoreEmptyDirectoryPath() {
+        swipeDesktopToAppsPage(composeRule)
         composeRule.onNodeWithTag("desktop-grid-aura_swap").performClick()
         composeRule.onNodeWithTag("aura-swap-screen").assertIsDisplayed()
         composeRule.onNodeWithTag("aura-run").performClick()

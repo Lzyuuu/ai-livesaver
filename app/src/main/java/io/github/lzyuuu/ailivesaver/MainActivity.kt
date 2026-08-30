@@ -384,6 +384,14 @@ private fun AiLivesaverApp(
             products = storeProducts,
         )
     }
+    // DT-02：桌面第二页「全部应用」网格——首页网格项 + 其余当前可达应用。
+    val desktopAllGridApps = remember(worldRevision, homeInstalls, storeProducts, storeInstallStatus) {
+        DesktopNavigator.composeFullAppGrid(
+            homeInstalls = homeInstalls,
+            products = storeProducts,
+            installStatus = storeInstallStatus,
+        )
+    }
     // 常规页「社交媒体 · 自动发布」：仅应用前台时按间隔自动发布社交帖子。
     val lifecycleOwner = androidx.compose.ui.platform.LocalLifecycleOwner.current
     LaunchedEffect(Unit) {
@@ -905,12 +913,19 @@ private fun AiLivesaverApp(
                     onBack = { goDesktopHome() },
                     onOpenGallery = { openDesktopApp(DesktopApp.Gallery) },
                 )
-                DesktopApp.Storage -> PlaceholderAppScreen(
-                    title = "Storage",
-                    summary = "应用沙盒存储概览。备份与诊断也可从 Settings 使用。",
-                    contentPadding = padding,
-                    onBack = { goDesktopHome() },
-                ) { TextButton(onClick = { showStorage = true }) { Text("打开存储详情", color = FancyGold) } }
+                DesktopApp.Storage -> Column(
+                    Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.background),
+                ) {
+                    // SO-11：桌面 Storage 直达真实文件式存储页，不再经占位页。
+                    StorageScreen(
+                        contentPadding = padding,
+                        store = worldStore,
+                        revision = worldRevision,
+                        onBack = { goDesktopHome() },
+                    )
+                }
                 DesktopApp.Benchmark -> BenchmarkAppScreen(
                     contentPadding = padding,
                     onOpenModelsEngine = { showModelsEngine = true },
@@ -1002,6 +1017,7 @@ private fun AiLivesaverApp(
                         },
                         homeApps = homeDesktopApps,
                         homeGridApps = homeGridApps,
+                        allGridApps = desktopAllGridApps,
                     )
                     if (activeHub != null) {
                         DesktopHubSheet(
@@ -2670,6 +2686,20 @@ private fun WorldKnowledgeScreen(
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp)) {
                     Text(fact.body)
+                    // SO-12：同源条目保留书册/分组归属可见（编辑与删除均在原书册上生效）。
+                    val bookLine = listOfNotNull(
+                        fact.book.takeIf { it.isNotBlank() }
+                            ?.let { stringResource(R.string.lorebook_in_book, it) },
+                        fact.group.takeIf { it.isNotBlank() }
+                            ?.let { stringResource(R.string.lorebook_in_group, it) },
+                    ).joinToString(" · ")
+                    if (bookLine.isNotEmpty()) {
+                        Text(
+                            bookLine,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         TextButton(
                             onClick = {

@@ -160,6 +160,99 @@ class DesktopRoutesTest {
     }
 
     @Test
+    fun `composeFullAppGrid keeps home entries first and appends reachable shell apps`() {
+        // 全新状态：无安装记录、空目录 -> 首页网格仅 Characters，
+        // 补充项为常开壳层入口（按 DesktopApp 声明序，不含已在首页的 Characters）。
+        val grid = DesktopNavigator.composeFullAppGrid(
+            homeInstalls = emptyList(),
+            products = emptyList(),
+            installStatus = emptyMap(),
+        )
+        assertEquals(
+            listOf("characters", "messenger", "imaging", "gallery", "settings", "store"),
+            grid.map { it.app.route },
+        )
+        // 首页项保留 desktop-grid-* 标签与长按语义；补充项一律无 productId（无长按菜单）。
+        assertEquals("desktop-grid-characters", grid[0].testTag)
+        grid.drop(1).forEach { entry ->
+            assertEquals(null, entry.productId)
+            assertFalse(entry.supportsLongPressMenu)
+        }
+    }
+
+    @Test
+    fun `composeFullAppGrid includes installed catalog apps and gates uninstalled ones`() {
+        val yProduct = StoreProduct(
+            id = "y",
+            name = "Y",
+            symbol = "Y",
+            tagline = "t",
+            description = "d",
+            category = "Social",
+            launchTarget = "y",
+            kind = "app",
+            builtIn = true,
+            version = "1.0",
+            features = emptyList(),
+            requirements = emptyList(),
+            requiredDownloadBytes = 0L,
+            featured = false,
+            availability = StoreAvailability.AVAILABLE,
+        )
+        // 已安装但未上首页：Y 可达，作为补充项出现且不丢首页标签语义。
+        val installed = DesktopNavigator.composeFullAppGrid(
+            homeInstalls = emptyList(),
+            products = listOf(yProduct),
+            installStatus = mapOf("y" to InstallStatus.INSTALLED),
+        )
+        assertTrue(installed.any { it.app == DesktopApp.Y })
+        assertEquals(null, installed.first { it.app == DesktopApp.Y }.productId)
+        // 未安装：Y 不可达，不出现在全应用集合。
+        val notInstalled = DesktopNavigator.composeFullAppGrid(
+            homeInstalls = emptyList(),
+            products = listOf(yProduct),
+            installStatus = mapOf("y" to InstallStatus.NOT_INSTALLED),
+        )
+        assertFalse(notInstalled.any { it.app == DesktopApp.Y })
+    }
+
+    @Test
+    fun `composeFullAppGrid does not duplicate on home apps and keeps their product ids`() {
+        val yProduct = StoreProduct(
+            id = "y",
+            name = "Y",
+            symbol = "Y",
+            tagline = "t",
+            description = "d",
+            category = "Social",
+            launchTarget = "y",
+            kind = "app",
+            builtIn = true,
+            version = "1.0",
+            features = emptyList(),
+            requirements = emptyList(),
+            requiredDownloadBytes = 0L,
+            featured = false,
+            availability = StoreAvailability.AVAILABLE,
+        )
+        val installs = listOf(
+            PersistedAppInstall("y", InstallStatus.INSTALLED, 10L, true, 1, "1.0", 10L),
+        )
+        val grid = DesktopNavigator.composeFullAppGrid(
+            homeInstalls = installs,
+            products = listOf(yProduct),
+            installStatus = mapOf("y" to InstallStatus.INSTALLED),
+        )
+        // on_home 的 Y 只出现一次（首页网格项），保留 productId 以支撑长按菜单。
+        assertEquals(1, grid.count { it.app == DesktopApp.Y })
+        val yEntry = grid.first { it.app == DesktopApp.Y }
+        assertEquals("desktop-grid-y", yEntry.testTag)
+        assertEquals("y", yEntry.productId)
+        assertTrue(yEntry.supportsLongPressMenu)
+        assertEquals(listOf("characters", "y"), grid.take(2).map { it.app.route })
+    }
+
+    @Test
     fun `hub and app navigation can return home`() {
         val hub = DesktopNavigator.openHub(DesktopHub.Social)
         assertEquals(DesktopRoute.Hub(DesktopHub.Social), hub)

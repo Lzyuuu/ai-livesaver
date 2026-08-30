@@ -55,6 +55,11 @@ class CharactersImportPersistenceSmokeTest {
                 context = context,
             )
         }
+        // 隔离：清上一轮运行残留的同名角色，保证列表/查询中每个冒烟名字只有一份。
+        deleteCharactersByNameForSmoke(
+            context,
+            setOf("SmokeXml", "SmokeJson", "NewSmoke"),
+        )
         composeRule.activityRule.scenario.recreate()
         composeRule.waitUntil(timeoutMillis = 5_000) {
             composeRule.onAllNodesWithTag("system-desktop").fetchSemanticsNodes().isNotEmpty()
@@ -64,6 +69,7 @@ class CharactersImportPersistenceSmokeTest {
 
     @Test
     fun opensCharactersFromSocialHub() {
+        swipeDesktopToAppsPage(composeRule)
         composeRule.onNodeWithTag("desktop-grid-characters").performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("characters-app").assertIsDisplayed()
@@ -138,6 +144,7 @@ class CharactersImportPersistenceSmokeTest {
 
         composeRule.activityRule.scenario.recreate()
         composeRule.waitForIdle()
+        swipeDesktopToAppsPage(composeRule)
         composeRule.onNodeWithTag("desktop-grid-characters").performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("characters-app").assertIsDisplayed()
@@ -166,6 +173,7 @@ class CharactersImportPersistenceSmokeTest {
 
     @Test
     fun newCharacterPersistsAfterEditorSave() {
+        swipeDesktopToAppsPage(composeRule)
         composeRule.onNodeWithTag("desktop-grid-characters").performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("characters-new").performClick()
@@ -208,6 +216,7 @@ class CharactersImportPersistenceSmokeTest {
                 .fetchSemanticsNodes()
                 .isNotEmpty()
         if (!onCharacters) {
+            swipeDesktopToAppsPage(composeRule)
             composeRule.onNodeWithTag("desktop-grid-characters").performClick()
             composeRule.waitForIdle()
         } else if (

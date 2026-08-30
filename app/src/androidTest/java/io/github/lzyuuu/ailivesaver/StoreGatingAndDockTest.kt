@@ -49,6 +49,7 @@ class StoreGatingAndDockTest {
         seedHomeGridForSmoke(context, listOf("ustagram"), installed = false)
         composeRule.activityRule.scenario.recreate()
         composeRule.waitForIdle()
+        swipeDesktopToAppsPage(composeRule)
         composeRule.onNodeWithTag("desktop-grid-ustagram").performClick()
         composeRule.waitForIdle()
         // 商店屏出现而非 Ustagram 屏
@@ -68,6 +69,7 @@ class StoreGatingAndDockTest {
         seedHomeDesktopAppsForSmoke(context, setOf("ustagram"))
         composeRule.activityRule.scenario.recreate()
         composeRule.waitForIdle()
+        swipeDesktopToAppsPage(composeRule)
         composeRule.onNodeWithTag("desktop-grid-ustagram").performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("ustagram-screen", useUnmergedTree = true).assertIsDisplayed()
@@ -126,6 +128,7 @@ class StoreGatingAndDockTest {
         composeRule.onNodeWithTag("system-desktop").assertIsDisplayed()
         composeRule.onNodeWithTag("desktop-dock-store").assertIsDisplayed()
         // V4.51 Dock 固定五入口；on_home 应用落在首页网格而非 Dock。
+        swipeDesktopToAppsPage(composeRule)
         composeRule.onNodeWithTag("desktop-grid-ustagram").assertIsDisplayed()
         composeRule.onNodeWithTag("desktop-grid-ustagram").performClick()
         composeRule.waitForIdle()

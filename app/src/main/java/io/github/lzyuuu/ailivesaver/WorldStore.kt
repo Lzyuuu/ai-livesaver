@@ -296,6 +296,12 @@ internal data class NpcProfile(
     val lastSeenAt: Long,
 )
 
+/** 世界书默认书册（公共/已分享知识），对齐参考 ref-81「已分享」书册。 */
+internal const val LOREBOOK_SHARED_BOOK = "已分享"
+
+/** 主角色（Root Sudo）专属书册，对齐参考 ref-81「Root Sudo」书册。 */
+internal const val LOREBOOK_ROOT_BOOK = "Root Sudo"
+
 internal data class WorldFact(
     val id: Long,
     val body: String,
@@ -303,6 +309,10 @@ internal data class WorldFact(
     val createdAt: Long,
     val keywords: String = "",
     val enabled: Boolean = true,
+    /** 所属书册（如「已分享」「Root Sudo」）；空值按默认书册处理。 */
+    val book: String = LOREBOOK_SHARED_BOOK,
+    /** 书内分组名；空串表示未分组。 */
+    val group: String = "",
 )
 
 internal data class CharacterCognition(
@@ -335,7 +345,7 @@ internal data class MemberWorldContext(
     val timeZone: String,
 )
 
-internal const val WORLD_DATABASE_VERSION = 27
+internal const val WORLD_DATABASE_VERSION = 28
 
 internal class WorldStore(
     context: Context,
@@ -561,6 +571,12 @@ internal class WorldStore(
             // 迁移幂等：测试会用 PRAGMA user_version 压回旧版重放升级，列已存在时跳过。
             addColumnIfMissing(database, "world_facts", "keywords", "TEXT NOT NULL DEFAULT ''")
             addColumnIfMissing(database, "world_facts", "enabled", "INTEGER NOT NULL DEFAULT 1")
+        }
+        if (oldVersion < 28) {
+            // SO-12：世界书书册（book）+ 书内分组（group）；既有条目经列默认值落入「已分享」书册、未分组。
+            // group 是 SQL 关键字，列名一律加引号（addColumnIfMissing 的幂等比较会剥引号）。
+            addColumnIfMissing(database, "world_facts", "book", "TEXT NOT NULL DEFAULT '已分享'")
+            addColumnIfMissing(database, "world_facts", "\"group\"", "TEXT NOT NULL DEFAULT ''")
         }
     }
 
@@ -791,10 +807,11 @@ internal class WorldStore(
         column: String,
         declaration: String,
     ) {
+        val name = column.trim('"')
         val exists = database.rawQuery("PRAGMA table_info($table)", null).use { cursor ->
             val nameIndex = cursor.getColumnIndexOrThrow("name")
             generateSequence { if (cursor.moveToNext()) cursor.getString(nameIndex) else null }
-                .any { it == column }
+                .any { it.equals(name, ignoreCase = true) }
         }
         if (!exists) database.execSQL("ALTER TABLE $table ADD COLUMN $column $declaration")
     }
@@ -831,6 +848,8 @@ internal class WorldStore(
                 pinned INTEGER NOT NULL DEFAULT 0,
                 keywords TEXT NOT NULL DEFAULT '',
                 enabled INTEGER NOT NULL DEFAULT 1,
+                book TEXT NOT NULL DEFAULT '已分享',
+                "group" TEXT NOT NULL DEFAULT '',
                 created_at INTEGER NOT NULL
             )
             """.trimIndent(),
@@ -3291,7 +3310,12 @@ internal class WorldStore(
     }
 
     fun worldFacts(): List<WorldFact> = readableDatabase.rawQuery(
-        "SELECT id, body, pinned, keywords, enabled, created_at FROM world_facts ORDER BY pinned DESC, created_at DESC",
+        """
+        SELECT id, body, pinned, keywords, enabled, created_at, book, "group"
+        FROM world_facts
+        ORDER BY CASE book WHEN '已分享' THEN 0 ELSE 1 END, book COLLATE NOCASE,
+                 pinned DESC, created_at DESC
+        """.trimIndent(),
         null,
     ).use { cursor ->
         buildList {
@@ -3304,23 +3328,36 @@ internal class WorldStore(
                         cursor.getLong(5),
                         keywords = cursor.getString(3).orEmpty(),
                         enabled = cursor.getInt(4) == 1,
+                        book = cursor.getString(6).ifEmpty { LOREBOOK_SHARED_BOOK },
+                        group = cursor.getString(7).orEmpty(),
                     ),
                 )
             }
         }
     }
 
-    fun addWorldFact(body: String, pinned: Boolean = false, keywords: String = "") {
-        writableDatabase.insert(
-            "world_facts",
-            null,
-            android.content.ContentValues().apply {
-                put("body", body)
-                put("pinned", pinned)
-                put("keywords", keywords)
-                put("enabled", true)
-                put("created_at", System.currentTimeMillis())
-            },
+    fun addWorldFact(
+        body: String,
+        pinned: Boolean = false,
+        keywords: String = "",
+        book: String = LOREBOOK_SHARED_BOOK,
+        group: String = "",
+    ) {
+        // group 是 SQL 关键字，ContentValues 生成的列名不带引号会语法错误，故用显式引号 SQL。
+        writableDatabase.execSQL(
+            """
+            INSERT INTO world_facts (body, pinned, keywords, enabled, book, "group", created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """.trimIndent(),
+            arrayOf<Any>(
+                body,
+                if (pinned) 1 else 0,
+                keywords,
+                1,
+                book,
+                group,
+                System.currentTimeMillis(),
+            ),
         )
     }
 
@@ -3347,6 +3384,77 @@ internal class WorldStore(
             ContentValues().apply { put("pinned", if (pinned) 1 else 0) },
             "id = ?",
             arrayOf(id.toString()),
+        )
+    }
+
+    // —— 世界书书册 / 分组（SO-12）——
+
+    /** 仅移动条目到其它书册/分组，不触碰注入语义（enabled/keywords/始终注入保持不变）。 */
+    fun setWorldFactBook(id: Long, book: String) {
+        val next = book.trim()
+        if (next.isEmpty()) return
+        writableDatabase.update(
+            "world_facts",
+            ContentValues().apply { put("book", next) },
+            "id = ?",
+            arrayOf(id.toString()),
+        )
+    }
+
+    fun setWorldFactGroup(id: Long, group: String) {
+        // group 是 SQL 关键字，列名显式加引号。
+        writableDatabase.execSQL(
+            "UPDATE world_facts SET \"group\" = ? WHERE id = ?",
+            arrayOf(group.trim(), id.toString()),
+        )
+    }
+
+    /** 书册清单（去重、按展示顺序，默认书册居首）。 */
+    fun lorebookBooks(): List<String> = readableDatabase.rawQuery(
+        """
+        SELECT DISTINCT book FROM world_facts
+        WHERE book != ''
+        ORDER BY CASE book WHEN '已分享' THEN 0 ELSE 1 END, book COLLATE NOCASE
+        """.trimIndent(),
+        null,
+    ).use { cursor ->
+        buildList { while (cursor.moveToNext()) add(cursor.getString(0)) }
+    }
+
+    /** 书内非空分组清单（按名称排序）。 */
+    fun lorebookGroups(book: String): List<String> = readableDatabase.rawQuery(
+        """
+        SELECT DISTINCT "group" FROM world_facts
+        WHERE book = ? AND "group" != ''
+        ORDER BY "group" COLLATE NOCASE
+        """.trimIndent(),
+        arrayOf(book),
+    ).use { cursor ->
+        buildList { while (cursor.moveToNext()) add(cursor.getString(0)) }
+    }
+
+    /** 重命名书册（合并同名条目），返回受影响条目数；无效输入返回 0。 */
+    fun renameLorebookBook(from: String, to: String): Int {
+        val source = from.trim()
+        val target = to.trim()
+        if (source.isEmpty() || target.isEmpty() || source == target) return 0
+        return writableDatabase.update(
+            "world_facts",
+            ContentValues().apply { put("book", target) },
+            "book = ?",
+            arrayOf(source),
+        )
+    }
+
+    /** 删除书册：条目迁回默认书册（不删除数据），返回受影响条目数；默认书册本身不可删除。 */
+    fun deleteLorebookBook(book: String): Int {
+        val source = book.trim()
+        if (source.isEmpty() || source == LOREBOOK_SHARED_BOOK) return 0
+        return writableDatabase.update(
+            "world_facts",
+            ContentValues().apply { put("book", LOREBOOK_SHARED_BOOK) },
+            "book = ?",
+            arrayOf(source),
         )
     }
 
