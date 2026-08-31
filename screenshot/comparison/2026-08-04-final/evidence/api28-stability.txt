@@ -1,3 +1,0 @@
-2026-08-04 final verification
-Command: adb -s emulator-5554 logcat -d -t 500 | grep -E "FATAL EXCEPTION|ANR in io.github.lzyuuu.ailivesaver"
-Result: no matches

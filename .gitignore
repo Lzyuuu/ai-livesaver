@@ -3,9 +3,14 @@
 .kotlin/
 build/
 **/build/
+.cxx/
+**/.cxx/
 local.properties
 keystore.properties
 *.jks
 *.keystore
 .env
-v4.47-github-release.apk
+*.apk
+.goal-scratch/
+.grok/
+*.log
